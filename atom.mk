@@ -7,7 +7,6 @@ LOCAL_MODULE := libBeaver
 LOCAL_DESCRIPTION := H.264 Elementary Stream Tools Library
 
 LOCAL_LIBRARIES := libARSAL libARStream
-LOCAL_EXPORT_LDLIBS := -lbeaver
 
 LOCAL_CFLAGS := -Wextra
 LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/include

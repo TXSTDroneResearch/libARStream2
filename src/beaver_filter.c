@@ -474,8 +474,6 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)custom;
     BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
-    uint32_t newAuBufferSize, dummy = 0;
-    uint8_t *newAuBuffer = NULL;
     int ret = 0, cbRet;
     uint8_t *retPtr = NULL;
 
@@ -858,6 +856,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
 int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    int ret = 0;
 
     if (!filterHandle)
     {
@@ -868,6 +867,8 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadShouldStop = 1;
     ARSAL_Mutex_Unlock(&(filter->mutex));
+
+    return ret;
 }
 
 

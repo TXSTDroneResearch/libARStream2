@@ -15,11 +15,6 @@
 #include <libARStream/beaver_parser.h>
 
 
-#define printf(...) //TODO
-#define fprintf(...) //TODO
-#define log2(x) (log(x) / log(2)) //TODO
-
-
 #define BYTE_STREAM_NALU_START_CODE 0x00000001
 
 #define SEI_PAYLOAD_TYPE_BUFFERING_PERIOD 0
@@ -45,7 +40,7 @@ typedef struct BEAVER_Parser_s
     // NALU buffer
     uint8_t* pNaluBuf;
     uint8_t* pNaluBufCur;
-    int naluBufSize;
+    unsigned int naluBufSize;
     int naluBufManaged;
     unsigned int naluSize;      // in bytes
     unsigned int remNaluSize;   // in bytes
@@ -148,6 +143,7 @@ static BEAVER_Parser_ParseNaluType_func BEAVER_Parser_ParseNaluType[] =
 };
 
 
+#ifdef BEAVER_VERBOSE
 static char *BEAVER_Parser_naluTypeStr[] =
 {
     "undefined",
@@ -202,6 +198,11 @@ static char *BEAVER_Parser_sliceTypeStr[] =
     "SP (all)",
     "SI (all)"
 };
+#else
+    #define printf(...) {} //TODO
+    #define fprintf(...) {} //TODO
+    #define log2(x) (log(x) / log(2)) //TODO
+#endif
 
 
 static int BEAVER_Parser_picStructToNumClockTS[16] =
@@ -226,10 +227,10 @@ static inline int bitstreamByteAlign(BEAVER_Parser_t* _parser)
 static inline int readBits(BEAVER_Parser_t* _parser, unsigned int _numBits, uint32_t *_value, int _emulationPrevention)
 {
     unsigned int _count, _remBits = _numBits;
-    uint32_t _val = 0, _read32, _bitMask;
+    uint32_t _val = 0, _bitMask;
     uint8_t _read8;
 
-    if (_parser->cacheLength < _numBits)
+    if (_parser->cacheLength < (int)_numBits)
     {
         // Not enough bits in the cache
 
@@ -346,7 +347,7 @@ static inline int readBits_expGolomb_se(BEAVER_Parser_t* _parser, int32_t *_valu
 
 static inline int seekToByte(BEAVER_Parser_t* _parser, int _start, int _whence)
 {
-    int _ret, _pos;
+    int _pos;
 
     if (_whence == SEEK_CUR)
     {
@@ -2372,10 +2373,7 @@ static int BEAVER_Parser_ParseAud(BEAVER_Parser_t* parser)
 
 static int BEAVER_Parser_ParseFillerData(BEAVER_Parser_t* parser)
 {
-    int ret = 0;
-    uint32_t val = 0;
-    int readBytes = 0, _readBits = 0;
-    int size = 0;
+    int readBytes = 0;
 
     // filler_data_rbsp
     if (parser->config.printLogs) printf("-- filler_data_rbsp()\n");
@@ -3320,7 +3318,7 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
 {
     BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
     int ret = 0;
-    int naluStart, naluEnd, naluSize;
+    unsigned int naluStart, naluEnd, naluSize;
 
     if (!parserHandle)
     {
