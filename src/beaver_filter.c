@@ -7,11 +7,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
 #include <libARStream/ARSTREAM_Reader2.h>
-#include <libARStream/beaver_filter.h>
-#include <libARStream/beaver_parser.h>
+
+#include <beaver/beaver_filter.h>
+#include <beaver/beaver_parser.h>
+
 /* DEBUG */
 #include <locale.h>
 /* /DEBUG */

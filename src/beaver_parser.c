@@ -12,7 +12,7 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-#include <libARStream/beaver_parser.h>
+#include <beaver/beaver_parser.h>
 
 
 #define BYTE_STREAM_NALU_START_CODE 0x00000001
