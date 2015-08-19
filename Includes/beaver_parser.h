@@ -1,0 +1,182 @@
+/**
+ * @file beaver_parser.h
+ * @brief H.264 Elementary Stream Tools Library - Parser
+ * @date 08/04/2015
+ * @author aurelien.barre@parrot.com
+ */
+
+#ifndef _BEAVER_PARSER_H_
+#define _BEAVER_PARSER_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* #ifdef __cplusplus */
+
+#include <inttypes.h>
+#include <stdio.h>
+
+
+/**
+ * @brief Beaver Parser instance handle.
+ */
+typedef void* BEAVER_Parser_Handle;
+
+
+/**
+ * @brief Beaver Parser configuration for initialization.
+ */
+typedef struct
+{
+    int extractUserDataSei;                 /**< enable user data SEI extraction, see BEAVER_Parser_GetUserDataSei() */
+    int printLogs;                          /**< output parsing logs to stdout */
+
+} BEAVER_Parser_Config_t;
+
+
+/**
+ * @brief Output slice information.
+ */
+typedef struct
+{
+    int idrPicFlag;                         /**< idrPicFlag syntax element */
+    int nal_ref_idc;                        /**< nal_ref_idc syntax element */
+    int nal_unit_type;                      /**< nal_unit_type syntax element */
+    int first_mb_in_slice;                  /**< first_mb_in_slice syntax element */
+    int slice_type;                         /**< slice_type syntax element */
+    int sliceTypeMod5;                      /**< slice_type syntax element modulo 5 */
+    int frame_num;                          /**< frame_num syntax element */
+    int idr_pic_id;                         /**< idr_pic_id syntax element */
+    int slice_qp_delta;                     /**< slice_qp_delta syntax element */
+    int disable_deblocking_filter_idc;      /**< disable_deblocking_filter_idc syntax element */
+
+} BEAVER_Parser_SliceInfo_t;
+
+
+/**
+ * @brief Initialize a Beaver Parser instance.
+ *
+ * The library allocates the required resources. The user must call BEAVER_Parser_Free() to free the resources.
+ *
+ * @param parserHandle Pointer to the handle used in future calls to the library.
+ * @param config The instance configuration.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_Init(BEAVER_Parser_Handle* parserHandle, BEAVER_Parser_Config_t* config);
+
+
+/**
+ * @brief Free a Beaver Parser instance.
+ *
+ * The library frees the allocated resources.
+ *
+ * @param parserHandle Instance handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle);
+
+
+/**
+ * @brief Read the next NAL unit from a file.
+ *
+ * The function finds the next NALU start and end in the file. The NALU shall then be parsed using the BEAVER_Parser_ParseNalu() function.
+ *
+ * @param parserHandle Instance handle.
+ * @param fp Opened file to parse.
+ * @param fileSize Total file size.
+ *
+ * @return 0 if no error occurred.
+ * @return -2 if no start code has been found.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize);
+
+
+/**
+ * @brief Read the next NAL unit from a buffer.
+ *
+ * The function finds the next NALU start and end in the buffer. The NALU shall then be parsed using the BEAVER_Parser_ParseNalu() function.
+ *
+ * @param parserHandle Instance handle.
+ * @param buf Buffer to parse.
+ * @param bufSize Buffer size.
+ * @param nextStartCodePos Optional pointer to the following NALU start code filled if one has been found (i.e. if more NALUs are present 
+ * in the buffer).
+ *
+ * @return 0 if no error occurred.
+ * @return -2 if no start code has been found.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos);
+
+
+/**
+ * @brief Parse the NAL unit.
+ *
+ * The function parses the current NAL unit. A call either to BEAVER_Parser_ReadNextNalu_file() or BEAVER_Parser_ReadNextNalu_buffer() must have been made 
+ * prior to calling this function.
+ *
+ * @param parserHandle Instance handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle);
+
+
+/**
+ * @brief Get the NAL unit type.
+ *
+ * The function returns the NALU type of the last parsed NALU. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function.
+ *
+ * @param parserHandle Instance handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle);
+
+
+/**
+ * @brief Get the slice info.
+ *
+ * The function returns the slice info of the last parsed slice. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function. 
+ * This function should only be called if the last NALU type is either 1 or 5 (coded slice).
+ *
+ * @param parserHandle Instance handle.
+ * @param sliceInfo Pointer to the slice info structure to fill.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_SliceInfo_t* sliceInfo);
+
+
+/**
+ * @brief Get the user data SEI.
+ *
+ * The function gets a pointer to the last user data SEI parsed. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function. 
+ * This function should only be called if the last NALU type is 6 and the library instance has been initialized with extractUserDataSei = 1 in the config.
+ * If no user data SEI has been found or if extractUserDataSei == 0 the function fills pBuf with a NULL pointer.
+ * 
+ * @warning The returned pointer is managed by the library and must not be freed.
+ *
+ * @param parserHandle Instance handle.
+ * @param pBuf Pointer to the user data SEI buffer pointer (filled with NULL if no user data SEI is available).
+ * @param bufSize Pointer to the user data SEI buffer size (filled with 0 if no user data SEI is available).
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf, unsigned int* bufSize);
+
+
+#ifdef __cplusplus
+}
+#endif /* #ifdef __cplusplus */
+
+#endif /* #ifndef _BEAVER_PARSER_H_ */
+
