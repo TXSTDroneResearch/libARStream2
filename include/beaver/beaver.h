@@ -9,8 +9,10 @@
 #define _BEAVER_H_
 
 
+#include "beaver_parrot.h"
 #include "beaver_parser.h"
 #include "beaver_filter.h"
+#include "beaver_readerfilter.h"
 
 
 #endif /* #ifndef _BEAVER_H_ */

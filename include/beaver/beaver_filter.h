@@ -96,7 +96,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
  *
  * The library frees the allocated resources. On success the filterHandle is set to NULL.
  *
- * @param filterHandle Pointer to the nstance handle.
+ * @param filterHandle Pointer to the instance handle.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
