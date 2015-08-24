@@ -54,7 +54,7 @@ Java_com_parrot_beaver_BeaverReaderFilter_nativeInitClass(JNIEnv *env, jclass cl
 JNIEXPORT jlong JNICALL
 Java_com_parrot_beaver_BeaverReaderFilter_nativeConstructor(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
                                                       jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency,
-                                                      jint auFifoSize, jint waitForSync, jint outputIncompleteAu, jint filterOutSpsPps, jint filterOutSei)
+                                                      jint auFifoSize, jint waitForSync, jint outputIncompleteAu, jint filterOutSpsPps, jint filterOutSei, jint replaceStartCodesWithNaluSize)
 {
     int ret = 0;
     eARSTREAM_ERROR err = ARSTREAM_OK;
@@ -84,6 +84,7 @@ Java_com_parrot_beaver_BeaverReaderFilter_nativeConstructor(JNIEnv *env, jobject
     beaverFilterConfig.outputIncompleteAu = outputIncompleteAu;
     beaverFilterConfig.filterOutSpsPps = filterOutSpsPps;
     beaverFilterConfig.filterOutSei = filterOutSei;
+    beaverFilterConfig.replaceStartCodesWithNaluSize = replaceStartCodesWithNaluSize;
 
     ret = BEAVER_Filter_Init(&readerFilter->beaverFilter, &beaverFilterConfig);
     if (ret != 0)

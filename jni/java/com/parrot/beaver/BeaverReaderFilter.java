@@ -60,12 +60,13 @@ public class BeaverReaderFilter
       */
     public BeaverReaderFilter(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                               int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize,
-                              boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei, BeaverReaderFilterListener listener)
+                              boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei,
+                              boolean replaceStartCodesWithNaluSize, BeaverReaderFilterListener listener)
     {
         this.listener = listener;
         this.cReaderFilter = nativeConstructor(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
                                                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, auFifoSize,
-                                               waitForSync, outputIncompleteAu, filterOutSpsPps, filterOutSei);
+                                               waitForSync, outputIncompleteAu, filterOutSpsPps, filterOutSei, replaceStartCodesWithNaluSize);
         this.valid = (this.cReaderFilter != 0);
     }
 
@@ -276,7 +277,7 @@ public class BeaverReaderFilter
      */
     private native long nativeConstructor(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                                           int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize,
-                                          boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei);
+                                          boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei, boolean replaceStartCodesWithNaluSize);
 
     /**
      * Entry point for the BeaverReaderFilter filter thread<br>
