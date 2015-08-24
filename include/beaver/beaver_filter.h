@@ -67,11 +67,12 @@ typedef struct
     void* cancelAuBufferCallbackUserPtr;                            /**< cancel access unit buffer callback user pointer */
     BEAVER_Filter_AuReadyCallback_t auReadyCallback;                /**< access unit ready callback */
     void* auReadyCallbackUserPtr;                                   /**< access unit ready callback user pointer */
-    int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers */
+    int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
     int filterOutSei;                                               /**< if true, filter out SEI NAL units */
+    int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
 
 } BEAVER_Filter_Config_t;
 

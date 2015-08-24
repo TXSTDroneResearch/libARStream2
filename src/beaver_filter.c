@@ -77,6 +77,7 @@ typedef struct BEAVER_Filter_s
     int outputIncompleteAu;
     int filterOutSpsPps;
     int filterOutSei;
+    int replaceStartCodesWithNaluSize;
 
     uint8_t *currentAuBuffer;
     int currentAuBufferSize;
@@ -245,6 +246,12 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
     if ((!naluBuffer) || (naluSize <= 0))
     {
         return -1;
+    }
+
+    if (filter->replaceStartCodesWithNaluSize)
+    {
+        // Replace the NAL unit 4 bytes start code with the NALU size
+        *((uint32_t*)naluBuffer) = (uint32_t)naluSize;
     }
 
     //TODO: use a more efficient function than BEAVER_Parser_ReadNextNalu_buffer
@@ -927,10 +934,11 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         filter->auReadyCallbackUserPtr = config->auReadyCallbackUserPtr;
 
         filter->auFifoSize = config->auFifoSize;
-        filter->waitForSync = config->waitForSync;
-        filter->outputIncompleteAu = config->outputIncompleteAu;
-        filter->filterOutSpsPps = config->filterOutSpsPps;
-        filter->filterOutSei = config->filterOutSei;
+        filter->waitForSync = (config->waitForSync > 0) ? 1 : 0;
+        filter->outputIncompleteAu = (config->outputIncompleteAu > 0) ? 1 : 0;
+        filter->filterOutSpsPps = (config->filterOutSpsPps > 0) ? 1 : 0;
+        filter->filterOutSei = (config->filterOutSei > 0) ? 1 : 0;
+        filter->replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
 
         filter->threadStarted = 0;
         filter->threadShouldStop = 0;
