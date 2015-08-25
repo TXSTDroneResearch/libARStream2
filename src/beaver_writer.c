@@ -101,7 +101,7 @@ static inline int writeBits(BEAVER_Writer_t* _writer, unsigned int _numBits, uin
                     }
                     _writer->oldZeroCount = 0;
                 }
-                else if (_write8 == 0)
+                if (_write8 == 0)
                 {
                     _writer->oldZeroCount++;
                 }
