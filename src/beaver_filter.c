@@ -14,6 +14,7 @@
 
 #include <beaver/beaver_filter.h>
 #include <beaver/beaver_parser.h>
+#include <beaver/beaver_parrot.h>
 
 /* DEBUG */
 #include <locale.h>
@@ -304,6 +305,53 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                 break;
             case BEAVER_FILTER_H264_NALU_TYPE_SEI:
                 /* SEI */
+                if (filter->sync)
+                {
+                    void *pUserDataSei = NULL;
+                    unsigned int userDataSeiSize = 0;
+                    BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
+                    BEAVER_Parrot_DragonFrameInfoV1_t frameInfo;
+                    BEAVER_Parrot_DragonStreamingV1_t streaming;
+                    uint16_t sliceMbCount[BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT];
+                    ret = BEAVER_Parser_GetUserDataSei(filter->parser, &pUserDataSei, &userDataSeiSize);
+                    if (ret < 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetUserDataSei() failed (%d)", ret);
+                    }
+                    else
+                    {
+                        userDataSeiType = BEAVER_Parrot_GetUserDataSeiType(pUserDataSei, userDataSeiSize);
+                        switch (userDataSeiType)
+                        {
+                            case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1:
+                                ret = BEAVER_Parrot_DeserializeDragonStreamingV1(pUserDataSei, userDataSeiSize, &streaming, sliceMbCount);
+                                if (ret < 0)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeDragonStreamingV1() failed (%d)", ret);
+                                }
+                                else
+                                {
+                                    //ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "indexInGop: %d - sliceCount: %d", streaming.indexInGop, streaming.sliceCount); //TODO: debug
+                                    //TODO
+                                }
+                                break;
+                            case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
+                                ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &frameInfo, &streaming, sliceMbCount);
+                                if (ret < 0)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
+                                }
+                                else
+                                {
+                                    //ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "indexInGop: %d - sliceCount: %d", streaming.indexInGop, streaming.sliceCount); //TODO: debug
+                                    //TODO
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
                 break;
             case BEAVER_FILTER_H264_NALU_TYPE_SPS:
                 /* SPS */
@@ -1004,7 +1052,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
     {
         BEAVER_Parser_Config_t parserConfig;
         memset(&parserConfig, 0, sizeof(parserConfig));
-        parserConfig.extractUserDataSei = 0;
+        parserConfig.extractUserDataSei = 1;
         parserConfig.printLogs = 0;
 
         ret = BEAVER_Parser_Init(&(filter->parser), &parserConfig);
