@@ -25,13 +25,13 @@ extern "C" {
 typedef enum
 {
     BEAVER_PARROT_USER_DATA_SEI_UNKNOWN = 0,                                /**< Unknown user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V1,                            /**< "Dragon Basic" v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V1,                         /**< "Dragon Extended" v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V2,                            /**< "Dragon Basic" v2 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V2,                         /**< "Dragon Extended" v2 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1,                        /**< "Dragon FrameInfo" v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1,                        /**< "Dragon Streaming" v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1,              /**< "Dragon Streaming FrameInfo" v1 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V1,                            /**< 'Dragon Basic' v1 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V1,                         /**< 'Dragon Extended' v1 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V2,                            /**< 'Dragon Basic' v2 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V2,                         /**< 'Dragon Extended' v2 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1,                        /**< 'Dragon FrameInfo' v1 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1,                        /**< 'Dragon Streaming' v1 user data SEI */
+    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1,              /**< 'Dragon Streaming FrameInfo' v1 user data SEI */
 
 } BEAVER_Parrot_UserDataSeiTypes_t;
 

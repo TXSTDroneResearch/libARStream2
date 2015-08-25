@@ -12,7 +12,7 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-#include <beaver/beaver_writer.h>
+#include <libBeaver/beaver_writer.h>
 #include "beaver_h264.h"
 
 

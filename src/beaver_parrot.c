@@ -8,7 +8,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-#include <beaver/beaver_parrot.h>
+#include <libBeaver/beaver_parrot.h>
 
 
 int BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1(const void* pBuf, unsigned int bufSize, BEAVER_Parrot_UserDataSeiDragonBasicV1_t *userDataSei)

@@ -5,14 +5,11 @@
  * @author aurelien.barre@parrot.com
  */
 
-package com.parrot.beaver;
+package com.parrot.arsdk.beaver;
 
-import android.util.Log;
-
-import com.parrot.arsdk.arsal.ARNativeData;
 import com.parrot.arsdk.arsal.ARSALPrint;
 
-import org.apache.http.protocol.RequestUserAgent;
+import java.nio.ByteBuffer;
 
 /**
  * Wrapper class for the BeaverReaderFilter C object.<br>
@@ -44,35 +41,36 @@ public class BeaverReaderFilter
      */
     private boolean valid;
 
+    private ByteBuffer[] buffers;
+
     /* *********** */
     /* CONSTRUCTOR */
     /* *********** */
 
     /**
      * Constructor for a BeaverReaderFilter object<br>
-     * 
-     * @param auFifoSize size of the access unit FIFO
-     * @param waitForSync wait for SPS/PPS sync before outputting access units
+     *
+     * @param auFifoSize         size of the access unit FIFO
+     * @param waitForSync        wait for SPS/PPS sync before outputting access units
      * @param outputIncompleteAu output incomplete NAL units (with missing slices)
-     * @param filterOutSpsPps filter out SPS and PPS NAL units
-     * @param filterOutSei filter out SEI NAL units
-     * @param listener BeaverReaderFilter listener
-      */
+     * @param filterOutSpsPps    filter out SPS and PPS NAL units
+     * @param filterOutSei       filter out SEI NAL units
+     * @param listener           BeaverReaderFilter listener
+     */
     public BeaverReaderFilter(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                               int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize,
-                              boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei,
-                              boolean replaceStartCodesWithNaluSize, BeaverReaderFilterListener listener)
+                              BeaverReaderFilterListener listener)
     {
         this.listener = listener;
         this.cReaderFilter = nativeConstructor(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
-                                               maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, auFifoSize,
-                                               waitForSync, outputIncompleteAu, filterOutSpsPps, filterOutSei, replaceStartCodesWithNaluSize);
+                                               maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, auFifoSize);
         this.valid = (this.cReaderFilter != 0);
     }
 
     /* ********** */
     /* DESTRUCTOR */
     /* ********** */
+
     /**
      * Destructor<br>
      * This destructor tries to avoid leaks if the object was not disposed
@@ -90,8 +88,7 @@ public class BeaverReaderFilter
                     ARSALPrint.e(TAG, "Unable to dispose object " + this + " ... leaking memory !");
                 }
             }
-        }
-        finally
+        } finally
         {
             super.finalize();
         }
@@ -104,6 +101,7 @@ public class BeaverReaderFilter
     /**
      * Checks if the current BeaverReaderFilter is valid.<br>
      * A valid BeaverReaderFilter is a BeaverReaderFilter which can be used to receive video frames.
+     *
      * @return The validity of the BeaverReaderFilter.
      */
     public boolean isValid()
@@ -149,12 +147,15 @@ public class BeaverReaderFilter
      * This function should only be called after <code>stop()</code><br>
      * <br>
      * Warning: If this function returns <code>false</code>, then the BeaverReaderFilter was not deleted!
+     *
      * @return <code>true</code> if the Runnables are not running.<br><code>false</code> if the BeaverReaderFilter could not be disposed now.
      */
     public boolean dispose()
     {
         boolean ret = nativeDispose(cReaderFilter);
-        if (ret) {
+        if (ret)
+        {
+            this.buffers = null;
             this.valid = false;
         }
         return ret;
@@ -172,84 +173,82 @@ public class BeaverReaderFilter
     /* PRIVATE FUNCTIONS */
     /* ***************** */
 
+
+
     /**
      * spsPpsCallback wrapper for the listener
      */
-    private long[] spsPpsCallbackWrapper(long spsBuffer, int spsSize, long ppsBuffer, int ppsSize)
+    private int onSpsPpsReady(ByteBuffer sps, ByteBuffer pps)
     {
         try
         {
-            listener.onSpsPpsReady(spsBuffer, spsSize, ppsBuffer, ppsSize);
-        }
-        catch (Throwable t)
+            this.buffers = listener.onSpsPpsReady(sps, pps);
+        } catch (Throwable t)
         {
-            ARSALPrint.e(TAG, "Exception in onSpsPpsReady callback" + t.getMessage());
+            ARSALPrint.e(TAG, "Exception in onSpsPpsReady" + t.getMessage());
+            return -1;
         }
-        long retVal[] = { 0 };
-        return retVal;
+        if (this.buffers == null)
+        {
+            return -1;
+        }
+        return 0;
     }
 
-
-    /**
-     * getAuBufferCallback wrapper for the listener
-     */
-    private long[] getAuBufferCallbackWrapper()
-    {
-        long auBuffer = 0; //TODO
-        int auBufferSize = 0; //TODO
-        try
-        {
-            listener.onGetAuBuffer();
-        }
-        catch (Throwable t)
-        {
-            ARSALPrint.e(TAG, "Exception in onSpsPpsReceived callback" + t.getMessage());
-        }
-        long retVal[] = { 0, auBuffer, auBufferSize };
-        return retVal;
-    }
-
-
-    /**
-     * cancelAuBufferCallback wrapper for the listener
-     */
-    private long[] cancelAuBufferCallbackWrapper(long auBuffer, int auBufferSize)
+    private int getFreeBufferIdx()
     {
         try
         {
-            listener.onCancelAuBuffer(auBuffer, auBufferSize);
+            int bufferIdx = listener.getFreeBuffer();
+            if (bufferIdx >= 0) {
+                ARSALPrint.e(TAG, "\treturning index " + bufferIdx);
+                return bufferIdx;
+            }
+            ARSALPrint.e(TAG, "\tNo more free buffers");
         }
         catch (Throwable t)
         {
-            ARSALPrint.e(TAG, "Exception in onCancelAuBuffer callback" + t.getMessage());
+            ARSALPrint.e(TAG, "Exception in getFreeBufferIdx" + t.getMessage());
         }
-        long retVal[] = { 0 };
-        return retVal;
+        return -1;
     }
 
-
-    /**
-     * auReadyCallback wrapper for the listener
-     */
-    private long[] auReadyCallbackWrapper(long auBuffer, int auSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
+    private ByteBuffer getBuffer(int bufferIdx)
     {
-        BEAVER_FILTER_AU_SYNC_TYPE_ENUM auSyncType = BEAVER_FILTER_AU_SYNC_TYPE_ENUM.getFromValue(iAuSyncType); //TODO
-        if (auSyncType == null) {
-            ARSALPrint.e(TAG, "Bad cause : " + icause);
-            return null;
-        }
-        
         try
         {
-            listener.onAuReady(auBuffer, auSize, auTimestamp, auTimestampShifted, auSyncType);
+            return buffers[bufferIdx];
         }
         catch (Throwable t)
         {
-            ARSALPrint.e (TAG, "Exception in onAuReady callback" + t.getMessage());
+            ARSALPrint.e(TAG, "Exception in getBuffer" + t.getMessage());
         }
-        long retVal[] = { 0 };
-        return retVal;
+        return null;
     }
+
+    private int onBufferReady(int bufferIdx, int auSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
+    {
+        BEAVER_Filter_AuSyncType_t_ENUM auSyncType = BEAVER_Filter_AuSyncType_t_ENUM.getFromValue(iAuSyncType);
+        if (auSyncType == null)
+        {
+            ARSALPrint.e(TAG, "Bad au sync type : " + iAuSyncType);
+            return -1;
+        }
+
+        try
+        {
+            ByteBuffer buffer = this.buffers[bufferIdx];
+            //buffer.limit(auSize);
+            buffer.position(auSize);
+            listener.onBufferReady(bufferIdx, auTimestamp, auTimestampShifted, auSyncType);
+            return 0;
+        } catch (Throwable t)
+        {
+            ARSALPrint.e(TAG, "Exception in onBufferReady" + t.getMessage());
+            return -1;
+        }
+    }
+
 
 
     /* **************** */
@@ -259,29 +258,26 @@ public class BeaverReaderFilter
     /**
      * Constructor in native memory space<br>
      * This function creates a C-Managed BeaverReaderFilter object
-     * @param serverAddress server address
-     * @param serverStreamPort server stream port
-     * @param serverControlPort server control port
-     * @param clientStreamPort client stream port
-     * @param clientControlPort client control port
-     * @param maxPacketSize maximum network packet size
-     * @param maxBitrate maximum stream bitrate
-     * @param maxLatency maximum total latency
-     * @param maxNetworkLatency maximum natwork latency
-     * @param auFifoSize size of the access unit FIFO
-     * @param waitForSync wait for SPS/PPS sync before outputting access units
-     * @param outputIncompleteAu output incomplete NAL units (with missing slices)
-     * @param filterOutSpsPps filter out SPS and PPS NAL units
-     * @param filterOutSei filter out SEI NAL units
+     *
+     * @param serverAddress      server address
+     * @param serverStreamPort   server stream port
+     * @param serverControlPort  server control port
+     * @param clientStreamPort   client stream port
+     * @param clientControlPort  client control port
+     * @param maxPacketSize      maximum network packet size
+     * @param maxBitrate         maximum stream bitrate
+     * @param maxLatency         maximum total latency
+     * @param maxNetworkLatency  maximum natwork latency
+     * @param auFifoSize         size of the access unit FIFO
      * @return C-Pointer to the BeaverReaderFilter object (or null if any error occured)
      */
     private native long nativeConstructor(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
-                                          int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize,
-                                          boolean waitForSync, boolean outputIncompleteAu, boolean filterOutSpsPps, boolean filterOutSei, boolean replaceStartCodesWithNaluSize);
+                                          int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize);
 
     /**
      * Entry point for the BeaverReaderFilter filter thread<br>
      * This function never returns until <code>stop</code> is called
+     *
      * @param cReaderFilter C-Pointer to the BeaverReaderFilter C object
      */
     private native void nativeRunFilterThread(long cReaderFilter);
@@ -289,6 +285,7 @@ public class BeaverReaderFilter
     /**
      * Entry point for the BeaverReaderFilter stream thread<br>
      * This function never returns until <code>stop</code> is called
+     *
      * @param cReaderFilter C-Pointer to the BeaverReaderFilter C object
      */
     private native void nativeRunStreamThread(long cReaderFilter);
@@ -296,18 +293,21 @@ public class BeaverReaderFilter
     /**
      * Entry point for the BeaverReaderFilter control thread<br>
      * This function never returns until <code>stop</code> is called
+     *
      * @param cReaderFilter C-Pointer to the BeaverReaderFilter C object
      */
     private native void nativeRunControlThread(long cReaderFilter);
 
     /**
      * Stops the internal thread loops
+     *
      * @param cReaderFilter C-Pointer to the BeaverReaderFilter C object
      */
     private native void nativeStop(long cReaderFilter);
 
     /**
      * Marks the BeaverReaderFilter as invalid and frees it if needed
+     *
      * @param cReaderFilter C-Pointer to the BeaverReaderFilter C object
      */
     private native boolean nativeDispose(long cReaderFilter);

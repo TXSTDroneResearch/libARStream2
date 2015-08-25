@@ -10,7 +10,7 @@
 
 #include <libARSAL/ARSAL_Print.h>
 
-#include <beaver/beaver_readerfilter.h>
+#include <libBeaver/beaver_readerfilter.h>
 
 
 #define BEAVER_READERFILTER_TAG "BEAVER_ReaderFilter"
