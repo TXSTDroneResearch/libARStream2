@@ -38,15 +38,15 @@ typedef int (*BEAVER_Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, u
 
 
 /* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void *userPtr);
+typedef int (*BEAVER_Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
 
 
 /* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_CancelAuBufferCallback_t)(uint8_t *auBuffer, int auBufferSize, void *userPtr);
+typedef int (*BEAVER_Filter_CancelAuBufferCallback_t)(uint8_t *auBuffer, int auBufferSize, void *auBufferUserPtr, void *userPtr);
 
 
 /* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *userPtr);
+typedef int (*BEAVER_Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auBufferUserPtr, void *userPtr);
 
 
 uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,

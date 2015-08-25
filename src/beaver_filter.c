@@ -53,6 +53,7 @@ typedef struct BEAVER_Filter_Au_s
     uint64_t timestamp;
     uint64_t timestampShifted;
     BEAVER_Filter_AuSyncType_t syncType;
+    void *userPtr;
 
     struct BEAVER_Filter_Au_s* prev;
     struct BEAVER_Filter_Au_s* next;
@@ -81,6 +82,7 @@ typedef struct BEAVER_Filter_s
 
     uint8_t *currentAuBuffer;
     int currentAuBufferSize;
+    void *currentAuBufferUserPtr;
     uint8_t *currentNaluBuffer;
     int currentNaluBufferSize;
 
@@ -227,7 +229,7 @@ static int BEAVER_Filter_flushAuFifo(BEAVER_Filter_t *filter)
     while ((fifoRes = BEAVER_Filter_dequeueAu(filter, &au)) == 0)
     {
         /* call the cancelAuBufferCallback */
-        cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, filter->cancelAuBufferCallbackUserPtr);
+        cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, au.userPtr, filter->cancelAuBufferCallbackUserPtr);
         if (cbRet != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
@@ -385,7 +387,7 @@ static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
 {
     int ret = 0;
 
-    int cbRet = filter->getAuBufferCallback(&filter->currentAuBuffer, &filter->currentAuBufferSize, filter->getAuBufferCallbackUserPtr);
+    int cbRet = filter->getAuBufferCallback(&filter->currentAuBuffer, &filter->currentAuBufferSize, &filter->currentAuBufferUserPtr, filter->getAuBufferCallbackUserPtr);
     if (cbRet != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
@@ -428,7 +430,7 @@ static void BEAVER_Filter_addNaluToCurrentAu(BEAVER_Filter_t *filter, BEAVER_Fil
 }
 
 
-static int BEAVER_Filter_outputCurrentAu(BEAVER_Filter_t *filter)
+static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
 {
     int ret = 0;
     int cancelAuOutput = 0;
@@ -463,6 +465,7 @@ static int BEAVER_Filter_outputCurrentAu(BEAVER_Filter_t *filter)
         au.timestamp = filter->currentAuTimestamp;
         au.timestampShifted = filter->currentAuTimestampShifted;
         au.syncType = filter->currentAuSyncType;
+        au.userPtr = filter->currentAuBufferUserPtr;
         int fifoRes = BEAVER_Filter_enqueueAu(filter, &au);
         if (fifoRes == 0)
         {
@@ -512,7 +515,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 BEAVER_Filter_addNaluToCurrentAu(filter, naluType, naluSize);
 
                 /* Output access unit */
-                ret = BEAVER_Filter_outputCurrentAu(filter);
+                ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
                 if (ret > 0)
                 {
@@ -554,7 +557,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     }
 
                     /* Output access unit */
-                    ret = BEAVER_Filter_outputCurrentAu(filter);
+                    ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
                     if (ret > 0)
                     {
@@ -611,7 +614,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             if (filter->currentAuSize > 0)
             {
                 /* Output access unit */
-                ret = BEAVER_Filter_outputCurrentAu(filter);
+                ret = BEAVER_Filter_enqueueCurrentAu(filter);
             }
 
             if (ret > 0)
@@ -647,7 +650,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             retPtr = filter->currentNaluBuffer;
             break;
         case ARSTREAM_READER2_CAUSE_CANCEL:
-            cbRet = filter->cancelAuBufferCallback(filter->currentAuBuffer, filter->currentAuBufferSize, filter->cancelAuBufferCallbackUserPtr);
+            cbRet = filter->cancelAuBufferCallback(filter->currentAuBuffer, filter->currentAuBufferSize, filter->currentAuBufferUserPtr, filter->cancelAuBufferCallbackUserPtr);
             if (cbRet != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
@@ -783,7 +786,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                 decodingDelta2 = decodingDelta;
 
                 /* call the cancelAuBufferCallback */
-                cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, filter->cancelAuBufferCallbackUserPtr);
+                cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, au.userPtr, filter->cancelAuBufferCallbackUserPtr);
                 if (cbRet != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
@@ -806,7 +809,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                 decodingDelta2 = (lastAuCallbackTime != 0) ? (int)(curTime2 - lastAuCallbackTime) : 0;
 
                 /* call the auReadyCallback */
-                cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, filter->auReadyCallbackUserPtr);
+                cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
                 if (cbRet != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
