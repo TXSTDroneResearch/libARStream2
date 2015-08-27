@@ -13,24 +13,7 @@
 #include <arpa/inet.h>
 
 #include <beaver/beaver_parser.h>
-
-
-#define BYTE_STREAM_NALU_START_CODE 0x00000001
-
-#define SEI_PAYLOAD_TYPE_BUFFERING_PERIOD 0
-#define SEI_PAYLOAD_TYPE_PIC_TIMING 1
-#define SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED 5
-
-#define SLICE_TYPE_P 0
-#define SLICE_TYPE_B 1
-#define SLICE_TYPE_I 2
-#define SLICE_TYPE_SP 3
-#define SLICE_TYPE_SI 4
-#define SLICE_TYPE_P_ALL 5
-#define SLICE_TYPE_B_ALL 6
-#define SLICE_TYPE_I_ALL 7
-#define SLICE_TYPE_SP_ALL 8
-#define SLICE_TYPE_SI_ALL 9
+#include "beaver_h264.h"
 
 
 typedef struct BEAVER_Parser_s
@@ -49,44 +32,15 @@ typedef struct BEAVER_Parser_s
     uint32_t cache;
     int cacheLength;   // in bits
     int oldZeroCount;
-    
-    //TODO: value per PPS ID or SPS ID
+
+    // SPS/PPS context
+    BEAVER_H264_SpsContext_t spsContext;
     int spsSync;
+    BEAVER_H264_PpsContext_t ppsContext;
     int ppsSync;
-    int pic_width_in_mbs_minus1;
-    int pic_height_in_map_units_minus1;
-    int slice_group_change_rate_minus1;
-    int entropy_coding_mode_flag;
-    int separate_colour_plane_flag;
-    int frame_mbs_only_flag;
-    int log2_max_frame_num_minus4;
-    int pic_order_cnt_type;
-    int log2_max_pic_order_cnt_lsb_minus4;
-    int bottom_field_pic_order_in_frame_present_flag;
-    int delta_pic_order_always_zero_flag;
-    int initial_cpb_removal_delay_length_minus1;
-    int cpb_removal_delay_length_minus1;
-    int dpb_output_delay_length_minus1;
-    int nal_hrd_parameters_present_flag;
-    int vcl_hrd_parameters_present_flag;
-    int cpb_cnt_minus1;
-    int time_offset_length;
-    int pic_struct_present_flag;
-    int chroma_format_idc;
-    int redundant_pic_cnt_present_flag;
-    int num_ref_idx_l0_default_active_minus1;
-    int num_ref_idx_l1_default_active_minus1;
-    int weighted_pred_flag;
-    int weighted_bipred_idc;
-    int deblocking_filter_control_present_flag;
-    int num_slice_groups_minus1;
-    int slice_group_map_type;
 
-    int idrPicFlag;
-    int nal_ref_idc;
-    int nal_unit_type;
-
-    BEAVER_Parser_SliceInfo_t sliceInfo;
+    // Slice context
+    BEAVER_H264_SliceContext_t sliceContext;
 
     // User data SEI
     uint8_t* pUserDataBuf;
@@ -469,7 +423,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
     int ret = 0;
     uint32_t val = 0;
     int _readBits = 0;
-    int i;
+    unsigned int i;
 
     // hrd_parameters
     if (parser->config.printLogs) printf("------ hrd_parameters()\n");
@@ -482,7 +436,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->cpb_cnt_minus1 = val;
+    parser->spsContext.cpb_cnt_minus1 = val;
     if (parser->config.printLogs) printf("-------- cpb_cnt_minus1 = %d\n", val);
 
     // bit_rate_scale
@@ -505,7 +459,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
     _readBits += ret;
     if (parser->config.printLogs) printf("-------- cpb_size_scale = %d\n", val);
 
-    for (i = 0; i <= parser->cpb_cnt_minus1; i++)
+    for (i = 0; i <= parser->spsContext.cpb_cnt_minus1; i++)
     {
         // bit_rate_value_minus1
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -546,7 +500,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->initial_cpb_removal_delay_length_minus1 = val;
+    parser->spsContext.initial_cpb_removal_delay_length_minus1 = val;
     if (parser->config.printLogs) printf("-------- initial_cpb_removal_delay_length_minus1 = %d\n", val);
 
     // cpb_removal_delay_length_minus1
@@ -557,7 +511,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->cpb_removal_delay_length_minus1 = val;
+    parser->spsContext.cpb_removal_delay_length_minus1 = val;
     if (parser->config.printLogs) printf("-------- cpb_removal_delay_length_minus1 = %d\n", val);
 
     // dpb_output_delay_length_minus1
@@ -568,7 +522,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->dpb_output_delay_length_minus1 = val;
+    parser->spsContext.dpb_output_delay_length_minus1 = val;
     if (parser->config.printLogs) printf("-------- dpb_output_delay_length_minus1 = %d\n", val);
 
     // time_offset_length
@@ -579,7 +533,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->time_offset_length = val;
+    parser->spsContext.time_offset_length = val;
     if (parser->config.printLogs) printf("-------- time_offset_length = %d\n", val);
 
     return _readBits;
@@ -825,10 +779,10 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->nal_hrd_parameters_present_flag = val;
+    parser->spsContext.nal_hrd_parameters_present_flag = val;
     if (parser->config.printLogs) printf("------ nal_hrd_parameters_present_flag = %d\n", val);
     
-    if (parser->nal_hrd_parameters_present_flag)
+    if (parser->spsContext.nal_hrd_parameters_present_flag)
     {
         // hrd_parameters
         ret = BEAVER_Parser_ParseHrdParams(parser);
@@ -848,10 +802,10 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->vcl_hrd_parameters_present_flag = val;
+    parser->spsContext.vcl_hrd_parameters_present_flag = val;
     if (parser->config.printLogs) printf("------ vcl_hrd_parameters_present_flag = %d\n", val);
     
-    if (parser->vcl_hrd_parameters_present_flag)
+    if (parser->spsContext.vcl_hrd_parameters_present_flag)
     {
         // hrd_parameters
         ret = BEAVER_Parser_ParseHrdParams(parser);
@@ -863,7 +817,7 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
         _readBits += ret;
     }
 
-    if (parser->nal_hrd_parameters_present_flag || parser->vcl_hrd_parameters_present_flag)
+    if (parser->spsContext.nal_hrd_parameters_present_flag || parser->spsContext.vcl_hrd_parameters_present_flag)
     {
         // low_delay_hrd_flag
         ret = readBits(parser, 1, &val, 1);
@@ -884,7 +838,7 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->pic_struct_present_flag = val;
+    parser->spsContext.pic_struct_present_flag = val;
     if (parser->config.printLogs) printf("------ pic_struct_present_flag = %d\n", val);
     
     // bitstream_restriction_flag
@@ -1045,7 +999,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->chroma_format_idc = val;
+        parser->spsContext.chroma_format_idc = val;
         if (parser->config.printLogs) printf("---- chroma_format_idc = %d\n", val);
 
         if (val == 3)
@@ -1058,7 +1012,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            parser->separate_colour_plane_flag = val;
+            parser->spsContext.separate_colour_plane_flag = val;
             if (parser->config.printLogs) printf("---- separate_colour_plane_flag = %d\n", val);
         }
 
@@ -1104,7 +1058,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
 
         if (val)
         {
-            for (i = 0; i < ((parser->chroma_format_idc != 3) ? 8 : 12); i++)
+            for (i = 0; i < ((parser->spsContext.chroma_format_idc != 3) ? 8 : 12); i++)
             {
                 // seq_scaling_list_present_flag
                 ret = readBits(parser, 1, &val, 1);
@@ -1138,7 +1092,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->log2_max_frame_num_minus4 = val;
+    parser->spsContext.log2_max_frame_num_minus4 = val;
     if (parser->config.printLogs) printf("---- log2_max_frame_num_minus4 = %d\n", val);
 
     // pic_order_cnt_type
@@ -1149,10 +1103,10 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->pic_order_cnt_type = val;
+    parser->spsContext.pic_order_cnt_type = val;
     if (parser->config.printLogs) printf("---- pic_order_cnt_type = %d\n", val);
 
-    if (parser->pic_order_cnt_type == 0)
+    if (parser->spsContext.pic_order_cnt_type == 0)
     {
         // log2_max_pic_order_cnt_lsb_minus4
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -1162,10 +1116,10 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->log2_max_pic_order_cnt_lsb_minus4 = val;
+        parser->spsContext.log2_max_pic_order_cnt_lsb_minus4 = val;
         if (parser->config.printLogs) printf("---- log2_max_pic_order_cnt_lsb_minus4 = %d\n", val);
     }
-    else if (parser->pic_order_cnt_type == 1)
+    else if (parser->spsContext.pic_order_cnt_type == 1)
     {
         // delta_pic_order_always_zero_flag
         ret = readBits(parser, 1, &val, 1);
@@ -1175,7 +1129,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->delta_pic_order_always_zero_flag = val;
+        parser->spsContext.delta_pic_order_always_zero_flag = val;
         if (parser->config.printLogs) printf("---- delta_pic_order_always_zero_flag = %d\n", val);
 
         // offset_for_non_ref_pic
@@ -1251,8 +1205,8 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->pic_width_in_mbs_minus1 = val;
-    width = (parser->pic_width_in_mbs_minus1 + 1) * 16;
+    parser->spsContext.pic_width_in_mbs_minus1 = val;
+    width = (parser->spsContext.pic_width_in_mbs_minus1 + 1) * 16;
     if (parser->config.printLogs) printf("---- pic_width_in_mbs_minus1 = %d (width = %d pixels)\n", val, width);
 
     // pic_height_in_map_units_minus1
@@ -1263,8 +1217,8 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->pic_height_in_map_units_minus1 = val;
-    height = (parser->pic_height_in_map_units_minus1 + 1) * 16;
+    parser->spsContext.pic_height_in_map_units_minus1 = val;
+    height = (parser->spsContext.pic_height_in_map_units_minus1 + 1) * 16;
     if (parser->config.printLogs) printf("---- pic_height_in_map_units_minus1 = %d\n", val);
 
     // frame_mbs_only_flag
@@ -1275,8 +1229,8 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->frame_mbs_only_flag = val;
-    if (!parser->frame_mbs_only_flag) height *= 2;
+    parser->spsContext.frame_mbs_only_flag = val;
+    if (!parser->spsContext.frame_mbs_only_flag) height *= 2;
     if (parser->config.printLogs) printf("---- frame_mbs_only_flag = %d (height = %d pixels)\n", val, height);
 
     if (!val)
@@ -1406,7 +1360,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
     uint32_t val = 0;
     int32_t val_se = 0;
     int readBytes = 0, _readBits = 0;
-    int i, len, pic_size_in_map_units_minus1, transform_8x8_mode_flag;
+    unsigned int i, len, pic_size_in_map_units_minus1, transform_8x8_mode_flag;
 
     // pic_parameter_set_rbsp
     if (parser->config.printLogs) printf("-- pic_parameter_set_rbsp()\n");
@@ -1439,7 +1393,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->entropy_coding_mode_flag = val;
+    parser->ppsContext.entropy_coding_mode_flag = val;
     if (parser->config.printLogs) printf("---- entropy_coding_mode_flag = %d\n", val);
 
     // bottom_field_pic_order_in_frame_present_flag
@@ -1450,7 +1404,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->bottom_field_pic_order_in_frame_present_flag = val;
+    parser->ppsContext.bottom_field_pic_order_in_frame_present_flag = val;
     if (parser->config.printLogs) printf("---- bottom_field_pic_order_in_frame_present_flag = %d\n", val);
 
     // num_slice_groups_minus1
@@ -1461,10 +1415,10 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->num_slice_groups_minus1 = val;
+    parser->ppsContext.num_slice_groups_minus1 = val;
     if (parser->config.printLogs) printf("---- num_slice_groups_minus1 = %d\n", val);
 
-    if (parser->num_slice_groups_minus1 > 0)
+    if (parser->ppsContext.num_slice_groups_minus1 > 0)
     {
         // slice_group_map_type
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -1474,12 +1428,12 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->slice_group_map_type = val;
+        parser->ppsContext.slice_group_map_type = val;
         if (parser->config.printLogs) printf("---- slice_group_map_type = %d\n", val);
         
-        if (parser->slice_group_map_type == 0)
+        if (parser->ppsContext.slice_group_map_type == 0)
         {
-            for (i = 0; i <= parser->num_slice_groups_minus1; i++)
+            for (i = 0; i <= parser->ppsContext.num_slice_groups_minus1; i++)
             {
                 // run_length_minus1[i]
                 ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -1492,9 +1446,9 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
                 if (parser->config.printLogs) printf("---- run_length_minus1[%d] = %d\n", i, val);
             }
         }
-        else if (parser->slice_group_map_type == 2)
+        else if (parser->ppsContext.slice_group_map_type == 2)
         {
-            for (i = 0; i < parser->num_slice_groups_minus1; i++)
+            for (i = 0; i < parser->ppsContext.num_slice_groups_minus1; i++)
             {
                 // top_left[i]
                 ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -1517,7 +1471,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
                 if (parser->config.printLogs) printf("---- bottom_right[%d] = %d\n", i, val);
             }
         }
-        else if ((parser->slice_group_map_type == 3) || (parser->slice_group_map_type == 4) || (parser->slice_group_map_type == 5))
+        else if ((parser->ppsContext.slice_group_map_type == 3) || (parser->ppsContext.slice_group_map_type == 4) || (parser->ppsContext.slice_group_map_type == 5))
         {
             // slice_group_change_direction_flag
             ret = readBits(parser, 1, &val, 1);
@@ -1537,10 +1491,10 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            parser->slice_group_change_rate_minus1 = val;
+            parser->ppsContext.slice_group_change_rate_minus1 = val;
             if (parser->config.printLogs) printf("---- slice_group_change_rate_minus1 = %d\n", val);
         }
-        else if (parser->slice_group_map_type == 6)
+        else if (parser->ppsContext.slice_group_map_type == 6)
         {
             // pic_size_in_map_units_minus1
             ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -1556,7 +1510,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
             for (i = 0; i <= pic_size_in_map_units_minus1; i++)
             {
                 // slice_group_id[i]
-                len = (int)ceil(log2(parser->num_slice_groups_minus1 + 1));
+                len = (int)ceil(log2(parser->ppsContext.num_slice_groups_minus1 + 1));
                 ret = readBits(parser, len, &val, 1);
                 if (ret < 0)
                 {
@@ -1577,7 +1531,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->num_ref_idx_l0_default_active_minus1 = val;
+    parser->ppsContext.num_ref_idx_l0_default_active_minus1 = val;
     if (parser->config.printLogs) printf("---- num_ref_idx_l0_default_active_minus1 = %d\n", val);
 
     // num_ref_idx_l1_default_active_minus1
@@ -1588,7 +1542,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->num_ref_idx_l1_default_active_minus1 = val;
+    parser->ppsContext.num_ref_idx_l1_default_active_minus1 = val;
     if (parser->config.printLogs) printf("---- num_ref_idx_l1_default_active_minus1 = %d\n", val);
 
     // weighted_pred_flag
@@ -1599,7 +1553,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->weighted_pred_flag = val;
+    parser->ppsContext.weighted_pred_flag = val;
     if (parser->config.printLogs) printf("---- weighted_pred_flag = %d\n", val);
 
     // weighted_bipred_idc
@@ -1610,7 +1564,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->weighted_bipred_idc = val;
+    parser->ppsContext.weighted_bipred_idc = val;
     if (parser->config.printLogs) printf("---- weighted_bipred_idc = %d\n", val);
 
     // pic_init_qp_minus26
@@ -1621,7 +1575,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- pic_init_qp_minus26 = %d\n", val);
+    if (parser->config.printLogs) printf("---- pic_init_qp_minus26 = %d\n", val_se);
 
     // pic_init_qs_minus26
     ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -1631,7 +1585,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- pic_init_qs_minus26 = %d\n", val);
+    if (parser->config.printLogs) printf("---- pic_init_qs_minus26 = %d\n", val_se);
 
     // chroma_qp_index_offset
     ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -1641,7 +1595,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- chroma_qp_index_offset = %d\n", val);
+    if (parser->config.printLogs) printf("---- chroma_qp_index_offset = %d\n", val_se);
 
     // deblocking_filter_control_present_flag
     ret = readBits(parser, 1, &val, 1);
@@ -1651,7 +1605,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->deblocking_filter_control_present_flag = val;
+    parser->ppsContext.deblocking_filter_control_present_flag = val;
     if (parser->config.printLogs) printf("---- deblocking_filter_control_present_flag = %d\n", val);
 
     // constrained_intra_pred_flag
@@ -1672,7 +1626,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->redundant_pic_cnt_present_flag = val;
+    parser->ppsContext.redundant_pic_cnt_present_flag = val;
     if (parser->config.printLogs) printf("---- redundant_pic_cnt_present_flag = %d\n", val);
 
 
@@ -1701,7 +1655,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
 
         if (val)
         {
-            for (i = 0; i < 6 + ((parser->chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag; i++)
+            for (i = 0; i < 6 + ((parser->spsContext.chroma_format_idc != 3) ? 2 : 6) * transform_8x8_mode_flag; i++)
             {
                 // pic_scaling_list_present_flag[i]
                 ret = readBits(parser, 1, &val, 1);
@@ -1734,7 +1688,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- second_chroma_qp_index_offset = %d\n", val);
+        if (parser->config.printLogs) printf("---- second_chroma_qp_index_offset = %d\n", val_se);
     }
 
 
@@ -1863,7 +1817,7 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
     int ret = 0;
     uint32_t val = 0;
     int _readBits = 0;
-    int i;
+    unsigned int i;
 
     if (parser->config.printLogs) printf("---- SEI: buffering_period\n");
 
@@ -1877,12 +1831,12 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
     _readBits += ret;
     if (parser->config.printLogs) printf("------ seq_parameter_set_id = %d\n", val);
 
-    if (parser->nal_hrd_parameters_present_flag)
+    if (parser->spsContext.nal_hrd_parameters_present_flag)
     {
-        for (i = 0; i <= parser->cpb_cnt_minus1; i++)
+        for (i = 0; i <= parser->spsContext.cpb_cnt_minus1; i++)
         {
             // initial_cpb_removal_delay[i]
-            ret = readBits(parser, parser->initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
+            ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
                 fprintf(stderr, "error: failed to read from file\n");
@@ -1892,7 +1846,7 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
             if (parser->config.printLogs) printf("------ initial_cpb_removal_delay[%d] = %d\n", i, val);
 
             // initial_cpb_removal_delay_offset[i]
-            ret = readBits(parser, parser->initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
+            ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
                 fprintf(stderr, "error: failed to read from file\n");
@@ -1903,12 +1857,12 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
         }
     }
     
-    if (parser->vcl_hrd_parameters_present_flag)
+    if (parser->spsContext.vcl_hrd_parameters_present_flag)
     {
-        for (i = 0; i <= parser->cpb_cnt_minus1; i++)
+        for (i = 0; i <= parser->spsContext.cpb_cnt_minus1; i++)
         {
             // initial_cpb_removal_delay[i]
-            ret = readBits(parser, parser->initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
+            ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
                 fprintf(stderr, "error: failed to read from file\n");
@@ -1918,7 +1872,7 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
             if (parser->config.printLogs) printf("------ initial_cpb_removal_delay[%d] = %d\n", i, val);
 
             // initial_cpb_removal_delay_offset[i]
-            ret = readBits(parser, parser->initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
+            ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
                 fprintf(stderr, "error: failed to read from file\n");
@@ -1942,10 +1896,10 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
 
     if (parser->config.printLogs) printf("---- SEI: pic_timing\n");
 
-    if (parser->nal_hrd_parameters_present_flag || parser->vcl_hrd_parameters_present_flag)
+    if (parser->spsContext.nal_hrd_parameters_present_flag || parser->spsContext.vcl_hrd_parameters_present_flag)
     {
         // cpb_removal_delay
-        ret = readBits(parser, parser->cpb_removal_delay_length_minus1 + 1, &val, 1);
+        ret = readBits(parser, parser->spsContext.cpb_removal_delay_length_minus1 + 1, &val, 1);
         if (ret < 0)
         {
             fprintf(stderr, "error: failed to read from file\n");
@@ -1955,7 +1909,7 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
         if (parser->config.printLogs) printf("------ cpb_removal_delay = %d\n", val);
 
         // dpb_output_delay
-        ret = readBits(parser, parser->dpb_output_delay_length_minus1 + 1, &val, 1);
+        ret = readBits(parser, parser->spsContext.dpb_output_delay_length_minus1 + 1, &val, 1);
         if (ret < 0)
         {
             fprintf(stderr, "error: failed to read from file\n");
@@ -1965,7 +1919,7 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
         if (parser->config.printLogs) printf("------ dpb_output_delay = %d\n", val);
     }
 
-    if (parser->pic_struct_present_flag)
+    if (parser->spsContext.pic_struct_present_flag)
     {
         // pic_struct
         ret = readBits(parser, 4, &val, 1);
@@ -2167,10 +2121,10 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
                     }
                 }
 
-                if (parser->time_offset_length)
+                if (parser->spsContext.time_offset_length)
                 {
                     // time_offset
-                    ret = readBits(parser, parser->time_offset_length, &val, 1); //TODO: signed value
+                    ret = readBits(parser, parser->spsContext.time_offset_length, &val, 1); //TODO: signed value
                     if (ret < 0)
                     {
                         fprintf(stderr, "error: failed to read from file\n");
@@ -2240,7 +2194,7 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
         // sei_payload
         switch(payloadType)
         {
-            /*case SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
+            /*case BEAVER_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
                 ret = BEAVER_Parser_ParseSeiPayload_bufferingPeriod(parser, payloadSize);
                 if (ret < 0)
                 {
@@ -2249,7 +2203,7 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
                 }
                 _readBits2 += ret;
                 break;*/ //TODO
-            /*case SEI_PAYLOAD_TYPE_PIC_TIMING:
+            /*case BEAVER_H264_SEI_PAYLOAD_TYPE_PIC_TIMING:
                 ret = BEAVER_Parser_ParseSeiPayload_picTiming(parser, payloadSize);
                 if (ret < 0)
                 {
@@ -2258,7 +2212,7 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
                 }
                 _readBits2 += ret;
                 break;*/ //TODO
-            case SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED:
+            case BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED:
                 ret = BEAVER_Parser_ParseSeiPayload_userDataUnregistered(parser, payloadSize);
                 if (ret < 0)
                 {
@@ -2384,9 +2338,10 @@ static int BEAVER_Parser_ParseFillerData(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, int sliceTypeMod5, int num_ref_idx_l0_active_minus1, int num_ref_idx_l1_active_minus1)
+static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser)
 {
-    int ret = 0, i;
+    int ret = 0;
+    unsigned int i;
     uint32_t val = 0;
     int _readBits = 0;
     int modification_of_pic_nums_idc;
@@ -2394,7 +2349,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, in
     // ref_pic_list_modification
     if (parser->config.printLogs) printf("------ ref_pic_list_modification()\n");
 
-    if ((sliceTypeMod5 != SLICE_TYPE_I) && (sliceTypeMod5 != SLICE_TYPE_SI))
+    if ((parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
     {
         // ref_pic_list_modification_flag_l0
         ret = readBits(parser, 1, &val, 1);
@@ -2404,6 +2359,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, in
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.ref_pic_list_modification_flag_l0 = val;
         if (parser->config.printLogs) printf("-------- ref_pic_list_modification_flag_l0 = %d\n", val);
         
         if (val)
@@ -2448,11 +2404,11 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, in
                 }
                 i++;
             }
-            while ((modification_of_pic_nums_idc != 3) && (i < num_ref_idx_l0_active_minus1 + 1));
+            while ((modification_of_pic_nums_idc != 3) && (i < parser->sliceContext.num_ref_idx_l0_active_minus1 + 1));
         }
     }
 
-    if (sliceTypeMod5 == SLICE_TYPE_B)
+    if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
     {
         // ref_pic_list_modification_flag_l1
         ret = readBits(parser, 1, &val, 1);
@@ -2462,6 +2418,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, in
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.ref_pic_list_modification_flag_l1 = val;
         if (parser->config.printLogs) printf("-------- ref_pic_list_modification_flag_l1 = %d\n", val);
         
         if (val)
@@ -2505,7 +2462,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser, in
                     if (parser->config.printLogs) printf("-------- long_term_pic_num = %d\n", val);
                 }
             }
-            while ((modification_of_pic_nums_idc != 3) && (i < num_ref_idx_l1_active_minus1 + 1));
+            while ((modification_of_pic_nums_idc != 3) && (i < parser->sliceContext.num_ref_idx_l1_active_minus1 + 1));
         }
     }
 
@@ -2548,7 +2505,7 @@ static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
     // dec_ref_pic_marking
     if (parser->config.printLogs) printf("------ dec_ref_pic_marking()\n");
 
-    if (parser->idrPicFlag)
+    if (parser->sliceContext.idrPicFlag)
     {
         // no_output_of_prior_pics_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2558,6 +2515,7 @@ static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.no_output_of_prior_pics_flag = val;
         if (parser->config.printLogs) printf("-------- no_output_of_prior_pics_flag = %d\n", val);
 
         // long_term_reference_flag
@@ -2568,6 +2526,7 @@ static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.long_term_reference_flag = val;
         if (parser->config.printLogs) printf("-------- long_term_reference_flag = %d\n", val);
     }
     else
@@ -2580,6 +2539,7 @@ static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.adaptive_ref_pic_marking_mode_flag = val;
         if (parser->config.printLogs) printf("-------- adaptive_ref_pic_marking_mode_flag = %d\n", val);
         
         if (val)
@@ -2665,14 +2625,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     uint32_t val = 0;
     int32_t val_se = 0;
     int readBytes = 0, _readBits = 0;
-    int field_pic_flag = 0, sliceTypeMod5;
-    int num_ref_idx_l0_active_minus1 = parser->num_ref_idx_l0_default_active_minus1;
-    int num_ref_idx_l1_active_minus1 = parser->num_ref_idx_l1_default_active_minus1;
-
-    memset(&parser->sliceInfo, 0, sizeof (BEAVER_Parser_SliceInfo_t));
-    parser->sliceInfo.idrPicFlag = parser->idrPicFlag;
-    parser->sliceInfo.nal_ref_idc = parser->nal_ref_idc;
-    parser->sliceInfo.nal_unit_type = parser->nal_unit_type;
+    int field_pic_flag = 0;
 
     if ((!parser->spsSync) || (!parser->ppsSync))
     {
@@ -2693,7 +2646,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->sliceInfo.first_mb_in_slice = val;
+    parser->sliceContext.first_mb_in_slice = val;
     if (parser->config.printLogs) printf("------ first_mb_in_slice = %d\n", val);
 
     // slice_type
@@ -2704,9 +2657,8 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    sliceTypeMod5 = val % 5;
-    parser->sliceInfo.slice_type = val;
-    parser->sliceInfo.sliceTypeMod5 = sliceTypeMod5;
+    parser->sliceContext.slice_type = val;
+    parser->sliceContext.sliceTypeMod5 = val % 5;
     if (parser->config.printLogs) printf("------ slice_type = %d (%s)\n", val, (val <= 9) ? BEAVER_Parser_sliceTypeStr[val] : "(invalid)");
 
     // pic_parameter_set_id
@@ -2717,9 +2669,10 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
+    parser->sliceContext.pic_parameter_set_id = val;
     if (parser->config.printLogs) printf("------ pic_parameter_set_id = %d\n", val);
 
-    if (parser->separate_colour_plane_flag == 1)
+    if (parser->spsContext.separate_colour_plane_flag == 1)
     {
         // colour_plane_id
         ret = readBits(parser, 2, &val, 1);
@@ -2729,21 +2682,22 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.colour_plane_id = val;
         if (parser->config.printLogs) printf("------ colour_plane_id = %d\n", val);
     }
 
     // frame_num
-    ret = readBits(parser, parser->log2_max_frame_num_minus4 + 4, &val, 1);
+    ret = readBits(parser, parser->spsContext.log2_max_frame_num_minus4 + 4, &val, 1);
     if (ret < 0)
     {
         fprintf(stderr, "error: failed to read from file\n");
         return ret;
     }
     _readBits += ret;
-    parser->sliceInfo.frame_num = val;
+    parser->sliceContext.frame_num = val;
     if (parser->config.printLogs) printf("------ frame_num = %d\n", val);
 
-    if (!parser->frame_mbs_only_flag)
+    if (!parser->spsContext.frame_mbs_only_flag)
     {
         // field_pic_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2753,10 +2707,10 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        field_pic_flag = val;
+        parser->sliceContext.field_pic_flag = val;
         if (parser->config.printLogs) printf("------ field_pic_flag = %d\n", val);
 
-        if (val)
+        if (parser->sliceContext.field_pic_flag)
         {
             // bottom_field_flag
             ret = readBits(parser, 1, &val, 1);
@@ -2766,11 +2720,12 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
+            parser->sliceContext.bottom_field_flag = val;
             if (parser->config.printLogs) printf("------ bottom_field_flag = %d\n", val);
         }
     }
 
-    if (parser->idrPicFlag)
+    if (parser->sliceContext.idrPicFlag)
     {
         // idr_pic_id
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2780,23 +2735,24 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->sliceInfo.idr_pic_id = val;
+        parser->sliceContext.idr_pic_id = val;
         if (parser->config.printLogs) printf("------ idr_pic_id = %d\n", val);
     }
 
-    if (parser->pic_order_cnt_type == 0)
+    if (parser->spsContext.pic_order_cnt_type == 0)
     {
         // pic_order_cnt_lsb
-        ret = readBits(parser, parser->log2_max_pic_order_cnt_lsb_minus4 + 4, &val, 1);
+        ret = readBits(parser, parser->spsContext.log2_max_pic_order_cnt_lsb_minus4 + 4, &val, 1);
         if (ret < 0)
         {
             fprintf(stderr, "error: failed to read from file\n");
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.pic_order_cnt_lsb = val;
         if (parser->config.printLogs) printf("------ pic_order_cnt_lsb = %d\n", val);
 
-        if ((parser->bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
+        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
         {
             // delta_pic_order_cnt_bottom
             ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -2806,11 +2762,12 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ delta_pic_order_cnt_bottom = %d\n", val);
+            parser->sliceContext.delta_pic_order_cnt_bottom = val_se;
+            if (parser->config.printLogs) printf("------ delta_pic_order_cnt_bottom = %d\n", val_se);
         }
     }
 
-    if ((parser->pic_order_cnt_type == 1) && (!parser->delta_pic_order_always_zero_flag))
+    if ((parser->spsContext.pic_order_cnt_type == 1) && (!parser->spsContext.delta_pic_order_always_zero_flag))
     {
         // delta_pic_order_cnt[0]
         ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -2820,9 +2777,10 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ delta_pic_order_cnt[0] = %d\n", val);
+        parser->sliceContext.delta_pic_order_cnt_0 = val_se;
+        if (parser->config.printLogs) printf("------ delta_pic_order_cnt[0] = %d\n", val_se);
 
-        if ((parser->bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
+        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
         {
             // delta_pic_order_cnt[1]
             ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -2832,11 +2790,12 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ delta_pic_order_cnt[1] = %d\n", val);
+            parser->sliceContext.delta_pic_order_cnt_1 = val_se;
+            if (parser->config.printLogs) printf("------ delta_pic_order_cnt[1] = %d\n", val_se);
         }
     }
 
-    if (parser->redundant_pic_cnt_present_flag)
+    if (parser->ppsContext.redundant_pic_cnt_present_flag)
     {
         // redundant_pic_cnt
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2846,10 +2805,11 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.redundant_pic_cnt = val;
         if (parser->config.printLogs) printf("------ redundant_pic_cnt = %d\n", val);
     }
     
-    if (sliceTypeMod5 == SLICE_TYPE_B)
+    if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
     {
         // direct_spatial_mv_pred_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2859,10 +2819,11 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.direct_spatial_mv_pred_flag = val;
         if (parser->config.printLogs) printf("------ direct_spatial_mv_pred_flag = %d\n", val);
     }
     
-    if ((sliceTypeMod5 == SLICE_TYPE_P) || (sliceTypeMod5 == SLICE_TYPE_SP) || (sliceTypeMod5 == SLICE_TYPE_B))
+    if ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B))
     {
         // num_ref_idx_active_override_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2871,6 +2832,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             fprintf(stderr, "error: failed to read from file\n");
             return ret;
         }
+        parser->sliceContext.num_ref_idx_active_override_flag = val;
         _readBits += ret;
         if (parser->config.printLogs) printf("------ num_ref_idx_active_override_flag = %d\n", val);
         
@@ -2884,10 +2846,10 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            num_ref_idx_l0_active_minus1 = val;
+            parser->sliceContext.num_ref_idx_l0_active_minus1 = val;
             if (parser->config.printLogs) printf("------ num_ref_idx_l0_active_minus1 = %d\n", val);
 
-            if (sliceTypeMod5 == SLICE_TYPE_B)
+            if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
             {
                 // num_ref_idx_l1_active_minus1
                 ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2897,13 +2859,13 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                     return ret;
                 }
                 _readBits += ret;
-                num_ref_idx_l1_active_minus1 = val;
+                parser->sliceContext.num_ref_idx_l1_active_minus1 = val;
                 if (parser->config.printLogs) printf("------ num_ref_idx_l1_active_minus1 = %d\n", val);
             }
         }
     }
     
-    if ((parser->nal_unit_type == 20) || (parser->nal_unit_type == 21))
+    if ((parser->sliceContext.nal_unit_type == 20) || (parser->sliceContext.nal_unit_type == 21))
     {    
         // ref_pic_list_mvc_modification()
         //TODO
@@ -2912,7 +2874,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     else
     {
         // ref_pic_list_modification()
-        ret = BEAVER_Parser_ParseRefPicListModification(parser, sliceTypeMod5, num_ref_idx_l0_active_minus1, num_ref_idx_l1_active_minus1);
+        ret = BEAVER_Parser_ParseRefPicListModification(parser);
         if (ret < 0)
         {
             fprintf(stderr, "error: BEAVER_Parser_ParseRefPicListModification() failed (%d)\n", ret);
@@ -2922,8 +2884,8 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     }
     
     
-    if ((parser->weighted_pred_flag && ((sliceTypeMod5 == SLICE_TYPE_P) || (sliceTypeMod5 == SLICE_TYPE_SP))) 
-            || ((parser->weighted_bipred_idc == 1) && (sliceTypeMod5 == SLICE_TYPE_B)))
+    if ((parser->ppsContext.weighted_pred_flag && ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP))) 
+            || ((parser->ppsContext.weighted_bipred_idc == 1) && (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)))
     {
         // pred_weight_table()
         ret = BEAVER_Parser_ParsePredWeightTable(parser);
@@ -2935,7 +2897,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         _readBits += ret;
     }
     
-    if (parser->nal_ref_idc != 0)
+    if (parser->sliceContext.nal_ref_idc != 0)
     {
         // dec_ref_pic_marking()
         ret = BEAVER_Parser_ParseDecRefPicMarking(parser);
@@ -2947,7 +2909,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         _readBits += ret;
     }
     
-    if ((parser->entropy_coding_mode_flag) && (sliceTypeMod5 != SLICE_TYPE_I) && (sliceTypeMod5 != SLICE_TYPE_SI))
+    if ((parser->ppsContext.entropy_coding_mode_flag) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
     {
         // cabac_init_idc
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2957,6 +2919,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.cabac_init_idc = val;
         if (parser->config.printLogs) printf("------ cabac_init_idc = %d\n", val);
     }
     
@@ -2968,12 +2931,12 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         return ret;
     }
     _readBits += ret;
-    parser->sliceInfo.slice_qp_delta = val;
-    if (parser->config.printLogs) printf("------ slice_qp_delta = %d\n", val);
+    parser->sliceContext.slice_qp_delta = val_se;
+    if (parser->config.printLogs) printf("------ slice_qp_delta = %d\n", val_se);
 
-    if ((sliceTypeMod5 == SLICE_TYPE_SP) || (sliceTypeMod5 == SLICE_TYPE_SI))
+    if ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SI))
     {
-        if (sliceTypeMod5 == SLICE_TYPE_SP)
+        if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP)
         {
             // sp_for_switch_flag
             ret = readBits(parser, 1, &val, 1);
@@ -2983,6 +2946,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
+            parser->sliceContext.sp_for_switch_flag = val;
             if (parser->config.printLogs) printf("------ sp_for_switch_flag = %d\n", val);
         }
 
@@ -2994,10 +2958,11 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ slice_qs_delta = %d\n", val);
+        parser->sliceContext.slice_qs_delta = val_se;
+        if (parser->config.printLogs) printf("------ slice_qs_delta = %d\n", val_se);
     }
     
-    if (parser->deblocking_filter_control_present_flag)
+    if (parser->ppsContext.deblocking_filter_control_present_flag)
     {
         // disable_deblocking_filter_idc
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -3007,7 +2972,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
-        parser->sliceInfo.disable_deblocking_filter_idc = val;
+        parser->sliceContext.disable_deblocking_filter_idc = val;
         if (parser->config.printLogs) printf("------ disable_deblocking_filter_idc = %d\n", val);
         
         if (val != 1)
@@ -3020,7 +2985,8 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ slice_alpha_c0_offset_div2 = %d\n", val);
+            parser->sliceContext.slice_alpha_c0_offset_div2 = val_se;
+            if (parser->config.printLogs) printf("------ slice_alpha_c0_offset_div2 = %d\n", val_se);
 
             // slice_beta_offset_div2
             ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -3030,16 +2996,17 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ slice_beta_offset_div2 = %d\n", val);
+            parser->sliceContext.slice_beta_offset_div2 = val_se;
+            if (parser->config.printLogs) printf("------ slice_beta_offset_div2 = %d\n", val_se);
         }
     }
     
-    if ((parser->num_slice_groups_minus1 > 0) && (parser->slice_group_map_type >= 3) && (parser->slice_group_map_type <= 5))
+    if ((parser->ppsContext.num_slice_groups_minus1 > 0) && (parser->ppsContext.slice_group_map_type >= 3) && (parser->ppsContext.slice_group_map_type <= 5))
     {
         int picSizeInMapUnits, n;
 
-        picSizeInMapUnits = (parser->pic_width_in_mbs_minus1 + 1) * (parser->pic_height_in_map_units_minus1 + 1);
-        n = ceil(log2((picSizeInMapUnits / (parser->slice_group_change_rate_minus1 + 1)) + 1));
+        picSizeInMapUnits = (parser->spsContext.pic_width_in_mbs_minus1 + 1) * (parser->spsContext.pic_height_in_map_units_minus1 + 1);
+        n = ceil(log2((picSizeInMapUnits / (parser->ppsContext.slice_group_change_rate_minus1 + 1)) + 1));
 
         // slice_group_change_cycle
         ret = readBits(parser, n, &val, 1);
@@ -3049,6 +3016,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->sliceContext.slice_group_change_cycle = val;
         if (parser->config.printLogs) printf("------ slice_group_change_cycle = %d\n", val);
     }
 
@@ -3102,19 +3070,19 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
     readBytes++;
 
     forbidden_zero_bit = (val >> 7) & 0x1;
-    parser->nal_ref_idc = (val >> 5) & 0x3;
-    parser->nal_unit_type = val & 0x1F;
+    parser->sliceContext.nal_ref_idc = (val >> 5) & 0x3;
+    parser->sliceContext.nal_unit_type = val & 0x1F;
 
     if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->nal_ref_idc, parser->nal_unit_type, BEAVER_Parser_naluTypeStr[parser->nal_unit_type]);
 
-    parser->idrPicFlag = (parser->nal_unit_type == 5) ? 1 : 0;
+    parser->sliceContext.idrPicFlag = (parser->sliceContext.nal_unit_type == 5) ? 1 : 0;
     
-    if (BEAVER_Parser_ParseNaluType[parser->nal_unit_type])
+    if (BEAVER_Parser_ParseNaluType[parser->sliceContext.nal_unit_type])
     {
-        ret = BEAVER_Parser_ParseNaluType[parser->nal_unit_type](parser);
+        ret = BEAVER_Parser_ParseNaluType[parser->sliceContext.nal_unit_type](parser);
         if (ret < 0)
         {
-            fprintf(stderr, "Error: BEAVER_Parser_ParseNaluType[%d]() failed (%d)\n", parser->nal_unit_type, ret);
+            fprintf(stderr, "Error: BEAVER_Parser_ParseNaluType[%d]() failed (%d)\n", parser->sliceContext.nal_unit_type, ret);
             return -1;
         }
         readBytes += ret;
@@ -3144,7 +3112,7 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
     if (ret != 1) return -1;
     shiftVal = val = ntohl(val);
 
-    while ((shiftVal != BYTE_STREAM_NALU_START_CODE) && (pos < end))
+    while ((shiftVal != BEAVER_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end))
     {
         if ((!i) && (pos < end - 4))
         {
@@ -3166,7 +3134,7 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
         i--;
     }
 
-    if (shiftVal == BYTE_STREAM_NALU_START_CODE)
+    if (shiftVal == BEAVER_H264_BYTE_STREAM_NALU_START_CODE)
     {
         pos += 4;
         ret = fseek(fp, pos, SEEK_SET);
@@ -3299,9 +3267,9 @@ static int BEAVER_Parser_StartcodeMatch_buffer(BEAVER_Parser_t* parser, uint8_t*
         shiftVal |= (*ptr++) & 0xFF;
         pos++;
     }
-    while (((shiftVal != BYTE_STREAM_NALU_START_CODE) && (pos < end)) || (pos < 4));
+    while (((shiftVal != BEAVER_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end)) || (pos < 4));
 
-    if (shiftVal == BYTE_STREAM_NALU_START_CODE)
+    if (shiftVal == BEAVER_H264_BYTE_STREAM_NALU_START_CODE)
     {
         ret = pos;
     }
@@ -3415,7 +3383,7 @@ int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle)
         return -1;
     }
 
-    return parser->nal_unit_type;
+    return parser->sliceContext.nal_unit_type;
 }
 
 
@@ -3436,7 +3404,16 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
         return -1;
     }
 
-    memcpy(sliceInfo, &parser->sliceInfo, sizeof(BEAVER_Parser_SliceInfo_t));
+    sliceInfo->idrPicFlag = parser->sliceContext.idrPicFlag;
+    sliceInfo->nal_ref_idc = parser->sliceContext.nal_ref_idc;
+    sliceInfo->nal_unit_type = parser->sliceContext.nal_unit_type;
+    sliceInfo->first_mb_in_slice = parser->sliceContext.first_mb_in_slice;
+    sliceInfo->slice_type = parser->sliceContext.slice_type;
+    sliceInfo->sliceTypeMod5 = parser->sliceContext.sliceTypeMod5;
+    sliceInfo->frame_num = parser->sliceContext.frame_num;
+    sliceInfo->idr_pic_id = parser->sliceContext.idr_pic_id;
+    sliceInfo->slice_qp_delta = parser->sliceContext.slice_qp_delta;
+    sliceInfo->disable_deblocking_filter_idc = parser->sliceContext.disable_deblocking_filter_idc;
 
     return ret;
 }
@@ -3463,6 +3440,62 @@ int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf,
         if (bufSize) *bufSize = 0;
         if (pBuf) *pBuf = NULL;
     }
+
+    return ret;
+}
+
+
+int BEAVER_Parser_GetSpsPpsContext(BEAVER_Parser_Handle parserHandle, void **spsContext, void **ppsContext)
+{
+    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    int ret = 0;
+
+    if (!parserHandle)
+    {
+        fprintf(stderr, "Error: invalid handle\n");
+        return -1;
+    }
+    if ((!spsContext) || (!ppsContext))
+    {
+        fprintf(stderr, "Error: invalid pointer\n");
+        return -1;
+    }
+
+    if ((!parser->spsSync) || (!parser->ppsSync))
+    {
+        return -1;
+    }
+
+    *spsContext = &parser->spsContext;
+    *ppsContext = &parser->ppsContext;
+
+    return ret;
+}
+
+
+int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **sliceContext)
+{
+    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    int ret = 0;
+
+    if (!parserHandle)
+    {
+        fprintf(stderr, "Error: invalid handle\n");
+        return -1;
+    }
+    if (!sliceContext)
+    {
+        fprintf(stderr, "Error: invalid pointer\n");
+        return -1;
+    }
+
+    int lastNaluType = BEAVER_Parser_GetLastNaluType(parserHandle);
+    if ((lastNaluType != BEAVER_H264_NALU_TYPE_SLICE) && (lastNaluType != BEAVER_H264_NALU_TYPE_SLICE_IDR))
+    {
+        return -1;
+    }
+
+    *sliceContext = &parser->sliceContext;
 
     return ret;
 }

@@ -38,16 +38,16 @@ typedef struct
  */
 typedef struct
 {
-    int idrPicFlag;                         /**< idrPicFlag syntax element */
-    int nal_ref_idc;                        /**< nal_ref_idc syntax element */
-    int nal_unit_type;                      /**< nal_unit_type syntax element */
-    int first_mb_in_slice;                  /**< first_mb_in_slice syntax element */
-    int slice_type;                         /**< slice_type syntax element */
-    int sliceTypeMod5;                      /**< slice_type syntax element modulo 5 */
-    int frame_num;                          /**< frame_num syntax element */
-    int idr_pic_id;                         /**< idr_pic_id syntax element */
-    int slice_qp_delta;                     /**< slice_qp_delta syntax element */
-    int disable_deblocking_filter_idc;      /**< disable_deblocking_filter_idc syntax element */
+    unsigned int idrPicFlag;                         /**< idrPicFlag syntax element */
+    unsigned int nal_ref_idc;                        /**< nal_ref_idc syntax element */
+    unsigned int nal_unit_type;                      /**< nal_unit_type syntax element */
+    unsigned int first_mb_in_slice;                  /**< first_mb_in_slice syntax element */
+    unsigned int slice_type;                         /**< slice_type syntax element */
+    unsigned int sliceTypeMod5;                      /**< slice_type syntax element modulo 5 */
+    unsigned int frame_num;                          /**< frame_num syntax element */
+    unsigned int idr_pic_id;                         /**< idr_pic_id syntax element */
+    int slice_qp_delta;                              /**< slice_qp_delta syntax element */
+    unsigned int disable_deblocking_filter_idc;      /**< disable_deblocking_filter_idc syntax element */
 
 } BEAVER_Parser_SliceInfo_t;
 
@@ -144,7 +144,7 @@ int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle);
  * @brief Get the slice info.
  *
  * The function returns the slice info of the last parsed slice. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function. 
- * This function should only be called if the last NALU type is either 1 or 5 (coded slice).
+ * This function must only be called if the last NALU type is either 1 or 5 (coded slice).
  *
  * @param parserHandle Instance handle.
  * @param sliceInfo Pointer to the slice info structure to fill.
@@ -172,6 +172,36 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
  * @return -1 if an error occurred.
  */
 int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf, unsigned int* bufSize);
+
+
+/**
+ * @brief Gets the Parser SPS and PPS context.
+ *
+ * The function exports SPS and PPS context from a Beaver Parser.
+ *
+ * @param[in] parserHandle Instance handle.
+ * @param[out] spsContext Pointer to the SPS context
+ * @param[out] ppsContext Pointer to the PPS context
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetSpsPpsContext(BEAVER_Parser_Handle parserHandle, void **spsContext, void **ppsContext);
+
+
+/**
+ * @brief Gets the Parser slice context.
+ *
+ * The function exports the last processed slice context from a Beaver Parser.
+ * This function must only be called if the last NALU type is either 1 or 5 (coded slice).
+ *
+ * @param[in] parserHandle Instance handle.
+ * @param[out] sliceContext Pointer to the slice context
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **sliceContext);
 
 
 #ifdef __cplusplus
