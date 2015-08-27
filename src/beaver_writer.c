@@ -13,32 +13,7 @@
 #include <arpa/inet.h>
 
 #include <beaver/beaver_writer.h>
-
-
-#define BEAVER_WRITER_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
-
-#define BEAVER_WRITER_H264_NALU_TYPE_SLICE 1
-#define BEAVER_WRITER_H264_NALU_TYPE_SLICE_IDR 5
-#define BEAVER_WRITER_H264_NALU_TYPE_SEI 6
-#define BEAVER_WRITER_H264_NALU_TYPE_SPS 7
-#define BEAVER_WRITER_H264_NALU_TYPE_PPS 8
-#define BEAVER_WRITER_H264_NALU_TYPE_AUD 9
-#define BEAVER_WRITER_H264_NALU_TYPE_FILLER_DATA 12
-
-#define BEAVER_WRITER_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD 0
-#define BEAVER_WRITER_H264_SEI_PAYLOAD_TYPE_PIC_TIMING 1
-#define BEAVER_WRITER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED 5
-
-#define BEAVER_WRITER_H264_SLICE_TYPE_P 0
-#define BEAVER_WRITER_H264_SLICE_TYPE_B 1
-#define BEAVER_WRITER_H264_SLICE_TYPE_I 2
-#define BEAVER_WRITER_H264_SLICE_TYPE_SP 3
-#define BEAVER_WRITER_H264_SLICE_TYPE_SI 4
-#define BEAVER_WRITER_H264_SLICE_TYPE_P_ALL 5
-#define BEAVER_WRITER_H264_SLICE_TYPE_B_ALL 6
-#define BEAVER_WRITER_H264_SLICE_TYPE_I_ALL 7
-#define BEAVER_WRITER_H264_SLICE_TYPE_SP_ALL 8
-#define BEAVER_WRITER_H264_SLICE_TYPE_SI_ALL 9
+#include "beaver_h264.h"
 
 
 typedef struct BEAVER_Writer_s
@@ -54,6 +29,12 @@ typedef struct BEAVER_Writer_s
     uint32_t cache;
     int cacheLength;   // in bits
     int oldZeroCount;
+
+    // Context
+    BEAVER_H264_SpsContext_t spsContext;
+    BEAVER_H264_PpsContext_t ppsContext;
+    int isSpsPpsContextValid;
+    BEAVER_H264_SliceContext_t sliceContext;
 
 } BEAVER_Writer_t;
 
@@ -319,7 +300,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
     // NALU start code
     if (writer->config.naluPrefix)
     {
-        ret = writeBits(writer, 32, BEAVER_WRITER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
             return -1;
@@ -330,7 +311,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
     // forbidden_zero_bit = 0
     // nal_ref_idc = 0
     // nal_unit_type = 6
-    ret = writeBits(writer, 8, BEAVER_WRITER_H264_NALU_TYPE_SEI, 0);
+    ret = writeBits(writer, 8, BEAVER_H264_NALU_TYPE_SEI, 0);
     if (ret < 0)
     {
         return -1;
@@ -339,7 +320,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
 
     if ((pbUserDataUnregistered) && (userDataUnregisteredSize >= 16))
     {
-        payloadType = BEAVER_WRITER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
+        payloadType = BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
         payloadSize = userDataUnregisteredSize;
 
         while (payloadType > 255)
@@ -405,6 +386,548 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
     bitsWritten += ret;
 
     *outputSize = writer->naluSize;
+
+    return 0;
+}
+
+
+static int BEAVER_Writer_WriteRefPicListModification(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+{
+    int ret = 0;
+    int bitsWritten = 0;
+
+    if ((slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    {
+        // ref_pic_list_modification_flag_l0
+        ret = writeBits(writer, 1, slice->ref_pic_list_modification_flag_l0, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->ref_pic_list_modification_flag_l0)
+        {
+            // UNSUPPORTED
+            return -1;
+        }
+    }
+
+    if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    {
+        // ref_pic_list_modification_flag_l1
+        ret = writeBits(writer, 1, slice->ref_pic_list_modification_flag_l1, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->ref_pic_list_modification_flag_l1)
+        {
+            // UNSUPPORTED
+            return -1;
+        }
+    }
+
+    return bitsWritten;
+}
+
+
+static int BEAVER_Writer_WriteDecRefPicMarking(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+{
+    int ret = 0;
+    int bitsWritten = 0;
+
+    if (slice->idrPicFlag)
+    {
+        // no_output_of_prior_pics_flag
+        ret = writeBits(writer, 1, slice->no_output_of_prior_pics_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        // long_term_reference_flag
+        ret = writeBits(writer, 1, slice->long_term_reference_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+    else
+    {
+        // adaptive_ref_pic_marking_mode_flag
+        ret = writeBits(writer, 1, slice->adaptive_ref_pic_marking_mode_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->adaptive_ref_pic_marking_mode_flag)
+        {
+            // UNSUPPORTED
+            return -1;
+        }
+    }
+
+    return bitsWritten;
+}
+
+
+static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+{
+    int ret = 0;
+    int bitsWritten = 0;
+
+    // first_mb_in_slice
+    ret = writeBits_expGolomb_ue(writer, slice->first_mb_in_slice, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // slice_type
+    ret = writeBits_expGolomb_ue(writer, slice->slice_type, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // pic_parameter_set_id
+    ret = writeBits_expGolomb_ue(writer, slice->pic_parameter_set_id, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    if (sps->separate_colour_plane_flag == 1)
+    {
+        // colour_plane_id
+        ret = writeBits(writer, 2, slice->colour_plane_id, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    // frame_num
+    ret = writeBits(writer, sps->log2_max_frame_num_minus4 + 4, slice->frame_num, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    if (!sps->frame_mbs_only_flag)
+    {
+        // field_pic_flag
+        ret = writeBits(writer, 1, slice->field_pic_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->field_pic_flag)
+        {
+            // bottom_field_flag
+            ret = writeBits(writer, 1, slice->bottom_field_flag, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+        }
+    }
+
+    if (slice->idrPicFlag)
+    {
+        // idr_pic_id
+        ret = writeBits_expGolomb_ue(writer, slice->idr_pic_id, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if (sps->pic_order_cnt_type == 0)
+    {
+        // pic_order_cnt_lsb
+        ret = writeBits(writer, sps->log2_max_pic_order_cnt_lsb_minus4 + 4, slice->pic_order_cnt_lsb, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if ((pps->bottom_field_pic_order_in_frame_present_flag) && (!slice->field_pic_flag))
+        {
+            // delta_pic_order_cnt_bottom
+            ret = writeBits_expGolomb_se(writer, slice->delta_pic_order_cnt_bottom, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+        }
+    }
+
+    if ((sps->pic_order_cnt_type == 1) && (!sps->delta_pic_order_always_zero_flag))
+    {
+        // delta_pic_order_cnt[0]
+        ret = writeBits_expGolomb_se(writer, slice->delta_pic_order_cnt_0, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if ((pps->bottom_field_pic_order_in_frame_present_flag) && (!slice->field_pic_flag))
+        {
+            // delta_pic_order_cnt[1]
+            ret = writeBits_expGolomb_se(writer, slice->delta_pic_order_cnt_1, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+        }
+    }
+
+    if (pps->redundant_pic_cnt_present_flag)
+    {
+        // redundant_pic_cnt
+        ret = writeBits_expGolomb_ue(writer, slice->redundant_pic_cnt, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    {
+        // direct_spatial_mv_pred_flag
+        ret = writeBits(writer, 1, slice->direct_spatial_mv_pred_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B))
+    {
+        // num_ref_idx_active_override_flag
+        ret = writeBits(writer, 1, slice->num_ref_idx_active_override_flag, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->num_ref_idx_active_override_flag)
+        {
+            // num_ref_idx_l0_active_minus1
+            ret = writeBits_expGolomb_ue(writer, slice->num_ref_idx_l0_active_minus1, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+
+            if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+            {
+                // num_ref_idx_l1_active_minus1
+                ret = writeBits_expGolomb_ue(writer, slice->num_ref_idx_l1_active_minus1, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                bitsWritten += ret;
+            }
+        }
+    }
+
+    if ((slice->nal_unit_type == 20) || (slice->nal_unit_type == 21))
+    {
+        // ref_pic_list_mvc_modification()
+        // UNSUPPORTED
+        return -1;
+    }
+    else
+    {
+        // ref_pic_list_modification()
+        ret = BEAVER_Writer_WriteRefPicListModification(writer, slice, sps, pps);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if ((pps->weighted_pred_flag && ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP))) 
+            || ((pps->weighted_bipred_idc == 1) && (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)))
+    {
+        // pred_weight_table()
+        // UNSUPPORTED
+        return -1;
+    }
+
+    if (slice->nal_ref_idc != 0)
+    {
+        // dec_ref_pic_marking()
+        ret = BEAVER_Writer_WriteDecRefPicMarking(writer, slice, sps, pps);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if ((pps->entropy_coding_mode_flag) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    {
+        // cabac_init_idc
+        ret = writeBits_expGolomb_ue(writer, slice->cabac_init_idc, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    // slice_qp_delta
+    ret = writeBits_expGolomb_se(writer, slice->slice_qp_delta, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    if ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SI))
+    {
+        if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP)
+        {
+            // sp_for_switch_flag
+            ret = writeBits(writer, 1, slice->sp_for_switch_flag, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+        }
+
+        // slice_qs_delta
+        ret = writeBits_expGolomb_se(writer, slice->slice_qs_delta, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    if (pps->deblocking_filter_control_present_flag)
+    {
+        // disable_deblocking_filter_idc
+        ret = writeBits_expGolomb_ue(writer, slice->disable_deblocking_filter_idc, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        if (slice->disable_deblocking_filter_idc != 1)
+        {
+            // slice_alpha_c0_offset_div2
+            ret = writeBits_expGolomb_se(writer, slice->slice_alpha_c0_offset_div2, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+
+            // slice_beta_offset_div2
+            ret = writeBits_expGolomb_se(writer, slice->slice_beta_offset_div2, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
+        }
+    }
+
+    if ((pps->num_slice_groups_minus1 > 0) && (pps->slice_group_map_type >= 3) && (pps->slice_group_map_type <= 5))
+    {
+        int picSizeInMapUnits, n;
+
+        picSizeInMapUnits = (sps->pic_width_in_mbs_minus1 + 1) * (sps->pic_height_in_map_units_minus1 + 1);
+        n = ceil(log2((picSizeInMapUnits / (pps->slice_group_change_rate_minus1 + 1)) + 1));
+
+        // slice_group_change_cycle
+        ret = writeBits(writer, n, slice->slice_group_change_cycle, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    return bitsWritten;
+}
+
+
+static int BEAVER_Writer_WriteSkippedPSliceData(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+{
+    int ret = 0;
+    int bitsWritten = 0;
+
+    if (pps->entropy_coding_mode_flag)
+    {
+        // cabac_alignment_one_bit
+        // UNSUPPORTED
+        return -1;
+    }
+
+    // mb_skip_run
+    ret = writeBits_expGolomb_ue(writer, slice->sliceMbCount, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    return bitsWritten;
+}
+
+
+int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+{
+    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    int ret = 0, bitsWritten = 0;
+
+    if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
+    {
+        return -1;
+    }
+
+    if (!writer->isSpsPpsContextValid)
+    {
+        return -1;
+    }
+
+    // Slice context
+    if (sliceContext)
+    {
+        memcpy(&writer->sliceContext, sliceContext, sizeof(BEAVER_H264_SliceContext_t));
+        writer->sliceContext.first_mb_in_slice = firstMbInSlice;
+        writer->sliceContext.sliceMbCount = sliceMbCount;
+        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? BEAVER_H264_SLICE_TYPE_P_ALL : BEAVER_H264_SLICE_TYPE_P;
+        writer->sliceContext.sliceTypeMod5 = writer->sliceContext.slice_type % 5;
+        writer->sliceContext.redundant_pic_cnt = 0;
+        writer->sliceContext.direct_spatial_mv_pred_flag = 0;
+        writer->sliceContext.slice_qp_delta = 0;
+        writer->sliceContext.disable_deblocking_filter_idc = 2; // disable deblocking across slice boundaries
+        writer->sliceContext.slice_alpha_c0_offset_div2 = 0;
+        writer->sliceContext.slice_beta_offset_div2 = 0;
+    }
+    else
+    {
+        //TODO
+        return -1;
+    }
+
+    writer->pNaluBuf = pbOutputBuf;
+    writer->naluBufSize = outputBufSize;
+    writer->naluSize = 0;
+
+    // Reset the bitstream cache
+    writer->cache = 0;
+    writer->cacheLength = 0;
+    writer->oldZeroCount = 0;
+
+    // NALU start code
+    if (writer->config.naluPrefix)
+    {
+        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    // forbidden_zero_bit
+    // nal_ref_idc
+    // nal_unit_type
+    ret = writeBits(writer, 8, ((writer->sliceContext.nal_ref_idc & 3) << 5) | writer->sliceContext.nal_unit_type, 0);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // slice_header
+    ret = BEAVER_Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // slice_data
+    ret = BEAVER_Writer_WriteSkippedPSliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // rbsp_slice_trailing_bits
+
+    // rbsp_trailing_bits
+    ret = writeBits(writer, 1, 1, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    ret = bitstreamByteAlign(writer, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    //TODO: cabac_zero_word
+
+    *outputSize = writer->naluSize;
+
+    return 0;
+}
+
+
+int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void *spsContext, const void *ppsContext)
+{
+    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+
+    if ((!writerHandle) || (!spsContext) || (!ppsContext))
+    {
+        return -1;
+    }
+
+    memcpy(&writer->spsContext, spsContext, sizeof(BEAVER_H264_SpsContext_t));
+    memcpy(&writer->ppsContext, ppsContext, sizeof(BEAVER_H264_PpsContext_t));
+    writer->isSpsPpsContextValid = 1;
 
     return 0;
 }
