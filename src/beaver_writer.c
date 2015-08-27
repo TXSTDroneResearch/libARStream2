@@ -212,13 +212,13 @@ static inline int writeBits_expGolomb_code(BEAVER_Writer_t* _writer, uint32_t _v
         _halfLength = 31 - _leadingZeroBits;
 
         // Prefix
-        _ret = writeBits(_writer, 0, _halfLength, _emulationPrevention);
-        if (_ret != _halfLength) return -1;
+        _ret = writeBits(_writer, _halfLength, 0, _emulationPrevention);
+        if (_ret != _halfLength) return -41;
         _bitsWritten += _ret;
 
         // Suffix
-        _ret = writeBits(_writer, _value, _halfLength + 1, _emulationPrevention);
-        if (_ret != _halfLength + 1) return -1;
+        _ret = writeBits(_writer, _halfLength + 1, _value, _emulationPrevention);
+        if (_ret != _halfLength + 1) return -42;
         _bitsWritten += _ret;
     }
 
