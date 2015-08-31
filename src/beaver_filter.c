@@ -954,6 +954,8 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadShouldStop = 1;
     ARSAL_Mutex_Unlock(&(filter->mutex));
+    /* signal the filter thread to avoid a deadlock */
+    ARSAL_Cond_Signal(&(filter->fifoCond));
 
     return ret;
 }
