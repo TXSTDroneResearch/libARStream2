@@ -293,7 +293,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
     int ret = 0;
     BEAVER_Filter_H264SliceType_t sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
 
-    if ((!naluBuffer) || (naluSize <= 0))
+    if ((!naluBuffer) || (naluSize <= 4))
     {
         return -1;
     }
@@ -304,11 +304,10 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
         *((uint32_t*)naluBuffer) = (uint32_t)naluSize;
     }
 
-    //TODO: use a more efficient function than BEAVER_Parser_ReadNextNalu_buffer
-    ret = BEAVER_Parser_ReadNextNalu_buffer(filter->parser, naluBuffer, naluSize, NULL);
+    ret = BEAVER_Parser_SetupNalu_buffer(filter->parser, naluBuffer + 4, naluSize - 4);
     if (ret < 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_ReadNextNalu_buffer() failed (%d)", ret);
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_SetupNalu_buffer() failed (%d)", ret);
     }
 
     if (ret >= 0)

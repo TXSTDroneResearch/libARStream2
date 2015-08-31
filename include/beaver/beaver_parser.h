@@ -101,7 +101,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
  * The function finds the next NALU start and end in the buffer. The NALU shall then be parsed using the BEAVER_Parser_ParseNalu() function.
  *
  * @param parserHandle Instance handle.
- * @param buf Buffer to parse.
+ * @param pBuf Buffer to parse.
  * @param bufSize Buffer size.
  * @param nextStartCodePos Optional pointer to the following NALU start code filled if one has been found (i.e. if more NALUs are present 
  * in the buffer).
@@ -111,6 +111,22 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
  * @return -1 if an error occurred.
  */
 int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos);
+
+
+/**
+ * @brief Setup a NAL unit from a buffer before parsing.
+ *
+ * The function configures the parser for a NALU. The NALU shall then be parsed using the BEAVER_Parser_ParseNalu() function.
+ * The buffer must contain only one NAL unit without start code.
+ *
+ * @param parserHandle Instance handle.
+ * @param pNaluBuf NAL unit buffer to parse.
+ * @param naluSize NAL unit size.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_SetupNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize);
 
 
 /**

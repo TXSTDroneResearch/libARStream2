@@ -3373,6 +3373,35 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
 }
 
 
+int BEAVER_Parser_SetupNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize)
+{
+    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    int ret = 0;
+
+    if (!parserHandle)
+    {
+        fprintf(stderr, "Error: invalid handle\n");
+        return -1;
+    }
+
+    if (parser->naluBufManaged)
+    {
+        fprintf(stderr, "Error: invalid state\n");
+        return -1;
+    }
+
+    parser->naluSize = parser->remNaluSize = parser->naluBufSize = naluSize;
+    parser->pNaluBufCur = parser->pNaluBuf = (uint8_t*)pNaluBuf;
+
+    // Reset the cache
+    parser->cache = 0;
+    parser->cacheLength = 0;
+    parser->oldZeroCount = 0; // NB: this value is wrong when emulation prevention is in use (inside NAL Units)
+
+    return ret;
+}
+
+
 int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle)
 {
     BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
