@@ -54,8 +54,6 @@ typedef struct
     void* spsPpsCallbackUserPtr;                                    /**< SPS/PPS callback user pointer */
     BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback;        /**< get access unit buffer callback */
     void* getAuBufferCallbackUserPtr;                               /**< get access unit buffer callback user pointer */
-    BEAVER_Filter_CancelAuBufferCallback_t cancelAuBufferCallback;  /**< cancel access unit buffer callback */
-    void* cancelAuBufferCallbackUserPtr;                            /**< cancel access unit buffer callback user pointer */
     BEAVER_Filter_AuReadyCallback_t auReadyCallback;                /**< access unit ready callback */
     void* auReadyCallbackUserPtr;                                   /**< access unit ready callback user pointer */
     int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */

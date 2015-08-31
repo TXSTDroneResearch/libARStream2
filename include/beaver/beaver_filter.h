@@ -42,10 +42,6 @@ typedef int (*BEAVER_Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBu
 
 
 /* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_CancelAuBufferCallback_t)(uint8_t *auBuffer, int auBufferSize, void *auBufferUserPtr, void *userPtr);
-
-
-/* BEAVER_Filter functions must not be called within the callback function */
 typedef int (*BEAVER_Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auBufferUserPtr, void *userPtr);
 
 
@@ -63,8 +59,6 @@ typedef struct
     void* spsPpsCallbackUserPtr;                                    /**< SPS/PPS callback user pointer */
     BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback;        /**< get access unit buffer callback */
     void* getAuBufferCallbackUserPtr;                               /**< get access unit buffer callback user pointer */
-    BEAVER_Filter_CancelAuBufferCallback_t cancelAuBufferCallback;  /**< cancel access unit buffer callback */
-    void* cancelAuBufferCallbackUserPtr;                            /**< cancel access unit buffer callback user pointer */
     BEAVER_Filter_AuReadyCallback_t auReadyCallback;                /**< access unit ready callback */
     void* auReadyCallbackUserPtr;                                   /**< access unit ready callback user pointer */
     int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */

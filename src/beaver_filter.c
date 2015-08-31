@@ -71,8 +71,6 @@ typedef struct BEAVER_Filter_s
     void* spsPpsCallbackUserPtr;
     BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback;
     void* getAuBufferCallbackUserPtr;
-    BEAVER_Filter_CancelAuBufferCallback_t cancelAuBufferCallback;
-    void* cancelAuBufferCallbackUserPtr;
     BEAVER_Filter_AuReadyCallback_t auReadyCallback;
     void* auReadyCallbackUserPtr;
 
@@ -223,7 +221,7 @@ static int BEAVER_Filter_dequeueAu(BEAVER_Filter_t *filter, BEAVER_Filter_Au_t *
 
 static int BEAVER_Filter_flushAuFifo(BEAVER_Filter_t *filter)
 {
-    int fifoRes, cbRet;
+    int fifoRes;
     BEAVER_Filter_Au_t au;
 
     if (!filter)
@@ -233,12 +231,7 @@ static int BEAVER_Filter_flushAuFifo(BEAVER_Filter_t *filter)
 
     while ((fifoRes = BEAVER_Filter_dequeueAu(filter, &au)) == 0)
     {
-        /* call the cancelAuBufferCallback */
-        cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, au.userPtr, filter->cancelAuBufferCallbackUserPtr);
-        if (cbRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
-        }
+        /* TODO: recycle the AU buffer */
     }
 
     return 0;
@@ -577,7 +570,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)custom;
     BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
-    int ret = 0, cbRet;
+    int ret = 0;
     uint8_t *retPtr = NULL;
 
     if (!filter)
@@ -740,11 +733,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             retPtr = filter->currentNaluBuffer;
             break;
         case ARSTREAM_READER2_CAUSE_CANCEL:
-            cbRet = filter->cancelAuBufferCallback(filter->currentAuBuffer, filter->currentAuBufferSize, filter->currentAuBufferUserPtr, filter->cancelAuBufferCallbackUserPtr);
-            if (cbRet != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
-            }
+            //TODO?
             *newNaluBufferSize = 0;
             retPtr = NULL;
             break;
@@ -875,12 +864,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                 curTime2 = curTime;
                 decodingDelta2 = decodingDelta;
 
-                /* call the cancelAuBufferCallback */
-                cbRet = filter->cancelAuBufferCallback(au.buffer, au.size, au.userPtr, filter->cancelAuBufferCallbackUserPtr);
-                if (cbRet != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "cancelAuBufferCallback failed (returned %d)", cbRet);
-                }
+                /* TODO: recycle the AU buffer */
 
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "TS delta: %.2fms - CbTime delta: %.2fms - too late - error: %.2f%% - latency would be: %.2fms - DROPPED",
                             (float)acquisitionDelta / 1000., (float)decodingDelta2 / 1000.,
@@ -995,11 +979,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid getAuBufferCallback function pointer");
         return -1;
     }
-    if (!config->cancelAuBufferCallback)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid cancelAuBufferCallback function pointer");
-        return -1;
-    }
     if (!config->auReadyCallback)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid auReadyCallback function pointer");
@@ -1021,8 +1000,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         filter->spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
         filter->getAuBufferCallback = config->getAuBufferCallback;
         filter->getAuBufferCallbackUserPtr = config->getAuBufferCallbackUserPtr;
-        filter->cancelAuBufferCallback = config->cancelAuBufferCallback;
-        filter->cancelAuBufferCallbackUserPtr = config->cancelAuBufferCallbackUserPtr;
         filter->auReadyCallback = config->auReadyCallback;
         filter->auReadyCallbackUserPtr = config->auReadyCallbackUserPtr;
 

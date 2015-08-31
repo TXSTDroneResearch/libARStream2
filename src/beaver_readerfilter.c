@@ -59,8 +59,6 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
         filterConfig.spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
         filterConfig.getAuBufferCallback = config->getAuBufferCallback;
         filterConfig.getAuBufferCallbackUserPtr = config->getAuBufferCallbackUserPtr;
-        filterConfig.cancelAuBufferCallback = config->cancelAuBufferCallback;
-        filterConfig.cancelAuBufferCallbackUserPtr = config->cancelAuBufferCallbackUserPtr;
         filterConfig.auReadyCallback = config->auReadyCallback;
         filterConfig.auReadyCallbackUserPtr = config->auReadyCallbackUserPtr;
         filterConfig.auFifoSize = config->auFifoSize;
