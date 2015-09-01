@@ -566,7 +566,10 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
         {
             filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_IFRAME;
         }
-        //TODO: BEAVER_FILTER_AU_SYNC_TYPE_PIR_START
+        else if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.indexInGop == 0))
+        {
+            filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_PIR_START;
+        }
     }
 
     if ((filter->waitForSync) && (!filter->sync))
