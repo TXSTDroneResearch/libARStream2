@@ -62,6 +62,8 @@ typedef struct
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
     int filterOutSei;                                               /**< if true, filter out SEI NAL units */
     int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
+    int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
+    int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
 } BEAVER_ReaderFilter_Config_t;
 

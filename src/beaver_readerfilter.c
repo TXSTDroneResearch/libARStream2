@@ -67,6 +67,8 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
         filterConfig.filterOutSpsPps = config->filterOutSpsPps;
         filterConfig.filterOutSei = config->filterOutSei;
         filterConfig.replaceStartCodesWithNaluSize = config->replaceStartCodesWithNaluSize;
+        filterConfig.generateSkippedPSlices = config->generateSkippedPSlices;
+        filterConfig.generateFirstGrayIFrame = config->generateFirstGrayIFrame;
 
         ret = BEAVER_Filter_Init(&readerFilter->filter, &filterConfig);
         if (ret != 0)

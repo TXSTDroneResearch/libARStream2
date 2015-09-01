@@ -809,6 +809,60 @@ static int BEAVER_Writer_WriteSkippedPSliceData(BEAVER_Writer_t* writer, BEAVER_
 }
 
 
+static int BEAVER_Writer_WriteGrayISliceData(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+{
+    int ret = 0;
+    int bitsWritten = 0;
+    unsigned int i;
+
+    if (pps->entropy_coding_mode_flag)
+    {
+        // cabac_alignment_one_bit
+        // UNSUPPORTED
+        return -1;
+    }
+
+    // macroblock_layer
+
+    for (i = writer->sliceContext.first_mb_in_slice; i < writer->sliceContext.sliceMbCount; i++)
+    {
+        // mb_type = 3 (I_16x16_2_0_0: Intra16x16PredMode = 2/DC, CodedBlockPatternLuma = 0, CodedBlockPatternChroma = 0)
+        ret = writeBits_expGolomb_ue(writer, 3, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+        
+        // mb_pred -> intra_chroma_pred_mode = 0 (DC)
+        ret = writeBits_expGolomb_ue(writer, 0, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        // mb_qp_delta = 0
+        ret = writeBits_expGolomb_se(writer, 0, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+
+        // residual(0, 15) -> residual_luma(i16x16DClevel, i16x16AClevel, level4x4, level8x8, 0, 15) -> residual_block_cavlc(i16x16DClevel, 0, 15, 16) -> coeff_token = 1 (nC = 0)
+        ret = writeBits(writer, 1, 1, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    return bitsWritten;
+}
+
+
 int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
     BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
@@ -841,7 +895,7 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
     }
     else
     {
-        //TODO
+        // UNSUPPORTED
         return -1;
     }
 
@@ -885,6 +939,113 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
 
     // slice_data
     ret = BEAVER_Writer_WriteSkippedPSliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // rbsp_slice_trailing_bits
+
+    // rbsp_trailing_bits
+    ret = writeBits(writer, 1, 1, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    ret = bitstreamByteAlign(writer, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    //TODO: cabac_zero_word
+
+    *outputSize = writer->naluSize;
+
+    return 0;
+}
+
+
+int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+{
+    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    int ret = 0, bitsWritten = 0;
+
+    if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
+    {
+        return -1;
+    }
+
+    if (!writer->isSpsPpsContextValid)
+    {
+        return -1;
+    }
+
+    // Slice context
+    if (sliceContext)
+    {
+        memcpy(&writer->sliceContext, sliceContext, sizeof(BEAVER_H264_SliceContext_t));
+        writer->sliceContext.first_mb_in_slice = firstMbInSlice;
+        writer->sliceContext.sliceMbCount = sliceMbCount;
+        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? BEAVER_H264_SLICE_TYPE_I_ALL : BEAVER_H264_SLICE_TYPE_I;
+        writer->sliceContext.sliceTypeMod5 = writer->sliceContext.slice_type % 5;
+        writer->sliceContext.redundant_pic_cnt = 0;
+        writer->sliceContext.direct_spatial_mv_pred_flag = 0;
+        writer->sliceContext.slice_qp_delta = 0;
+        writer->sliceContext.disable_deblocking_filter_idc = 2; // disable deblocking across slice boundaries
+        writer->sliceContext.slice_alpha_c0_offset_div2 = 0;
+        writer->sliceContext.slice_beta_offset_div2 = 0;
+    }
+    else
+    {
+        // UNSUPPORTED
+        return -1;
+    }
+
+    writer->pNaluBuf = pbOutputBuf;
+    writer->naluBufSize = outputBufSize;
+    writer->naluSize = 0;
+
+    // Reset the bitstream cache
+    writer->cache = 0;
+    writer->cacheLength = 0;
+    writer->oldZeroCount = 0;
+
+    // NALU start code
+    if (writer->config.naluPrefix)
+    {
+        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
+
+    // forbidden_zero_bit
+    // nal_ref_idc
+    // nal_unit_type
+    ret = writeBits(writer, 8, ((writer->sliceContext.nal_ref_idc & 3) << 5) | writer->sliceContext.nal_unit_type, 0);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // slice_header
+    ret = BEAVER_Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    bitsWritten += ret;
+
+    // slice_data
+    ret = BEAVER_Writer_WriteGrayISliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
         return -1;

@@ -93,11 +93,32 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
 
 
 /**
- * @brief Write a skipped P slice NAL unit.
+ * @brief Write a gray I-slice NAL unit.
  *
- * The function writes an entirely skipped P slice NAL unit.
+ * The function writes an entirely gray I-slice NAL unit.
  *
  * @param[in] writerHandle Instance handle.
+ * @param[in] firstMbInSlice Slice first macroblock index
+ * @param[in] sliceMbCount Slice macroblock count
+ * @param[in] sliceContext Optional slice context to use (from a Beaver Parser)
+ * @param[in] pbOutputBuf Bitstream output buffer
+ * @param[in] outputBufSize Bitstream output buffer size
+ * @param[out] outputSize Bitstream output size
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+
+
+/**
+ * @brief Write a skipped P-slice NAL unit.
+ *
+ * The function writes an entirely skipped P-slice NAL unit.
+ *
+ * @param[in] writerHandle Instance handle.
+ * @param[in] firstMbInSlice Slice first macroblock index
+ * @param[in] sliceMbCount Slice macroblock count
  * @param[in] sliceContext Optional slice context to use (from a Beaver Parser)
  * @param[in] pbOutputBuf Bitstream output buffer
  * @param[in] outputBufSize Bitstream output buffer size
