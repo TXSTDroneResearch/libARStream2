@@ -21,7 +21,7 @@
 #include "beaver_h264.h"
 
 /* DEBUG */
-#include <locale.h>
+//#include <locale.h>
 /* /DEBUG */
 
 
@@ -134,6 +134,10 @@ typedef struct BEAVER_Filter_s
     BEAVER_Filter_Au_t *fifoHead;
     BEAVER_Filter_Au_t *fifoTail;
     BEAVER_Filter_Au_t *fifoPool;
+
+/* DEBUG */
+    //FILE *fDebug;
+/* /DEBUG */
 
 } BEAVER_Filter_t;
 
@@ -272,6 +276,9 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
         filter->firstGrayIFramePending = 1;
     }
     ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "SPS/PPS sync OK"); //TODO: debug
+/* DEBUG */
+    //fprintf(filter->fDebug, "SPS/PPS sync OK\n");
+/* /DEBUG */
 
     /* SPS/PPS callback */
     if (filter->spsPpsCallback)
@@ -578,12 +585,18 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
     {
         cancelAuOutput = 1;
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "AU output cancelled (waitForSync)\n");
+/* /DEBUG */
     }
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
     {
         cancelAuOutput = 1;
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (!outputIncompleteAu)"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "AU output cancelled (!outputIncompleteAu)\n");
+/* /DEBUG */
     }
 
     if (!cancelAuOutput)
@@ -605,6 +618,9 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
         {
             ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to enqueue the current AU (fifoRes = %d)", fifoRes);
         }
+/* DEBUG */
+        //fprintf(filter->fDebug, "AU output: size=%d ts=%llu\n", filter->currentAuSize, (unsigned long long int)filter->currentAuTimestamp);
+/* /DEBUG */
     }
 
     return ret;
@@ -676,6 +692,9 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             ret = 0;
 
             ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
+/* DEBUG */
+            //fprintf(filter->fDebug, "Gray I slice NALU output size: %d\n", outputSize);
+/* /DEBUG */
 
             if (filter->replaceStartCodesWithNaluSize)
             {
@@ -816,6 +835,9 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     if (isFirstNaluInAu)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably on previous AU => OK"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "Missing NALU is probably on previous AU => OK\n");
+/* /DEBUG */
         if (filter->currentAuCurrentSliceFirstMb == 0)
         {
             filter->currentAuPreviousSliceFirstMb = 0;
@@ -825,7 +847,10 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     }
     else if (((naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a SPS, PPS or SEI => OK"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK\n");
+/* /DEBUG */
         if (filter->currentAuCurrentSliceFirstMb == 0)
         {
             filter->currentAuPreviousSliceFirstMb = 0;
@@ -836,13 +861,22 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     else if (!filter->generateSkippedPSlices)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
+/* /DEBUG */
         return -2;
     }
 
     ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+/* DEBUG */
+    //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
+/* /DEBUG */
     if (filter->currentAuStreamingInfoAvailable)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
+/* DEBUG */
+        //fprintf(filter->fDebug, "Streaming info is not available\n");
+/* /DEBUG */
         return -2;
     }
 
@@ -899,6 +933,9 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
+/* DEBUG */
+                //fprintf(filter->fDebug, "Skipped P slice NALU generated size=%d (firstMb=%d, mbCount=%d)\n", outputSize, firstMbInSlice, missingMb);
+/* /DEBUG */
                 if (filter->currentAuSize + naluSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
                     if (filter->replaceStartCodesWithNaluSize)
@@ -960,114 +997,32 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_processNalu() failed (%d)", ret);
             }
 
-            filter->currentAuTimestamp = auTimestamp; //TODO: handle changing TS
-            filter->currentAuTimestampShifted = auTimestampShifted; //TODO: handle changing TS
+/* DEBUG */
+            /*fprintf(filter->fDebug, "Received NALU type=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)\n",
+                    naluType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);*/
+/* /DEBUG */
 
-            if (filter->firstGrayIFramePending)
+            // Handle a previous access unit that has not been output
+            if ((filter->currentAuSize > 0)
+                    && ((isFirstNaluInAu) || ((filter->currentAuTimestamp != 0) && (auTimestamp != filter->currentAuTimestamp))))
             {
-                ret = BEAVER_Filter_generateGrayIFrame(filter, naluBuffer, naluSize, naluType);
-                if (ret < 0)
-                {
-                    if (ret != -2)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_generateGrayIFrame() failed (%d)", ret);
-                    }
-                }
-                else
-                {
-                    filter->firstGrayIFramePending = 0;
-                }
-            }
+                filter->currentAuIncomplete = 1;
 
-            if (missingPacketsBefore)
-            {
-                ret = BEAVER_Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, isFirstNaluInAu);
-                if (ret < 0)
+                uint8_t *tmpBuf = malloc(naluSize); //TODO
+                if (tmpBuf)
                 {
-                    if (ret != -2)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_fillMissingSlices() failed (%d)", ret);
-                    }
-                    filter->currentAuIncomplete = 1;
+                    memcpy(tmpBuf, naluBuffer, naluSize);
                 }
-            }
 
-            if (isLastNaluInAu)
-            {
-                BEAVER_Filter_addNaluToCurrentAu(filter, naluType, naluSize);
-
-                /* Output access unit */
+                // Output the access unit
                 ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
                 if (ret > 0)
                 {
-                    /* auReadyCallback has been called */
+                    // auReadyCallback has been called
                     ret = BEAVER_Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
-                        BEAVER_Filter_resetCurrentAu(filter);
-
-                        filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
-                        filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
-                    }
-                    else
-                    {
-                        filter->currentNaluBuffer = NULL;
-                        filter->currentNaluBufferSize = 0;
-                    }
-                }
-                else
-                {
-                    /* auReadyCallback has not been called: reuse current auBuffer */
-                    BEAVER_Filter_resetCurrentAu(filter);
-
-                    filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
-                    filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
-                }
-                *newNaluBufferSize = filter->currentNaluBufferSize;
-                retPtr = filter->currentNaluBuffer;
-            }
-            else
-            {
-                if ((isFirstNaluInAu) && (filter->currentAuSize > 0))
-                {
-                    /* Handle previous access unit that has not been output */
-                    filter->currentAuIncomplete = 1;
-
-                    uint8_t *tmpBuf = malloc(naluSize); //TODO
-                    if (tmpBuf)
-                    {
-                        memcpy(tmpBuf, naluBuffer, naluSize);
-                    }
-
-                    /* Output access unit */
-                    ret = BEAVER_Filter_enqueueCurrentAu(filter);
-
-                    if (ret > 0)
-                    {
-                        /* auReadyCallback has been called */
-                        ret = BEAVER_Filter_getNewAuBuffer(filter);
-                        if (ret == 0)
-                        {
-                            BEAVER_Filter_resetCurrentAu(filter);
-
-                            filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
-                            filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
-                            if (tmpBuf)
-                            {
-                                memcpy(filter->currentNaluBuffer, tmpBuf, naluSize); //TODO: filter->currentNaluBufferSize must be > naluSize
-                                free(tmpBuf);
-                            }
-                        }
-                        else
-                        {
-                            filter->currentNaluBuffer = NULL;
-                            filter->currentNaluBufferSize = 0;
-                        }
-                    }
-                    else
-                    {
-                        /* auReadyCallback has not been called: reuse current auBuffer */
                         BEAVER_Filter_resetCurrentAu(filter);
 
                         filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1078,12 +1033,102 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                             free(tmpBuf);
                         }
                     }
+                    else
+                    {
+                        filter->currentNaluBuffer = NULL;
+                        filter->currentNaluBufferSize = 0;
+                    }
+                }
+                else
+                {
+                    // auReadyCallback has not been called: reuse current auBuffer
+                    BEAVER_Filter_resetCurrentAu(filter);
+
+                    filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
+                    filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
+                    if (tmpBuf)
+                    {
+                        memcpy(filter->currentNaluBuffer, tmpBuf, naluSize); //TODO: filter->currentNaluBufferSize must be > naluSize
+                        free(tmpBuf);
+                    }
+                }
+            }
+
+            if ((filter->currentNaluBuffer == NULL) || (filter->currentNaluBufferSize == 0))
+            {
+                // We failed to get a new AU buffer previously; drop the NALU
+                *newNaluBufferSize = filter->currentNaluBufferSize;
+                retPtr = filter->currentNaluBuffer;
+            }
+            else
+            {
+                filter->currentAuTimestamp = auTimestamp;
+                filter->currentAuTimestampShifted = auTimestampShifted;
+
+                if (filter->firstGrayIFramePending)
+                {
+                    ret = BEAVER_Filter_generateGrayIFrame(filter, naluBuffer, naluSize, naluType);
+                    if (ret < 0)
+                    {
+                        if (ret != -2)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_generateGrayIFrame() failed (%d)", ret);
+                        }
+                    }
+                    else
+                    {
+                        filter->firstGrayIFramePending = 0;
+                    }
                 }
 
-                if ((filter->currentNaluBuffer) && (filter->currentNaluBufferSize))
+                if (missingPacketsBefore)
                 {
-                    BEAVER_Filter_addNaluToCurrentAu(filter, naluType, naluSize);
+                    ret = BEAVER_Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, isFirstNaluInAu);
+                    if (ret < 0)
+                    {
+                        if (ret != -2)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_fillMissingSlices() failed (%d)", ret);
+                        }
+                        filter->currentAuIncomplete = 1;
+                    }
+                }
 
+                BEAVER_Filter_addNaluToCurrentAu(filter, naluType, naluSize);
+
+                if (isLastNaluInAu)
+                {
+                    // Output the access unit
+                    ret = BEAVER_Filter_enqueueCurrentAu(filter);
+
+                    if (ret > 0)
+                    {
+                        // auReadyCallback has been called
+                        ret = BEAVER_Filter_getNewAuBuffer(filter);
+                        if (ret == 0)
+                        {
+                            BEAVER_Filter_resetCurrentAu(filter);
+
+                            filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
+                            filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
+                        }
+                        else
+                        {
+                            filter->currentNaluBuffer = NULL;
+                            filter->currentNaluBufferSize = 0;
+                        }
+                    }
+                    else
+                    {
+                        // auReadyCallback has not been called: reuse current auBuffer
+                        BEAVER_Filter_resetCurrentAu(filter);
+
+                        filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
+                        filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
+                    }
+                }
+                else
+                {
                     filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
                     filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
                 }
@@ -1097,13 +1142,13 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             ret = 1;
             if (filter->currentAuSize > 0)
             {
-                /* Output access unit */
+                // Output the access unit
                 ret = BEAVER_Filter_enqueueCurrentAu(filter);
             }
 
             if (ret > 0)
             {
-                /* auReadyCallback has been called, or no AU was pending */
+                // auReadyCallback has been called, or no AU was pending
                 ret = BEAVER_Filter_getNewAuBuffer(filter);
                 if (ret == 0)
                 {
@@ -1120,7 +1165,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             }
             else
             {
-                /* auReadyCallback has not been called: reuse current auBuffer */
+                // auReadyCallback has not been called: reuse current auBuffer
                 BEAVER_Filter_resetCurrentAu(filter);
 
                 filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1420,6 +1465,10 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         filter->sync = 0;
         filter->spsSync = 0;
         filter->ppsSync = 0;
+
+/* DEBUG */
+        //filter->fDebug = fopen("debug.dat", "w");
+/* /DEBUG */
     }
 
     if (ret == 0)
@@ -1590,6 +1639,10 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
         if (filter->pPps) free(filter->pPps);
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+
+/* DEBUG */
+        //fclose(filter->fDebug);
+/* /DEBUG */
 
         free(filter);
         *filterHandle = NULL;
