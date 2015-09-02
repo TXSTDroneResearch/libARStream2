@@ -8,8 +8,7 @@ HEADER_FILES                                                =   ../Includes/libB
                                                                 ../Includes/libBeaver/beaver_readerfilter.h \
                                                                 ../Includes/libBeaver/beaver_parrot.h       \
                                                                 ../Includes/libBeaver/beaver_parser.h       \
-                                                                ../Includes/libBeaver/beaver_writer.h       \
-                                                                ../Includes/libBeaver/beaver.h
+                                                                ../Includes/libBeaver/beaver_writer.h
 
 # The sources to add to the library and to add to the source distribution
 SOURCE_FILES                                                =   $(HEADER_FILES)                          \
@@ -17,7 +16,8 @@ SOURCE_FILES                                                =   $(HEADER_FILES) 
                                                                 ../src/beaver_readerfilter.c             \
                                                                 ../src/beaver_parrot.c                   \
                                                                 ../src/beaver_parser.c                   \
-                                                                ../src/beaver_writer.c
+                                                                ../src/beaver_writer.c                   \
+                                                                ../src/beaver_h264.h
 
 
 # The library names to build (note we are building static and shared libs)

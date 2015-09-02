@@ -9,10 +9,11 @@ LOCAL_DESCRIPTION := H.264 Elementary Stream Tools Library
 LOCAL_LIBRARIES := libARSAL libARStream
 
 LOCAL_INSTALL_HEADERS := \
-    Includes/libBeaver/beaver.h:usr/include/beaver/ \
-    Includes/libBeaver/beaver_filter.h:usr/include/beaver/ \
-    Includes/libBeaver/beaver_parser.h:usr/include/beaver/ \
-    Includes/libBeaver/beaver_parrot.h:usr/include/beaver/
+    Includes/libBeaver/beaver_filter.h:usr/include/libBeaver/ \
+    Includes/libBeaver/beaver_readerfilter.h:usr/include/libBeaver/ \
+    Includes/libBeaver/beaver_writer.h:usr/include/libBeaver/ \
+    Includes/libBeaver/beaver_parser.h:usr/include/libBeaver/ \
+    Includes/libBeaver/beaver_parrot.h:usr/include/libBeaver/
 
 LOCAL_CFLAGS := -Wextra
 LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/Includes
