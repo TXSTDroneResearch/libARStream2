@@ -331,7 +331,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
     if (filter->replaceStartCodesWithNaluSize)
     {
         // Replace the NAL unit 4 bytes start code with the NALU size
-        *((uint32_t*)naluBuffer) = (uint32_t)naluSize;
+        *((uint32_t*)naluBuffer) = htonl((uint32_t)naluSize - 4);
     }
 
     ret = BEAVER_Parser_SetupNalu_buffer(filter->parser, naluBuffer + 4, naluSize - 4);
@@ -678,7 +678,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             if (filter->replaceStartCodesWithNaluSize)
             {
                 // Replace the NAL unit 4 bytes start code with the NALU size
-                *((uint32_t*)filter->tempSliceNaluBuffer) = (uint32_t)outputSize;
+                *((uint32_t*)filter->tempSliceNaluBuffer) = htonl((uint32_t)outputSize - 4);
             }
 
             if (filter->currentAuSize + naluSize > 0)
@@ -902,7 +902,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
                     if (filter->replaceStartCodesWithNaluSize)
                     {
                         // Replace the NAL unit 4 bytes start code with the NALU size
-                        *((uint32_t*)filter->tempSliceNaluBuffer) = (uint32_t)outputSize;
+                        *((uint32_t*)filter->tempSliceNaluBuffer) = htonl((uint32_t)outputSize - 4);
                     }
                     memmove(naluBuffer + outputSize, naluBuffer, naluSize); //TODO
                     memcpy(naluBuffer, filter->tempSliceNaluBuffer, outputSize);
