@@ -124,6 +124,8 @@ typedef struct BEAVER_Filter_s
     int firstGrayIFramePending;
 
     ARSAL_Mutex_t mutex;
+    ARSAL_Cond_t cond;
+    int running;
     int threadShouldStop;
     int threadStarted;
 
@@ -264,13 +266,8 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
     int ret = 0;
     void *spsContext = NULL, *ppsContext = NULL;
 
-    if (filter->sync)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Already synchronized!");
-        return -1;
-    }
-
     filter->sync = 1;
+
     if (filter->generateFirstGrayIFrame)
     {
         filter->firstGrayIFramePending = 1;
@@ -453,14 +450,6 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                         memcpy(filter->pSps, naluBuffer, naluSize);
                         filter->spsSize = naluSize;
                         filter->spsSync = 1;
-                        if ((filter->spsSync) && (filter->ppsSync) && (!filter->sync))
-                        {
-                            ret = BEAVER_Filter_sync(filter, naluBuffer, naluSize);
-                            if (ret < 0)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_Sync() failed (%d)", ret);
-                            }
-                        }
                     }
                 }
                 break;
@@ -478,14 +467,6 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                         memcpy(filter->pPps, naluBuffer, naluSize);
                         filter->ppsSize = naluSize;
                         filter->ppsSync = 1;
-                        if ((filter->spsSync) && (filter->ppsSync) && (!filter->sync))
-                        {
-                            ret = BEAVER_Filter_sync(filter, naluBuffer, naluSize);
-                            if (ret < 0)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_Sync() failed (%d)", ret);
-                            }
-                        }
                     }
                 }
                 break;
@@ -493,6 +474,19 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                 break;
         }
     }
+
+    ARSAL_Mutex_Lock(&(filter->mutex));
+
+    if ((filter->running) && (filter->spsSync) && (filter->ppsSync) && (!filter->sync))
+    {
+        ret = BEAVER_Filter_sync(filter, naluBuffer, naluSize);
+        if (ret < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_Sync() failed (%d)", ret);
+        }
+    }
+
+    ARSAL_Mutex_Unlock(&(filter->mutex));
 
 #if 0 //TODO
 #ifdef ARSTREAM_READER2_DEBUG
@@ -509,7 +503,9 @@ static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
 {
     int ret = 0;
 
-    if ((filter->waitForSync) && (!filter->sync) && (filter->tempAuBuffer))
+    ARSAL_Mutex_Lock(&(filter->mutex));
+
+    if ((!filter->running) || ((filter->waitForSync) && (!filter->sync) && (filter->tempAuBuffer)))
     {
         filter->currentAuBuffer = filter->tempAuBuffer;
         filter->currentAuBufferSize = filter->tempAuBufferSize;
@@ -525,6 +521,8 @@ static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
             ret = -1;
         }
     }
+
+    ARSAL_Mutex_Unlock(&(filter->mutex));
 
     return ret;
 }
@@ -769,7 +767,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
 
                 if (ret > 0)
                 {
-                    // auReadyCallback has been called
+                    // The access unit has been enqueued
                     ret = BEAVER_Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
@@ -800,7 +798,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                 }
                 else
                 {
-                    // auReadyCallback has not been called: reuse current auBuffer
+                    // The access unit has not been enqueued: reuse current auBuffer
                     BEAVER_Filter_resetCurrentAu(filter);
                     filter->currentAuTimestamp = savedAuTimestamp;
                     filter->currentAuTimestampShifted = savedAuTimestampShifted;
@@ -986,7 +984,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
         return retPtr;
     }
 
-    ARSAL_Mutex_Lock(&(filter->mutex));
+    //ARSAL_Mutex_Lock(&(filter->mutex));
 
     switch (cause)
     {
@@ -1103,7 +1101,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 
                     if (ret > 0)
                     {
-                        // auReadyCallback has been called
+                        // The access unit has been enqueued
                         ret = BEAVER_Filter_getNewAuBuffer(filter);
                         if (ret == 0)
                         {
@@ -1120,7 +1118,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     }
                     else
                     {
-                        // auReadyCallback has not been called: reuse current auBuffer
+                        // The access unit has not been enqueued: reuse current auBuffer
                         BEAVER_Filter_resetCurrentAu(filter);
 
                         filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1148,7 +1146,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 
             if (ret > 0)
             {
-                // auReadyCallback has been called, or no AU was pending
+                // The access unit has been enqueued or no AU was pending
                 ret = BEAVER_Filter_getNewAuBuffer(filter);
                 if (ret == 0)
                 {
@@ -1165,7 +1163,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             }
             else
             {
-                // auReadyCallback has not been called: reuse current auBuffer
+                // The access unit has not been enqueued: reuse current auBuffer
                 BEAVER_Filter_resetCurrentAu(filter);
 
                 filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1187,7 +1185,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             break;
     }
 
-    ARSAL_Mutex_Unlock(&(filter->mutex));
+    //ARSAL_Mutex_Unlock(&(filter->mutex));
 
     return retPtr;
 }
@@ -1248,7 +1246,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
     BEAVER_Filter_Au_t au;
-    int shouldStop, late, early, tooLate;
+    int shouldStop, running, oldRunning = -1, late, early, tooLate;
     int enableJitterBuf = 0; //TODO
     int maxLatencyUs = 200000; //TODO
     int acquisitionDelta, decodingDelta, decodingDelta2;
@@ -1265,107 +1263,130 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
     fDebug = fopen("jitterbuf.dat", "w");*/
 /* /DEBUG */
 
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter thread is running");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter thread is started");
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadStarted = 1;
     shouldStop = filter->threadShouldStop;
+    running = filter->running;
     ARSAL_Mutex_Unlock(&(filter->mutex));
 
     while (!shouldStop)
     {
-        fifoRes = BEAVER_Filter_dequeueAu(filter, &au);
-
-        if (fifoRes == 0)
+        if (running != oldRunning)
         {
-            ARSAL_Time_GetTime(&t1);
-            curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-            if ((lastAuTimestamp != 0) && (lastAuCallbackTime != 0))
-            {
-                acquisitionDelta = (int)(au.timestamp - lastAuTimestamp);
-                decodingDelta = (int)(curTime - lastAuCallbackTime);
-            }
-            else
-            {
-                acquisitionDelta = decodingDelta = 0;
-            }
-
-            if (enableJitterBuf)
-            {
-                early = ((float)decodingDelta < (float)acquisitionDelta * 0.95) ? 1 : 0;
-                late = ((float)decodingDelta > (float)acquisitionDelta * 1.05) ? 1 : 0;
-                sleepTimeUs = (early) ? (float)(acquisitionDelta - decodingDelta) * sleepTimeSlope - sleepTimeOffsetUs : 0;
-                //if ((lastAuTimestamp == 0) || (lastAuCallbackTime == 0)) sleepTimeUs = 50000; //TODO
-                tooLate = (latencyUs + sleepTimeUs + decodingDelta - acquisitionDelta > maxLatencyUs) ? 1 : 0;
-            }
-            else
-            {
-                early = 0;
-                late = 0;
-                sleepTimeUs = 0;
-                tooLate = 0;
-            }
-
-            if (tooLate)
-            {
-                curTime2 = curTime;
-                decodingDelta2 = decodingDelta;
-
-                /* TODO: recycle the AU buffer */
-
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "TS delta: %.2fms - CbTime delta: %.2fms - too late - error: %.2f%% - latency would be: %.2fms - DROPPED",
-                            (float)acquisitionDelta / 1000., (float)decodingDelta2 / 1000.,
-                            (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0.,
-                            (float)(latencyUs + sleepTimeUs + decodingDelta - acquisitionDelta) / 1000.); //TODO: debug
-            }
-            else
-            {
-                if (sleepTimeUs > 0)
-                {
-                    usleep(sleepTimeUs);
-                }
-
-                ARSAL_Time_GetTime(&t1);
-                curTime2 = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-                decodingDelta2 = (lastAuCallbackTime != 0) ? (int)(curTime2 - lastAuCallbackTime) : 0;
-
-                /* call the auReadyCallback */
-                cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
-                if (cbRet != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
-                }
-
-                if (early) sleepTimeOffsetUs += (decodingDelta2 - acquisitionDelta);
-                latencyUs += (((lastAuTimestamp != 0) && (lastAuCallbackTime != 0)) ? (decodingDelta2 - acquisitionDelta) : 0);
-
-                /*ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "TS delta: %.2fms - CbTime delta: %.2fms - %s - sleep: %.2fms - CbTime delta after: %.2fms - error: %.2f%% - latency: %.2fms - total latency: %.2fms",
-                            (float)acquisitionDelta / 1000., (float)decodingDelta / 1000.,
-                            (late) ? "late" : ((early) ? "early" : "on time"), (float)sleepTimeUs / 1000., (float)decodingDelta2 / 1000.,
-                            (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0., (float)latencyUs / 1000., ((float)curTime2 - (float)au.timestampShifted) / 1000.);*/ //TODO: debug
-/* DEBUG */
-                /*setlocale(LC_ALL, "C");
-                fprintf(fDebug, "%llu %llu %llu %d %d %d %d ",
-                        (long long unsigned int)au.timestamp, (long long unsigned int)curTime, (long long unsigned int)curTime2, acquisitionDelta, decodingDelta, sleepTimeUs, decodingDelta2);
-                fprintf(fDebug, "%.2f %d %d %d\n",
-                        (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0., latencyUs, sleepTimeOffsetUs, curTime2 - au.timestampShifted);
-                setlocale(LC_ALL, "");*/
-/* /DEBUG */
-
-                lastAuTimestamp = au.timestamp;
-                lastAuCallbackTime = curTime2;
-            }
+            ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter thread is %s", (running) ? "running" : "paused");
+            oldRunning = running;
         }
 
-        ARSAL_Mutex_Lock(&(filter->mutex));
-        shouldStop = filter->threadShouldStop;
-        ARSAL_Mutex_Unlock(&(filter->mutex));
-
-        if ((fifoRes != 0) && (shouldStop == 0))
+        if (running)
         {
-            /* Wake up when a new AU is in the FIFO or when we need to exit */
-            ARSAL_Mutex_Lock(&(filter->fifoMutex));
-            ARSAL_Cond_Wait(&(filter->fifoCond), &(filter->fifoMutex));
-            ARSAL_Mutex_Unlock(&(filter->fifoMutex));
+            fifoRes = BEAVER_Filter_dequeueAu(filter, &au);
+
+            if (fifoRes == 0)
+            {
+                ARSAL_Time_GetTime(&t1);
+                curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+                if ((lastAuTimestamp != 0) && (lastAuCallbackTime != 0))
+                {
+                    acquisitionDelta = (int)(au.timestamp - lastAuTimestamp);
+                    decodingDelta = (int)(curTime - lastAuCallbackTime);
+                }
+                else
+                {
+                    acquisitionDelta = decodingDelta = 0;
+                }
+
+                if (enableJitterBuf)
+                {
+                    early = ((float)decodingDelta < (float)acquisitionDelta * 0.95) ? 1 : 0;
+                    late = ((float)decodingDelta > (float)acquisitionDelta * 1.05) ? 1 : 0;
+                    sleepTimeUs = (early) ? (float)(acquisitionDelta - decodingDelta) * sleepTimeSlope - sleepTimeOffsetUs : 0;
+                    //if ((lastAuTimestamp == 0) || (lastAuCallbackTime == 0)) sleepTimeUs = 50000; //TODO
+                    tooLate = (latencyUs + sleepTimeUs + decodingDelta - acquisitionDelta > maxLatencyUs) ? 1 : 0;
+                }
+                else
+                {
+                    early = 0;
+                    late = 0;
+                    sleepTimeUs = 0;
+                    tooLate = 0;
+                }
+
+                if (tooLate)
+                {
+                    curTime2 = curTime;
+                    decodingDelta2 = decodingDelta;
+
+                    /* TODO: recycle the AU buffer */
+
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "TS delta: %.2fms - CbTime delta: %.2fms - too late - error: %.2f%% - latency would be: %.2fms - DROPPED",
+                                (float)acquisitionDelta / 1000., (float)decodingDelta2 / 1000.,
+                                (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0.,
+                                (float)(latencyUs + sleepTimeUs + decodingDelta - acquisitionDelta) / 1000.); //TODO: debug
+                }
+                else
+                {
+                    if (sleepTimeUs > 0)
+                    {
+                        usleep(sleepTimeUs);
+                    }
+
+                    ARSAL_Time_GetTime(&t1);
+                    curTime2 = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+                    decodingDelta2 = (lastAuCallbackTime != 0) ? (int)(curTime2 - lastAuCallbackTime) : 0;
+
+                    /* call the auReadyCallback */
+                    cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
+                    if (cbRet != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
+                    }
+
+                    if (early) sleepTimeOffsetUs += (decodingDelta2 - acquisitionDelta);
+                    latencyUs += (((lastAuTimestamp != 0) && (lastAuCallbackTime != 0)) ? (decodingDelta2 - acquisitionDelta) : 0);
+
+                    /*ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "TS delta: %.2fms - CbTime delta: %.2fms - %s - sleep: %.2fms - CbTime delta after: %.2fms - error: %.2f%% - latency: %.2fms - total latency: %.2fms",
+                                (float)acquisitionDelta / 1000., (float)decodingDelta / 1000.,
+                                (late) ? "late" : ((early) ? "early" : "on time"), (float)sleepTimeUs / 1000., (float)decodingDelta2 / 1000.,
+                                (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0., (float)latencyUs / 1000., ((float)curTime2 - (float)au.timestampShifted) / 1000.);*/ //TODO: debug
+/* DEBUG */
+                    /*setlocale(LC_ALL, "C");
+                    fprintf(fDebug, "%llu %llu %llu %d %d %d %d ",
+                            (long long unsigned int)au.timestamp, (long long unsigned int)curTime, (long long unsigned int)curTime2, acquisitionDelta, decodingDelta, sleepTimeUs, decodingDelta2);
+                    fprintf(fDebug, "%.2f %d %d %d\n",
+                            (acquisitionDelta) ? ((float)decodingDelta2 - (float)acquisitionDelta) / (float)acquisitionDelta * 100. : 0., latencyUs, sleepTimeOffsetUs, curTime2 - au.timestampShifted);
+                    setlocale(LC_ALL, "");*/
+/* /DEBUG */
+
+                    lastAuTimestamp = au.timestamp;
+                    lastAuCallbackTime = curTime2;
+                }
+            }
+
+            ARSAL_Mutex_Lock(&(filter->mutex));
+            shouldStop = filter->threadShouldStop;
+            running = filter->running;
+            ARSAL_Mutex_Unlock(&(filter->mutex));
+
+            if ((fifoRes != 0) && (shouldStop == 0))
+            {
+                /* Wake up when a new AU is in the FIFO or when we need to exit */
+                ARSAL_Mutex_Lock(&(filter->fifoMutex));
+                ARSAL_Cond_Wait(&(filter->fifoCond), &(filter->fifoMutex));
+                ARSAL_Mutex_Unlock(&(filter->fifoMutex));
+            }
+        }
+        else
+        {
+            ARSAL_Mutex_Lock(&(filter->mutex));
+            shouldStop = filter->threadShouldStop;
+            running = filter->running;
+            if ((running == 0) && (shouldStop == 0))
+            {
+                /* Wake up when running state or when we need to exit */
+                ARSAL_Cond_Wait(&(filter->cond), &(filter->mutex));
+            }
+            ARSAL_Mutex_Unlock(&(filter->mutex));
         }
     }
 
@@ -1386,6 +1407,70 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
 }
 
 
+int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                        BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                        BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
+{
+    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    int ret = 0;
+
+    if (!filterHandle)
+    {
+        return -1;
+    }
+    if (!getAuBufferCallback)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid getAuBufferCallback function pointer");
+        return -1;
+    }
+    if (!auReadyCallback)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid auReadyCallback function pointer");
+        return -1;
+    }
+
+    ARSAL_Mutex_Lock(&(filter->mutex));
+    filter->spsPpsCallback = spsPpsCallback;
+    filter->spsPpsCallbackUserPtr = spsPpsCallbackUserPtr;
+    filter->getAuBufferCallback = getAuBufferCallback;
+    filter->getAuBufferCallbackUserPtr = getAuBufferCallbackUserPtr;
+    filter->auReadyCallback = auReadyCallback;
+    filter->auReadyCallbackUserPtr = auReadyCallbackUserPtr;
+    filter->running = 1;
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is running");
+    ARSAL_Mutex_Unlock(&(filter->mutex));
+
+    return ret;
+}
+
+
+int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle)
+{
+    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    int ret = 0;
+
+    if (!filterHandle)
+    {
+        return -1;
+    }
+
+    ARSAL_Mutex_Lock(&(filter->mutex));
+    filter->spsPpsCallback = NULL;
+    filter->spsPpsCallbackUserPtr = NULL;
+    filter->getAuBufferCallback = NULL;
+    filter->getAuBufferCallbackUserPtr = NULL;
+    filter->auReadyCallback = NULL;
+    filter->auReadyCallbackUserPtr = NULL;
+    filter->running = 0;
+    filter->sync = 0;
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is paused");
+    ARSAL_Mutex_Unlock(&(filter->mutex));
+    ARSAL_Cond_Signal(&(filter->cond));
+
+    return ret;
+}
+
+
 int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
@@ -1402,6 +1487,7 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
     ARSAL_Mutex_Unlock(&(filter->mutex));
     /* signal the filter thread to avoid a deadlock */
     ARSAL_Cond_Signal(&(filter->fifoCond));
+    ARSAL_Cond_Signal(&(filter->cond));
 
     return ret;
 }
@@ -1410,7 +1496,7 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
 int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_t *config)
 {
     BEAVER_Filter_t* filter;
-    int ret = 0, mutexWasInit = 0, fifoMutexWasInit = 0, fifoCondWasInit = 0;
+    int ret = 0, mutexWasInit = 0, condWasInit = 0, fifoMutexWasInit = 0, fifoCondWasInit = 0;
 
     if (!filterHandle)
     {
@@ -1420,16 +1506,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
     if (!config)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid pointer for config");
-        return -1;
-    }
-    if (!config->getAuBufferCallback)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid getAuBufferCallback function pointer");
-        return -1;
-    }
-    if (!config->auReadyCallback)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid auReadyCallback function pointer");
         return -1;
     }
 
@@ -1444,13 +1520,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
     {
         memset(filter, 0, sizeof(*filter));
 
-        filter->spsPpsCallback = config->spsPpsCallback;
-        filter->spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
-        filter->getAuBufferCallback = config->getAuBufferCallback;
-        filter->getAuBufferCallbackUserPtr = config->getAuBufferCallbackUserPtr;
-        filter->auReadyCallback = config->auReadyCallback;
-        filter->auReadyCallbackUserPtr = config->auReadyCallbackUserPtr;
-
         filter->auFifoSize = config->auFifoSize;
         filter->waitForSync = (config->waitForSync > 0) ? 1 : 0;
         filter->outputIncompleteAu = (config->outputIncompleteAu > 0) ? 1 : 0;
@@ -1459,12 +1528,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         filter->replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
         filter->generateSkippedPSlices = 0; //TODO (config->generateSkippedPSlices > 0) ? 1 : 0;
         filter->generateFirstGrayIFrame = (config->generateFirstGrayIFrame > 0) ? 1 : 0;
-
-        filter->threadStarted = 0;
-        filter->threadShouldStop = 0;
-        filter->sync = 0;
-        filter->spsSync = 0;
-        filter->ppsSync = 0;
 
 /* DEBUG */
         //filter->fDebug = fopen("debug.dat", "w");
@@ -1499,6 +1562,19 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         else
         {
             mutexWasInit = 1;
+        }
+    }
+    if (ret == 0)
+    {
+        int condInitRet = ARSAL_Cond_Init(&(filter->cond));
+        if (condInitRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Cond creation failed (%d)", condInitRet);
+            ret = -1;
+        }
+        else
+        {
+            fifoCondWasInit = 1;
         }
     }
 
@@ -1591,6 +1667,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         if (filter)
         {
             if (mutexWasInit) ARSAL_Mutex_Destroy(&(filter->mutex));
+            if (condWasInit) ARSAL_Cond_Destroy(&(filter->cond));
             if (filter->fifoPool) free(filter->fifoPool);
             if (fifoMutexWasInit) ARSAL_Mutex_Destroy(&(filter->fifoMutex));
             if (fifoCondWasInit) ARSAL_Cond_Destroy(&(filter->fifoCond));
@@ -1629,6 +1706,7 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
     if (canDelete == 1)
     {
         ARSAL_Mutex_Destroy(&(filter->mutex));
+        ARSAL_Cond_Destroy(&(filter->cond));
         free(filter->fifoPool);
         ARSAL_Mutex_Destroy(&(filter->fifoMutex));
         ARSAL_Cond_Destroy(&(filter->fifoCond));

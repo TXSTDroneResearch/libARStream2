@@ -55,12 +55,6 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
  */
 typedef struct
 {
-    BEAVER_Filter_SpsPpsCallback_t spsPpsCallback;                  /**< SPS/PPS callback */
-    void* spsPpsCallbackUserPtr;                                    /**< SPS/PPS callback user pointer */
-    BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback;        /**< get access unit buffer callback */
-    void* getAuBufferCallbackUserPtr;                               /**< get access unit buffer callback user pointer */
-    BEAVER_Filter_AuReadyCallback_t auReadyCallback;                /**< access unit ready callback */
-    void* auReadyCallbackUserPtr;                                   /**< access unit ready callback user pointer */
     int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
@@ -114,9 +108,47 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle);
 
 
 /**
+ * @brief Start a Beaver Filter instance.
+ *
+ * The function starts processing the ARSTREAM_Reader2 input.
+ * The processing can be stopped using BEAVER_Filter_Pause().
+ *
+ * @param filterHandle Instance handle.
+ * @param spsPpsCallback SPS/PPS callback function.
+ * @param spsPpsCallbackUserPtr SPS/PPS callback user pointer.
+ * @param getAuBufferCallback Get access unit buffer callback function.
+ * @param getAuBufferCallbackUserPtr Get access unit buffer callback user pointer.
+ * @param auReadyCallback Access unit ready callback function.
+ * @param auReadyCallbackUserPtr Access unit ready callback user pointer.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                        BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                        BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
+
+
+/**
+ * @brief Pause a Beaver Filter instance.
+ *
+ * The function stops processing the ARSTREAM_Reader2 input.
+ * The callback functions provided to BEAVER_Filter_Start() will not be called any more.
+ * The filter can be started again by a new call to BEAVER_Filter_Start().
+ *
+ * @param filterHandle Instance handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle);
+
+
+/**
  * @brief Stop a Beaver Filter instance.
  *
  * The function ends the filter thread before it can be joined.
+ * A stopped filter cannot be restarted.
  *
  * @param filterHandle Instance handle.
  *

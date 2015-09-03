@@ -55,12 +55,6 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
 
         BEAVER_Filter_Config_t filterConfig;
         memset(&filterConfig, 0, sizeof(filterConfig));
-        filterConfig.spsPpsCallback = config->spsPpsCallback;
-        filterConfig.spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
-        filterConfig.getAuBufferCallback = config->getAuBufferCallback;
-        filterConfig.getAuBufferCallbackUserPtr = config->getAuBufferCallbackUserPtr;
-        filterConfig.auReadyCallback = config->auReadyCallback;
-        filterConfig.auReadyCallbackUserPtr = config->auReadyCallbackUserPtr;
         filterConfig.auFifoSize = config->auFifoSize;
         filterConfig.waitForSync = config->waitForSync;
         filterConfig.outputIncompleteAu = config->outputIncompleteAu;
@@ -82,6 +76,7 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
     {
         ARSTREAM_Reader2_Config_t readerConfig;
         memset(&readerConfig, 0, sizeof(readerConfig));
+
         readerConfig.serverAddr = config->serverAddr;
         readerConfig.mcastAddr = config->mcastAddr;
         readerConfig.mcastIfaceAddr = config->mcastIfaceAddr;
@@ -179,6 +174,42 @@ void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle)
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
 
     return ARSTREAM_Reader2_RunControlThread((void*)readerFilter->reader);
+}
+
+
+int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                    BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                    BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
+{
+    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    int ret = 0;
+
+    ret = BEAVER_Filter_Start(readerFilter->filter, spsPpsCallback, spsPpsCallbackUserPtr,
+                              getAuBufferCallback, getAuBufferCallbackUserPtr,
+                              auReadyCallback, auReadyCallbackUserPtr);
+    if (ret != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to pause beaver_filter: %d", ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+
+int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandle)
+{
+    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    int ret = 0;
+
+    ret = BEAVER_Filter_Pause(readerFilter->filter);
+    if (ret != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to pause beaver_filter: %d", ret);
+        return ret;
+    }
+
+    return ret;
 }
 
 
