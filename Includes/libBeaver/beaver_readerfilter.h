@@ -35,6 +35,12 @@ typedef void* BEAVER_ReaderFilter_Handle;
 
 
 /**
+ * @brief Beaver ReaderFilter resender handle.
+ */
+typedef void* BEAVER_ReaderFilter_ResenderHandle;
+
+
+/**
  * @brief Beaver ReaderFilter configuration for initialization.
  */
 typedef struct
@@ -60,6 +66,26 @@ typedef struct
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
 } BEAVER_ReaderFilter_Config_t;
+
+
+/**
+ * @brief Beaver ReaderFilter resender configuration parameters.
+ */
+typedef struct BEAVER_ReaderFilter_ResenderConfig_t
+{
+    const char *clientAddr;                         /**< Client address */
+    const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
+    const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
+    int serverStreamPort;                           /**< Server stream port, @see ARSTREAM_SENDER2_DEFAULT_SERVER_STREAM_PORT */
+    int serverControlPort;                          /**< Server control port, @see ARSTREAM_SENDER2_DEFAULT_SERVER_CONTROL_PORT */
+    int clientStreamPort;                           /**< Client stream port */
+    int clientControlPort;                          /**< Client control port */
+    int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
+    int targetPacketSize;                           /**< Target network packet size in bytes */
+    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
+    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+
+} BEAVER_ReaderFilter_ResenderConfig_t;
 
 
 /**
@@ -196,6 +222,85 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle);
  * @return -2 if SPS/PPS are not available (no sync).
  */
 int BEAVER_ReaderFilter_GetSpsPps(BEAVER_ReaderFilter_Handle readerFilterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+
+
+/**
+ * @brief Initialize a new resender.
+ *
+ * The library allocates the required resources. The user must call BEAVER_ReaderFilter_Free() or BEAVER_ReaderFilter_FreeResender() to free the resources.
+ *
+ * @param readerFilterHandle ReaderFilter instance handle.
+ * @param resenderHandle Pointer to the resender handle used in future calls to the library.
+ * @param config The resender configuration.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ *
+ * @see BEAVER_ReaderFilter_StopResender()
+ * @see BEAVER_ReaderFilter_FreeResender()
+ */
+int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_ReaderFilter_ResenderHandle *resenderHandle, BEAVER_ReaderFilter_ResenderConfig_t *config);
+
+
+/**
+ * @brief Free a resender.
+ *
+ * The library frees the allocated resources. On success the resenderHandle is set to NULL.
+ *
+ * @param resenderHandle Pointer to the resender handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resenderHandle);
+
+
+/**
+ * @brief Run a resender stream thread.
+ *
+ * The resender must be correctly allocated using BEAVER_ReaderFilter_InitResender().
+ * @warning This function never returns until BEAVER_ReaderFilter_StopResender() is called. The tread can then be joined.
+ *
+ * @param resenderHandle Resender handle casted as (void*).
+ *
+ * @return NULL in all cases.
+ */
+void* BEAVER_ReaderFilter_RunResenderStreamThread(void *resenderHandle);
+
+
+/**
+ * @brief Run a resender control thread.
+ *
+ * The resender must be correctly allocated using BEAVER_ReaderFilter_InitResender().
+ * @warning This function never returns until BEAVER_ReaderFilter_StopResender() is called. The tread can then be joined.
+ *
+ * @param resenderHandle Resender handle casted as (void*).
+ *
+ * @return NULL in all cases.
+ */
+void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle);
+
+
+/**
+ * @brief Stops a running Reader2 Resender
+ * @warning Once stopped, a Reader2 Resender cannot be restarted
+ *
+ * @param[in] resender The Reader2 Resender instance
+ *
+ * @note Calling this function multiple times has no effect
+ */
+
+/**
+ * @brief Stop a resender.
+ *
+ * The function ends the resender threads before they can be joined.
+ *
+ * @param resenderHandle Resender handle.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_ReaderFilter_StopResender(BEAVER_ReaderFilter_ResenderHandle resenderHandle);
 
 
 #ifdef __cplusplus

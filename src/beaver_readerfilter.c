@@ -127,6 +127,7 @@ int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle)
 
     if ((!readerFilterHandle) || (!*readerFilterHandle))
     {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for handle");
         return -1;
     }
 
@@ -157,6 +158,12 @@ void* BEAVER_ReaderFilter_RunFilterThread(void *readerFilterHandle)
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
 
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return NULL;
+    }
+
     return BEAVER_Filter_RunFilterThread((void*)readerFilter->filter);
 }
 
@@ -165,6 +172,12 @@ void* BEAVER_ReaderFilter_RunStreamThread(void *readerFilterHandle)
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
 
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return NULL;
+    }
+
     return ARSTREAM_Reader2_RunStreamThread((void*)readerFilter->reader);
 }
 
@@ -172,6 +185,12 @@ void* BEAVER_ReaderFilter_RunStreamThread(void *readerFilterHandle)
 void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle)
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return NULL;
+    }
 
     return ARSTREAM_Reader2_RunControlThread((void*)readerFilter->reader);
 }
@@ -183,6 +202,12 @@ int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
     int ret = 0;
+
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return -1;
+    }
 
     ret = BEAVER_Filter_Start(readerFilter->filter, spsPpsCallback, spsPpsCallbackUserPtr,
                               getAuBufferCallback, getAuBufferCallbackUserPtr,
@@ -202,6 +227,12 @@ int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
     int ret = 0;
 
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return -1;
+    }
+
     ret = BEAVER_Filter_Pause(readerFilter->filter);
     if (ret != 0)
     {
@@ -217,6 +248,12 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle)
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
     int ret = 0;
+
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return -1;
+    }
 
     ARSTREAM_Reader2_StopReader(readerFilter->reader);
 
@@ -237,9 +274,99 @@ int BEAVER_ReaderFilter_GetSpsPps(BEAVER_ReaderFilter_Handle readerFilterHandle,
 
     if (!readerFilterHandle)
     {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
         return -1;
     }
 
     return BEAVER_Filter_GetSpsPps(readerFilter->filter, spsBuffer, spsSize, ppsBuffer, ppsSize);
+}
+
+
+int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_ReaderFilter_ResenderHandle *resenderHandle, BEAVER_ReaderFilter_ResenderConfig_t *config)
+{
+    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    eARSTREAM_ERROR err = ARSTREAM_OK;
+    ARSTREAM_Reader2_Resender_t* retResender = NULL;
+    int ret = 0;
+
+    if (!readerFilterHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        return -1;
+    }
+    if (!resenderHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for resender");
+        return -1;
+    }
+    if (!config)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for config");
+        return -1;
+    }
+
+    ARSTREAM_Reader2_Resender_Config_t resenderConfig;
+    memset(&resenderConfig, 0, sizeof(resenderConfig));
+
+    resenderConfig.clientAddr = config->clientAddr;
+    resenderConfig.mcastAddr = config->mcastAddr;
+    resenderConfig.mcastIfaceAddr = config->mcastIfaceAddr;
+    resenderConfig.serverStreamPort = config->serverStreamPort;
+    resenderConfig.serverControlPort = config->serverControlPort;
+    resenderConfig.clientStreamPort = config->clientStreamPort;
+    resenderConfig.clientControlPort = config->clientControlPort;
+    resenderConfig.maxPacketSize = config->maxPacketSize;
+    resenderConfig.targetPacketSize = config->targetPacketSize;
+    resenderConfig.maxLatencyMs = config->maxLatencyMs;
+    resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+
+    retResender = ARSTREAM_Reader2_Resender_New(readerFilter->reader, &resenderConfig, &err);
+    if (err != ARSTREAM_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating resender : %s", ARSTREAM_Error_ToString(err));
+        ret = -1;
+    }
+    else
+    {
+        *resenderHandle = (BEAVER_ReaderFilter_ResenderHandle)retResender;
+    }
+
+    return ret;
+}
+
+
+int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resenderHandle)
+{
+    int ret = 0;
+    eARSTREAM_ERROR err = ARSTREAM_OK;
+
+    err = ARSTREAM_Reader2_Resender_Delete((ARSTREAM_Reader2_Resender_t**)resenderHandle);
+    if (err != ARSTREAM_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while deleting resender : %s", ARSTREAM_Error_ToString(err));
+        ret = -1;
+    }
+
+    return ret;
+}
+
+
+void* BEAVER_ReaderFilter_RunResenderStreamThread(void *resenderHandle)
+{
+    return ARSTREAM_Reader2_Resender_RunStreamThread(resenderHandle);
+}
+
+
+void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle)
+{
+    return ARSTREAM_Reader2_Resender_RunControlThread(resenderHandle);
+}
+
+
+int BEAVER_ReaderFilter_StopResender(BEAVER_ReaderFilter_ResenderHandle resenderHandle)
+{
+    ARSTREAM_Reader2_Resender_Stop((ARSTREAM_Reader2_Resender_t*)resenderHandle);
+
+    return 0;
 }
 
