@@ -524,6 +524,7 @@ int BEAVER_Parrot_SerializeDragonFrameInfoV1(const BEAVER_Parrot_DragonFrameInfo
     *(pdwBuf++) = htonl(frameInfo->wifiRxRate);
     *(pdwBuf++) = htonl(frameInfo->wifiTxFailRate);
     *(pdwBuf++) = htonl(frameInfo->wifiTxErrorRate);
+    *(pdwBuf++) = htonl(frameInfo->wifiTxFailEventCount);
     *(pdwBuf++) = htonl(frameInfo->videoStreamingTargetBitrate);
     *(pdwBuf++) = htonl(frameInfo->videoStreamingDecimation);
     *(pdwBuf++) = htonl(frameInfo->videoStreamingGopLength);
@@ -544,6 +545,7 @@ int BEAVER_Parrot_SerializeDragonFrameInfoV1(const BEAVER_Parrot_DragonFrameInfo
     *(pdwBuf++) = htonl(frameInfo->streamingPacketsSent);
     *(pdwBuf++) = htonl(frameInfo->streamingBytesDropped);
     *(pdwBuf++) = htonl(frameInfo->streamingNaluDropped);
+    *(pdwBuf++) = htonl(frameInfo->commandsMaxTimeDeltaOnLastSec);
     *(pdwBuf++) = htonl(frameInfo->preReprojTimestampDelta);
     *(pdwBuf++) = htonl(frameInfo->postReprojTimestampDelta);
     *(pdwBuf++) = htonl(frameInfo->postEeTimestampDelta);
@@ -607,6 +609,7 @@ int BEAVER_Parrot_DeserializeDragonFrameInfoV1(const void* pBuf, unsigned int bu
     frameInfo->wifiRxRate = ntohl(*(pdwBuf++));
     frameInfo->wifiTxFailRate = ntohl(*(pdwBuf++));
     frameInfo->wifiTxErrorRate = ntohl(*(pdwBuf++));
+    frameInfo->wifiTxFailEventCount = ntohl(*(pdwBuf++));
     frameInfo->videoStreamingTargetBitrate = ntohl(*(pdwBuf++));
     frameInfo->videoStreamingDecimation = ntohl(*(pdwBuf++));
     frameInfo->videoStreamingGopLength = ntohl(*(pdwBuf++));
@@ -627,6 +630,7 @@ int BEAVER_Parrot_DeserializeDragonFrameInfoV1(const void* pBuf, unsigned int bu
     frameInfo->streamingPacketsSent = ntohl(*(pdwBuf++));
     frameInfo->streamingBytesDropped = ntohl(*(pdwBuf++));
     frameInfo->streamingNaluDropped = ntohl(*(pdwBuf++));
+    frameInfo->commandsMaxTimeDeltaOnLastSec = ntohl(*(pdwBuf++));
     frameInfo->preReprojTimestampDelta = ntohl(*(pdwBuf++));
     frameInfo->postReprojTimestampDelta = ntohl(*(pdwBuf++));
     frameInfo->postEeTimestampDelta = ntohl(*(pdwBuf++));

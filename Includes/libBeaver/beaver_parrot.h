@@ -275,6 +275,7 @@ typedef struct
     uint32_t wifiRxRate;                                                    /**< Wifi Rx rate (bit/s) */
     uint32_t wifiTxFailRate;                                                /**< Wifi Tx fail rate (#/s) */
     uint32_t wifiTxErrorRate;                                               /**< Wifi Tx error rate (#/s) */
+    uint32_t wifiTxFailEventCount;                                          /**< Wifi Tx fail events count */
     uint32_t videoStreamingTargetBitrate;                                   /**< Video streaming encoder target bitrate (bit/s) */
     uint32_t videoStreamingDecimation;                                      /**< Video streaming encoder decimation factor */
     uint32_t videoStreamingGopLength;                                       /**< Video streaming encoder GOP length */
@@ -284,24 +285,25 @@ typedef struct
     int32_t  videoRecordingPrevFrameType;                                   /**< Video recording previous frame type */
     uint32_t videoRecordingPrevFrameSize;                                   /**< Video recording previous frame size (bytes) */
     uint32_t videoRecordingPrevFrameMseY_fp8;                               /**< Video recording previous frame MSE, 8 bits fixed point value */
-    uint32_t streamingMonitorTimeInterval;                                  /**< Streaming monitoring time interval in microseconds */
-    uint32_t streamingMeanAcqToNetworkTime;                                 /**< Streaming mean acquisition to network time */
-    uint32_t streamingAcqToNetworkJitter;                                   /**< Streaming acquisition to network time jitter */
-    uint32_t streamingMeanNetworkTime;                                      /**< Streaming mean acquisition to network time */
-    uint32_t streamingNetworkJitter;                                        /**< Streaming acquisition to network time jitter */
+    uint32_t streamingMonitorTimeInterval;                                  /**< Streaming monitoring time interval (microseconds) */
+    uint32_t streamingMeanAcqToNetworkTime;                                 /**< Streaming mean acquisition to network time (microseconds) */
+    uint32_t streamingAcqToNetworkJitter;                                   /**< Streaming acquisition to network time jitter (microseconds) */
+    uint32_t streamingMeanNetworkTime;                                      /**< Streaming mean acquisition to network time (microseconds) */
+    uint32_t streamingNetworkJitter;                                        /**< Streaming acquisition to network time jitter (microseconds) */
     uint32_t streamingBytesSent;                                            /**< Streaming bytes sent during the interval */
-    uint32_t streamingMeanPacketSize;                                       /**< Streaming mean packet size */
-    uint32_t streamingPacketSizeStdDev;                                     /**< Streaming packet size standard deviation */
+    uint32_t streamingMeanPacketSize;                                       /**< Streaming mean packet size (bytes) */
+    uint32_t streamingPacketSizeStdDev;                                     /**< Streaming packet size standard deviation (bytes) */
     uint32_t streamingPacketsSent;                                          /**< Streaming packets sent during the interval */
     uint32_t streamingBytesDropped;                                         /**< Streaming bytes dropped during the interval */
     uint32_t streamingNaluDropped;                                          /**< Streaming NAL units dropped during the interval */
-    uint32_t preReprojTimestampDelta;                                       /**< Pre-reprojection time */
-    uint32_t postReprojTimestampDelta;                                      /**< Post-reprojection time */
-    uint32_t postEeTimestampDelta;                                          /**< Post-EE time */
-    uint32_t postScalingTimestampDelta;                                     /**< Post-scaling time */
-    uint32_t postStreamingEncodingTimestampDelta;                           /**< Post-streaming-encoding time */
-    uint32_t postRecordingEncodingTimestampDelta;                           /**< Post-recording-encoding time */
-    uint32_t postNetworkInputTimestampDelta;                                /**< Post-network-input time */
+    uint32_t commandsMaxTimeDeltaOnLastSec;                                 /**< Commands max reception time delta during the last second (microseconds) */
+    uint32_t preReprojTimestampDelta;                                       /**< Pre-reprojection time (microseconds) */
+    uint32_t postReprojTimestampDelta;                                      /**< Post-reprojection time (microseconds) */
+    uint32_t postEeTimestampDelta;                                          /**< Post-EE time (microseconds) */
+    uint32_t postScalingTimestampDelta;                                     /**< Post-scaling time (microseconds) */
+    uint32_t postStreamingEncodingTimestampDelta;                           /**< Post-streaming-encoding time (microseconds) */
+    uint32_t postRecordingEncodingTimestampDelta;                           /**< Post-recording-encoding time (microseconds) */
+    uint32_t postNetworkInputTimestampDelta;                                /**< Post-network-input time (microseconds) */
     char serialNumberH[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1]; /**< Serial number high part */
     char serialNumberL[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1]; /**< Serial number low part */
 
