@@ -1362,6 +1362,10 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                     lastAuCallbackTime = curTime2;
                 }
             }
+            else if (fifoRes != -2)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Failed to dequeue an AU (%d)", fifoRes);
+            }
 
             ARSAL_Mutex_Lock(&(filter->mutex));
             shouldStop = filter->threadShouldStop;
@@ -1439,6 +1443,7 @@ int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsC
     filter->running = 1;
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is running");
     ARSAL_Mutex_Unlock(&(filter->mutex));
+    ARSAL_Cond_Signal(&(filter->cond));
 
     return ret;
 }
@@ -1465,7 +1470,6 @@ int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle)
     filter->sync = 0;
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is paused");
     ARSAL_Mutex_Unlock(&(filter->mutex));
-    ARSAL_Cond_Signal(&(filter->cond));
 
     return ret;
 }
