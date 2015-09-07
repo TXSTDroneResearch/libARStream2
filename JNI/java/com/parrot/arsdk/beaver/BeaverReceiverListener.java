@@ -1,9 +1,3 @@
-/**
- * @file BeaverReaderFilterListener.java
- * @brief H.264 Elementary Stream Reader and Filter
- * @date 08/04/2015
- * @author aurelien.barre@parrot.com
- */
 
 package com.parrot.arsdk.beaver;
 
@@ -11,9 +5,9 @@ package com.parrot.arsdk.beaver;
 import java.nio.ByteBuffer;
 
 /**
- * This interface describes a listener for BeaverReaderFilter events
+ * This interface describes a listener for BeaverReceiver events
  */
-public interface BeaverReaderFilterListener
+public interface BeaverReceiverListener
 {
     /**
      * Called when sps/pps are received
