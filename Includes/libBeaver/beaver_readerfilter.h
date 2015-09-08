@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream/ARSTREAM_Reader2.h>
+#include <libARStream/ARSTREAM_Sender2.h>
 #include "beaver_filter.h"
 
 
@@ -26,6 +27,16 @@ extern "C" {
  * @brief Default client-side control port
  */
 #define BEAVER_READERFILTER_DEFAULT_CLIENT_CONTROL_PORT     ARSTREAM_READER2_DEFAULT_CLIENT_CONTROL_PORT
+
+/**
+ * @brief Default server-side resender stream port
+ */
+#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_STREAM_PORT      ARSTREAM_SENDER2_DEFAULT_SERVER_STREAM_PORT
+
+/**
+ * @brief Default server-side resender control port
+ */
+#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     ARSTREAM_SENDER2_DEFAULT_SERVER_CONTROL_PORT
 
 
 /**
