@@ -582,10 +582,13 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
     if ((filter->waitForSync) && (!filter->sync))
     {
         cancelAuOutput = 1;
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
+        if (filter->running)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
 /* DEBUG */
-        //fprintf(filter->fDebug, "AU output cancelled (waitForSync)\n");
+            //fprintf(filter->fDebug, "AU output cancelled (waitForSync)\n");
 /* /DEBUG */
+        }
     }
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
