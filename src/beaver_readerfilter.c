@@ -240,6 +240,8 @@ int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
         return ret;
     }
 
+    ARSTREAM_Reader2_InvalidateNaluBuffer(readerFilter->reader);
+
     return ret;
 }
 
