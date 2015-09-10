@@ -125,6 +125,7 @@ typedef struct BEAVER_Filter_s
 
     ARSAL_Mutex_t mutex;
     ARSAL_Cond_t cond;
+    int auBufferChangePending;
     int running;
     int threadShouldStop;
     int threadStarted;
@@ -304,7 +305,7 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
         }
     }
 
-    if ((filter->waitForSync) && (filter->tempAuBuffer))
+    if (filter->waitForSync)
     {
         int cbRet = filter->getAuBufferCallback(&filter->currentAuBuffer, &filter->currentAuBufferSize, &filter->currentAuBufferUserPtr, filter->getAuBufferCallbackUserPtr);
         if ((cbRet != 0) || (!filter->currentAuBuffer) || (!filter->currentAuBufferSize))
@@ -505,10 +506,11 @@ static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
 
     ARSAL_Mutex_Lock(&(filter->mutex));
 
-    if ((!filter->running) || ((filter->waitForSync) && (!filter->sync) && (filter->tempAuBuffer)))
+    if ((!filter->running) || (filter->auBufferChangePending) || ((filter->waitForSync) && (!filter->sync)))
     {
         filter->currentAuBuffer = filter->tempAuBuffer;
         filter->currentAuBufferSize = filter->tempAuBufferSize;
+        filter->auBufferChangePending = 0;
     }
     else
     {
@@ -772,9 +774,9 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             {
                 ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
-                if (ret > 0)
+                if ((ret > 0) || (filter->auBufferChangePending))
                 {
-                    // The access unit has been enqueued
+                    // The access unit has been enqueued or a buffer change is pending
                     ret = BEAVER_Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
@@ -1022,9 +1024,9 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 // Output the access unit
                 ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
-                if (ret > 0)
+                if ((ret > 0) || (filter->auBufferChangePending))
                 {
-                    // The access unit has been enqueued
+                    // The access unit has been enqueued or a buffer change is pending
                     ret = BEAVER_Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
@@ -1040,6 +1042,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     }
                     else
                     {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
                         filter->currentNaluBuffer = NULL;
                         filter->currentNaluBufferSize = 0;
                     }
@@ -1106,9 +1109,9 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     // Output the access unit
                     ret = BEAVER_Filter_enqueueCurrentAu(filter);
 
-                    if (ret > 0)
+                    if ((ret > 0) || (filter->auBufferChangePending))
                     {
-                        // The access unit has been enqueued
+                        // The access unit has been enqueued or a buffer change is pending
                         ret = BEAVER_Filter_getNewAuBuffer(filter);
                         if (ret == 0)
                         {
@@ -1119,6 +1122,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                         }
                         else
                         {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
                             filter->currentNaluBuffer = NULL;
                             filter->currentNaluBufferSize = 0;
                         }
@@ -1151,9 +1155,9 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 ret = BEAVER_Filter_enqueueCurrentAu(filter);
             }
 
-            if (ret > 0)
+            if ((ret > 0) || (filter->auBufferChangePending))
             {
-                // The access unit has been enqueued or no AU was pending
+                // The access unit has been enqueued or no AU was pending or a buffer change is pending
                 ret = BEAVER_Filter_getNewAuBuffer(filter);
                 if (ret == 0)
                 {
@@ -1164,6 +1168,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
                 else
                 {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
                     filter->currentNaluBuffer = NULL;
                     filter->currentNaluBufferSize = 0;
                 }
@@ -1484,6 +1489,7 @@ int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle)
     filter->auReadyCallbackUserPtr = NULL;
     filter->running = 0;
     filter->sync = 0;
+    filter->auBufferChangePending = 1;
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is paused");
     ARSAL_Mutex_Unlock(&(filter->mutex));
 
