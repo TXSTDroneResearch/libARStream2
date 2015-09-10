@@ -579,6 +579,8 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
         }
     }
 
+    ARSAL_Mutex_Lock(&(filter->mutex));
+
     if ((filter->waitForSync) && (!filter->sync))
     {
         cancelAuOutput = 1;
@@ -590,6 +592,8 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
 /* /DEBUG */
         }
     }
+
+    ARSAL_Mutex_Unlock(&(filter->mutex));
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
     {
@@ -1020,7 +1024,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 
                 if (ret > 0)
                 {
-                    // auReadyCallback has been called
+                    // The access unit has been enqueued
                     ret = BEAVER_Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
@@ -1042,7 +1046,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
                 else
                 {
-                    // auReadyCallback has not been called: reuse current auBuffer
+                    // The access unit has not been enqueued: reuse current auBuffer
                     BEAVER_Filter_resetCurrentAu(filter);
 
                     filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1338,12 +1342,21 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                     curTime2 = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                     decodingDelta2 = (lastAuCallbackTime != 0) ? (int)(curTime2 - lastAuCallbackTime) : 0;
 
-                    /* call the auReadyCallback */
-                    cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
-                    if (cbRet != 0)
+                    ARSAL_Mutex_Lock(&(filter->mutex));
+                    if (filter->running)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
+                        /* call the auReadyCallback */
+                        cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
+                        if (cbRet != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
+                        }
                     }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is not running, auReadyCallback was not called, acces unit was dropped");
+                    }
+                    ARSAL_Mutex_Unlock(&(filter->mutex));
 
                     if (early) sleepTimeOffsetUs += (decodingDelta2 - acquisitionDelta);
                     latencyUs += (((lastAuTimestamp != 0) && (lastAuCallbackTime != 0)) ? (decodingDelta2 - acquisitionDelta) : 0);
