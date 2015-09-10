@@ -15,8 +15,6 @@ public class BeaverManager
     public BeaverManager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                          int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize)
     {
-        Log.e("PLOP", " BeaverManager serverAddress = " + serverAddress + " serverStreamPort = " + serverStreamPort + " serverControlPort =  " + serverControlPort +
-                " clientStreamPort = " + clientStreamPort + " clientControlPort = " + clientControlPort);
         this.nativeRef = nativeInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
                 maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, auFifoSize);
         this.streamThread = new Thread(new Runnable()

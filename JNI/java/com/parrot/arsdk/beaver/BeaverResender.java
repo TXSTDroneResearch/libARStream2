@@ -15,20 +15,15 @@ public class BeaverResender
                           int clientStreamPort, int clientControlPort,
                           int maxPacketSize, int targetPacketSize, int maxLatency, int maxNetworkLatency)
     {
-        Log.e("PLOP", "BeaverResender " + clientAddress + " serverStreamPort " + serverStreamPort+  " serverControlPort " + serverControlPort +
-                " clientStreamPort " + clientStreamPort+   " clientControlPort " +  clientControlPort );
-        Log.e("PLOP","manager.getNativeRef() " + manager.getNativeRef());
         this.nativeRef = nativeInit(manager.getNativeRef(), clientAddress,
                 serverStreamPort, serverControlPort,
                 clientStreamPort, clientControlPort,
                 maxPacketSize, targetPacketSize, maxLatency, maxNetworkLatency);
-        Log.e("PLOP","BeaverResender " + this.nativeRef);
         this.streamThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
-                Log.e("PLOP","BeaverResenderStream nativeRef " + nativeRef);
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunStreamThread(nativeRef);
             }
@@ -38,12 +33,10 @@ public class BeaverResender
             @Override
             public void run()
             {
-                Log.e("PLOP","BeaverResenderStream nativeRef " + nativeRef);
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunControlThread(nativeRef);
             }
         }, "BeaverResenderControl");
-        Log.e("PLOP","nativeRef " + nativeRef);
     }
 
     private boolean isValid()
