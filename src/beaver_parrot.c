@@ -5,10 +5,14 @@
  * @author aurelien.barre@parrot.com
  */
 
+#include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <arpa/inet.h>
 
 #include <libBeaver/beaver_parrot.h>
+
+#define BEAVER_PARROT_FRAMEINFO_PSNR_MAX 48.130803609
 
 
 int BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1(const void* pBuf, unsigned int bufSize, BEAVER_Parrot_UserDataSeiDragonBasicV1_t *userDataSei)
@@ -778,5 +782,121 @@ BEAVER_Parrot_UserDataSeiTypes_t BEAVER_Parrot_GetUserDataSeiType(const void* pB
     }
 
     return BEAVER_PARROT_USER_DATA_SEI_UNKNOWN;
+}
+
+
+int BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(FILE *frameInfoFile)
+{
+    if (!frameInfoFile)
+    {
+        return -1;
+    }
+
+    fprintf(frameInfoFile, "frameIndex acquisitionTs systemTs ");
+    fprintf(frameInfoFile, "batteryPercentage latitude longitude altitude absoluteHeight relativeHeight xSpeed ySpeed zSpeed distanceFromHome yaw pitch roll cameraPan cameraTilt ");
+    fprintf(frameInfoFile, "videoStreamingTargetBitrate videoStreamingDecimation videoStreamingGopLength videoStreamingPrevFrameType videoStreamingPrevFrameSize videoStreamingPrevFramePsnrY ");
+    fprintf(frameInfoFile, "videoRecordingPrevFrameType videoRecordingPrevFrameSize videoRecordingPrevFramePsnrY ");
+    fprintf(frameInfoFile, "wifiRssi wifiMcsRate wifiTxRate wifiRxRate wifiTxFailRate wifiTxErrorRate wifiTxFailEventCount ");
+    fprintf(frameInfoFile, "preReprojTimestampDelta postReprojTimestampDelta postEeTimestampDelta postScalingTimestampDelta postStreamingEncodingTimestampDelta postRecordingEncodingTimestampDelta postNetworkInputTimestampDelta ");
+    fprintf(frameInfoFile, "streamingSrcMonitorTimeInterval streamingSrcMeanAcqToNetworkTime streamingSrcAcqToNetworkJitter streamingSrcMeanNetworkTime streamingSrcNetworkJitter ");
+    fprintf(frameInfoFile, "streamingSrcBytesSent streamingSrcMeanPacketSize streamingSrcPacketSizeStdDev streamingSrcPacketsSent streamingSrcBytesDropped streamingSrcNaluDropped commandsMaxTimeDeltaOnLastSec");
+
+    return 0;
+}
+
+
+int BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(const BEAVER_Parrot_DragonFrameInfoV1_t* frameInfo, FILE *frameInfoFile)
+{
+    if ((!frameInfo) || (!frameInfoFile))
+    {
+        return -1;
+    }
+
+    fprintf(frameInfoFile, "%lu ", (long unsigned int)frameInfo->frameIndex);
+    fprintf(frameInfoFile, "%llu ", (long long unsigned int)(((uint64_t)frameInfo->acquisitionTsH << 32) + (uint64_t)frameInfo->acquisitionTsL));
+    fprintf(frameInfoFile, "%llu ", (long long unsigned int)(((uint64_t)frameInfo->systemTsH << 32) + (uint64_t)frameInfo->systemTsL));
+    fprintf(frameInfoFile, "%lu %.8f %.8f %.3f ",
+            (long unsigned int)frameInfo->batteryPercentage,
+            (double)frameInfo->gpsLatitude_fp20 / 1048576.,
+            (double)frameInfo->gpsLongitude_fp20 / 1048576.,
+            (double)frameInfo->gpsAltitude_fp16 / 65536.);
+    fprintf(frameInfoFile, "%.3f %.3f %.3f %.3f %.3f %.3f ",
+            (float)frameInfo->absoluteHeight_fp16 / 65536.,
+            (float)frameInfo->relativeHeight_fp16 / 65536.,
+            (float)frameInfo->xSpeed_fp16 / 65536.,
+            (float)frameInfo->ySpeed_fp16 / 65536.,
+            (float)frameInfo->zSpeed_fp16 / 65536.,
+            (float)frameInfo->distanceFromHome_fp16 / 65536.);
+    fprintf(frameInfoFile, "%.3f %.3f %.3f %.3f %.3f ",
+            (float)frameInfo->yaw_fp16 / 65536.,
+            (float)frameInfo->pitch_fp16 / 65536.,
+            (float)frameInfo->roll_fp16 / 65536.,
+            (float)frameInfo->cameraPan_fp16 / 65536.,
+            (float)frameInfo->cameraTilt_fp16 / 65536.);
+    fprintf(frameInfoFile, "%d %d %d %d %d ",
+            frameInfo->videoStreamingTargetBitrate,
+            frameInfo->videoStreamingDecimation,
+            frameInfo->videoStreamingGopLength,
+            frameInfo->videoStreamingPrevFrameType,
+            frameInfo->videoStreamingPrevFrameSize);
+    if (frameInfo->videoStreamingPrevFrameMseY_fp8)
+    {
+        fprintf(frameInfoFile, "%.3f ", BEAVER_PARROT_FRAMEINFO_PSNR_MAX - 10. * log10((double)frameInfo->videoStreamingPrevFrameMseY_fp8 / 256.));
+    }
+    else
+    {
+        fprintf(frameInfoFile, "%.3f ", 0.);
+    }
+    fprintf(frameInfoFile, "%d %d ",
+            frameInfo->videoRecordingPrevFrameType,
+            frameInfo->videoRecordingPrevFrameSize);
+    if (frameInfo->videoRecordingPrevFrameMseY_fp8)
+    {
+        fprintf(frameInfoFile, "%.3f ", BEAVER_PARROT_FRAMEINFO_PSNR_MAX - 10. * log10((double)frameInfo->videoRecordingPrevFrameMseY_fp8 / 256.));
+    }
+    else
+    {
+        fprintf(frameInfoFile, "%.3f ", 0.);
+    }
+    fprintf(frameInfoFile, "%d %d %d %d %d %d %d ",
+            frameInfo->wifiRssi,
+            frameInfo->wifiMcsRate,
+            frameInfo->wifiTxRate,
+            frameInfo->wifiRxRate,
+            frameInfo->wifiTxFailRate,
+            frameInfo->wifiTxErrorRate,
+            frameInfo->wifiTxFailEventCount);
+    fprintf(frameInfoFile, "%lu %lu %lu %lu %lu %lu %lu ",
+            (long unsigned int)frameInfo->preReprojTimestampDelta,
+            (long unsigned int)frameInfo->postReprojTimestampDelta,
+            (long unsigned int)frameInfo->postEeTimestampDelta,
+            (long unsigned int)frameInfo->postScalingTimestampDelta,
+            (long unsigned int)frameInfo->postStreamingEncodingTimestampDelta,
+            (long unsigned int)frameInfo->postRecordingEncodingTimestampDelta,
+            (long unsigned int)frameInfo->postNetworkInputTimestampDelta);
+    fprintf(frameInfoFile, "%lu ",
+            (long unsigned int)frameInfo->streamingMonitorTimeInterval);
+    if (frameInfo->streamingMonitorTimeInterval)
+    {
+        fprintf(frameInfoFile, "%lu %lu %lu %lu %lu %lu %lu %lu %lu %lu ",
+                (long unsigned int)(((float)frameInfo->streamingMeanAcqToNetworkTime / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingAcqToNetworkJitter / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingMeanNetworkTime / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingNetworkJitter / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingBytesSent / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingMeanPacketSize / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingPacketSizeStdDev / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingPacketsSent / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingBytesDropped / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.),
+                (long unsigned int)(((float)frameInfo->streamingNaluDropped / (float)frameInfo->streamingMonitorTimeInterval) * 1000000.));
+    }
+    else
+    {
+        fprintf(frameInfoFile, "%lu %lu %lu %lu %lu %lu %lu %lu %lu %lu ",
+                (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0);
+    }
+    fprintf(frameInfoFile, "%lu", (long unsigned int)frameInfo->commandsMaxTimeDeltaOnLastSec);
+
+    return 0;
 }
 

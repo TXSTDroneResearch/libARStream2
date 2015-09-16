@@ -599,6 +599,37 @@ int BEAVER_Parrot_SerializeDragonStreamingV1(const BEAVER_Parrot_DragonStreaming
 int BEAVER_Parrot_DeserializeDragonStreamingV1(const void* pBuf, unsigned int bufSize, BEAVER_Parrot_DragonStreamingV1_t *streaming, uint16_t *sliceMbCount);
 
 
+/**
+ * @brief Write a "Dragon FrameInfo" v1 header to a file.
+ *
+ * The function writes the "Dragon FrameInfo" v1 field names to a file in CSV line format.
+ * No new line is appened at the end of the line.
+ * The file must have been previously opened.
+ *
+ * @param frameInfoFile Output file.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(FILE *frameInfoFile);
+
+
+/**
+ * @brief Write a "Dragon FrameInfo" v1 structure to a file.
+ *
+ * The function writes a "Dragon FrameInfo" v1 structure to a file in CSV line format.
+ * No new line is appened at the end of the line.
+ * The file must have been previously opened.
+ *
+ * @param frameInfo Pointer to the input FrameInfo structure.
+ * @param frameInfoFile Output file.
+ *
+ * @return 0 if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(const BEAVER_Parrot_DragonFrameInfoV1_t* frameInfo, FILE *frameInfoFile);
+
+
 #ifdef __cplusplus
 }
 #endif /* #ifdef __cplusplus */
