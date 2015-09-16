@@ -30,6 +30,22 @@
 #define BEAVER_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
 #define BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
 
+#define BEAVER_FILTER_MONITORING_OUTPUT
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+    #include <stdio.h>
+
+    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
+    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/frameinfo"
+    //#define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
+    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/frameinfo"
+    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
+    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/storage/emulated/legacy/FF/frameinfo"
+    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
+    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX "./frameinfo"
+
+    #define BEAVER_FILTER_MONITORING_OUTPUT_FILENAME "beaver_frameinfo"
+#endif
+
 
 typedef enum
 {
@@ -60,7 +76,9 @@ typedef struct BEAVER_Filter_Au_s
     uint32_t size;
     uint64_t timestamp;
     uint64_t timestampShifted;
+    uint64_t firstNaluInputTime;
     BEAVER_Filter_AuSyncType_t syncType;
+    BEAVER_Parrot_DragonFrameInfoV1_t frameInfo;
     void *userPtr;
 
     struct BEAVER_Filter_Au_s* prev;
@@ -100,11 +118,14 @@ typedef struct BEAVER_Filter_s
     int currentAuSize;
     uint64_t currentAuTimestamp;
     uint64_t currentAuTimestampShifted;
+    uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
     BEAVER_Filter_AuSyncType_t currentAuSyncType;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
+    int currentAuFrameInfoAvailable;
     BEAVER_Parrot_DragonStreamingV1_t currentAuStreamingInfo;
+    BEAVER_Parrot_DragonFrameInfoV1_t currentAuFrameInfo;
     uint16_t currentAuStreamingSliceMbCount[BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT];
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
@@ -141,6 +162,10 @@ typedef struct BEAVER_Filter_s
     BEAVER_Filter_Au_t *fifoHead;
     BEAVER_Filter_Au_t *fifoTail;
     BEAVER_Filter_Au_t *fifoPool;
+
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+    FILE* fMonitorOut;
+#endif
 
 /* DEBUG */
     //FILE *fDebug;
@@ -414,7 +439,6 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
                     BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
-                    BEAVER_Parrot_DragonFrameInfoV1_t frameInfo;
                     ret = BEAVER_Parser_GetUserDataSei(filter->parser, &pUserDataSei, &userDataSeiSize);
                     if (ret < 0)
                     {
@@ -437,7 +461,8 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                 }
                                 break;
                             case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
-                                ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &frameInfo, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
+                                                                                                     &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
                                 if (ret < 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
@@ -445,6 +470,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                 else
                                 {
                                     filter->currentAuStreamingInfoAvailable = 1;
+                                    filter->currentAuFrameInfoAvailable = 1;
                                 }
                                 break;
                             default:
@@ -507,13 +533,6 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
     ARSAL_Mutex_Unlock(&(filter->mutex));
     ARSAL_Cond_Signal(&(filter->callbackCond));
 
-#if 0 //TODO
-#ifdef ARSTREAM_READER2_DEBUG
-            ARSTREAM_Reader2Debug_ProcessNalu(reader->rdbg, reader->currentNaluBuffer, reader->currentNaluSize, auTimestamp, receptionTs,
-                                              missingPacketsBefore, 1, isFirstNaluInAu, isLastNaluInAu);
-#endif
-#endif
-
     return (ret >= 0) ? 0 : ret;
 }
 
@@ -568,9 +587,11 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
     filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_NONE;
     filter->currentAuSlicesAllI = 1;
     filter->currentAuStreamingInfoAvailable = 0;
+    filter->currentAuFrameInfoAvailable = 0;
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
+    filter->currentAuFirstNaluInputTime = 0;
 }
 
 
@@ -672,8 +693,17 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
         au.size = filter->currentAuSize;
         au.timestamp = filter->currentAuTimestamp;
         au.timestampShifted = filter->currentAuTimestampShifted;
+        au.firstNaluInputTime = filter->currentAuFirstNaluInputTime;
         au.syncType = filter->currentAuSyncType;
         au.userPtr = filter->currentAuBufferUserPtr;
+        if (filter->currentAuFrameInfoAvailable)
+        {
+            memcpy(&au.frameInfo, &filter->currentAuFrameInfo, sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
+        }
+        else
+        {
+            memset(&au.frameInfo, 0, sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
+        }
 /* DEBUG */
         //fprintf(filter->fDebug, "Trying to enqueue AU: size=%d ts=%llu\n", filter->currentAuSize, (unsigned long long int)filter->currentAuTimestamp);
         //fflush(filter->fDebug);
@@ -745,11 +775,13 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             BEAVER_Filter_AuSyncType_t savedAuSyncType = filter->currentAuSyncType;
             int savedAuSlicesAllI = filter->currentAuSlicesAllI;
             int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
+            int savedAuFrameInfoAvailable = filter->currentAuFrameInfoAvailable;
             int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
             int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
             int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
             uint64_t savedAuTimestamp = filter->currentAuTimestamp;
             uint64_t savedAuTimestampShifted = filter->currentAuTimestampShifted;
+            uint64_t savedAuFirstNaluInputTime = filter->currentAuFirstNaluInputTime;
             ret = 0;
 
             ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
@@ -777,6 +809,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_IDR;
             filter->currentAuTimestamp -= ((filter->currentAuTimestamp >= 1000) ? 1000 : ((filter->currentAuTimestamp >= 1) ? 1 : 0));
             filter->currentAuTimestampShifted -= ((filter->currentAuTimestampShifted >= 1000) ? 1000 : ((filter->currentAuTimestampShifted >= 1) ? 1 : 0));
+            filter->currentAuFirstNaluInputTime -= ((filter->currentAuFirstNaluInputTime >= 1000) ? 1000 : ((filter->currentAuFirstNaluInputTime >= 1) ? 1 : 0));
 
             if (!filter->filterOutSpsPps)
             {
@@ -838,6 +871,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                         BEAVER_Filter_resetCurrentAu(filter);
                         filter->currentAuTimestamp = savedAuTimestamp;
                         filter->currentAuTimestampShifted = savedAuTimestampShifted;
+                        filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
                         
                         if (tmpBuf)
                         {
@@ -849,6 +883,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                             filter->currentAuSyncType = savedAuSyncType;
                             filter->currentAuSlicesAllI = savedAuSlicesAllI;
                             filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                            filter->currentAuFrameInfoAvailable = savedAuFrameInfoAvailable;
                             filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                             filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                             filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
@@ -866,6 +901,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     BEAVER_Filter_resetCurrentAu(filter);
                     filter->currentAuTimestamp = savedAuTimestamp;
                     filter->currentAuTimestampShifted = savedAuTimestampShifted;
+                    filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
 
                     if (tmpBuf)
                     {
@@ -877,6 +913,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                         filter->currentAuSyncType = savedAuSyncType;
                         filter->currentAuSlicesAllI = savedAuSlicesAllI;
                         filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                        filter->currentAuFrameInfoAvailable = savedAuFrameInfoAvailable;
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                         filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
@@ -1168,6 +1205,8 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
     BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
     int ret = 0;
     uint8_t *retPtr = NULL;
+    uint64_t curTime;
+    struct timespec t1;
 
     if (!filter)
     {
@@ -1177,6 +1216,9 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
     switch (cause)
     {
         case ARSTREAM_READER2_CAUSE_NALU_COMPLETE:
+            ARSAL_Time_GetTime(&t1);
+            curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
             // Handle a previous access unit that has not been output
             if ((filter->currentAuSize > 0)
                     && ((isFirstNaluInAu) || ((filter->currentAuTimestamp != 0) && (auTimestamp != filter->currentAuTimestamp))))
@@ -1265,6 +1307,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             {
                 filter->currentAuTimestamp = auTimestamp;
                 filter->currentAuTimestampShifted = auTimestampShifted;
+                if (filter->currentAuFirstNaluInputTime == 0) filter->currentAuFirstNaluInputTime = curTime;
 
                 if (filter->firstGrayIFramePending)
                 {
@@ -1592,6 +1635,21 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
 
                     lastAuTimestamp = au.timestamp;
                     lastAuCallbackTime = curTime2;
+
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+                    if (filter->fMonitorOut)
+                    {
+                        int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(&au.frameInfo, filter->fMonitorOut);
+                        if (beaverRet != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to write the frameInfo to the file");
+                        }
+                        fprintf(filter->fMonitorOut, " %llu ", (long long unsigned int)au.timestampShifted);
+                        fprintf(filter->fMonitorOut, "%llu ", (long long unsigned int)au.firstNaluInputTime);
+                        fprintf(filter->fMonitorOut, "%llu\n", (long long unsigned int)curTime2);
+                        fflush(filter->fMonitorOut);
+                    }
+#endif
                 }
             }
             else if (fifoRes != -2)
@@ -1909,6 +1967,76 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         filter->tempSliceNaluBufferSize = BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE;
     }
 
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+    if (ret == 0)
+    {
+        int i;
+        char szOutputFileName[128];
+        char *pszFilePath = NULL;
+        szOutputFileName[0] = '\0';
+        if (0)
+        {
+        }
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
+        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB;
+        }
+#endif
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
+        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
+        }
+#endif
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
+        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
+        }
+#endif
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
+        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX;
+        }
+#endif
+        if (pszFilePath)
+        {
+            for (i = 0; i < 1000; i++)
+            {
+                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, BEAVER_FILTER_MONITORING_OUTPUT_FILENAME, i);
+                if (access(szOutputFileName, F_OK) == -1)
+                {
+                    // file does not exist
+                    break;
+                }
+                szOutputFileName[0] = '\0';
+            }
+        }
+
+        if (strlen(szOutputFileName))
+        {
+            filter->fMonitorOut = fopen(szOutputFileName, "w");
+            if (!filter->fMonitorOut)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
+            }
+        }
+
+        if (filter->fMonitorOut)
+        {
+            int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(filter->fMonitorOut);
+            if (beaverRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to write the frameInfo header to the file");
+            }
+            fprintf(filter->fMonitorOut, " acquisitionTsShifted beaverFirstNaluInputTime beaverAuOutputTime\n");
+            fflush(filter->fMonitorOut);
+        }
+    }
+#endif //#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+
     if (ret == 0)
     {
         *filterHandle = (BEAVER_Filter_Handle*)filter;
@@ -1927,6 +2055,9 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             if (filter->tempAuBuffer) free(filter->tempAuBuffer);
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
             if (filter->writer) BEAVER_Writer_Free(filter->writer);
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+            if (filter->fMonitorOut) fclose(filter->fMonitorOut);
+#endif
             free(filter);
         }
         *filterHandle = NULL;
@@ -1970,6 +2101,9 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
         if (filter->pPps) free(filter->pPps);
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+        if (filter->fMonitorOut) fclose(filter->fMonitorOut);
+#endif
 
 /* DEBUG */
         //fclose(filter->fDebug);
