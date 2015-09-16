@@ -297,6 +297,8 @@ typedef struct
     uint32_t streamingBytesDropped;                                         /**< Streaming bytes dropped during the interval */
     uint32_t streamingNaluDropped;                                          /**< Streaming NAL units dropped during the interval */
     uint32_t commandsMaxTimeDeltaOnLastSec;                                 /**< Commands max reception time delta during the last second (microseconds) */
+    uint32_t lastCommandTimeDelta;                                          /**< Last received command time delta (microseconds) */
+    uint32_t lastCommandPsiValue;                                           /**< Last received command psi value */
     uint32_t preReprojTimestampDelta;                                       /**< Pre-reprojection time (microseconds) */
     uint32_t postReprojTimestampDelta;                                      /**< Post-reprojection time (microseconds) */
     uint32_t postEeTimestampDelta;                                          /**< Post-EE time (microseconds) */

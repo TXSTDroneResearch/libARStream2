@@ -550,6 +550,8 @@ int BEAVER_Parrot_SerializeDragonFrameInfoV1(const BEAVER_Parrot_DragonFrameInfo
     *(pdwBuf++) = htonl(frameInfo->streamingBytesDropped);
     *(pdwBuf++) = htonl(frameInfo->streamingNaluDropped);
     *(pdwBuf++) = htonl(frameInfo->commandsMaxTimeDeltaOnLastSec);
+    *(pdwBuf++) = htonl(frameInfo->lastCommandTimeDelta);
+    *(pdwBuf++) = htonl(frameInfo->lastCommandPsiValue);
     *(pdwBuf++) = htonl(frameInfo->preReprojTimestampDelta);
     *(pdwBuf++) = htonl(frameInfo->postReprojTimestampDelta);
     *(pdwBuf++) = htonl(frameInfo->postEeTimestampDelta);
@@ -635,6 +637,8 @@ int BEAVER_Parrot_DeserializeDragonFrameInfoV1(const void* pBuf, unsigned int bu
     frameInfo->streamingBytesDropped = ntohl(*(pdwBuf++));
     frameInfo->streamingNaluDropped = ntohl(*(pdwBuf++));
     frameInfo->commandsMaxTimeDeltaOnLastSec = ntohl(*(pdwBuf++));
+    frameInfo->lastCommandTimeDelta = ntohl(*(pdwBuf++));
+    frameInfo->lastCommandPsiValue = ntohl(*(pdwBuf++));
     frameInfo->preReprojTimestampDelta = ntohl(*(pdwBuf++));
     frameInfo->postReprojTimestampDelta = ntohl(*(pdwBuf++));
     frameInfo->postEeTimestampDelta = ntohl(*(pdwBuf++));
@@ -799,7 +803,8 @@ int BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(FILE *frameInfoFile)
     fprintf(frameInfoFile, "wifiRssi wifiMcsRate wifiTxRate wifiRxRate wifiTxFailRate wifiTxErrorRate wifiTxFailEventCount ");
     fprintf(frameInfoFile, "preReprojTimestampDelta postReprojTimestampDelta postEeTimestampDelta postScalingTimestampDelta postStreamingEncodingTimestampDelta postRecordingEncodingTimestampDelta postNetworkInputTimestampDelta ");
     fprintf(frameInfoFile, "streamingSrcMonitorTimeInterval streamingSrcMeanAcqToNetworkTime streamingSrcAcqToNetworkJitter streamingSrcMeanNetworkTime streamingSrcNetworkJitter ");
-    fprintf(frameInfoFile, "streamingSrcBytesSent streamingSrcMeanPacketSize streamingSrcPacketSizeStdDev streamingSrcPacketsSent streamingSrcBytesDropped streamingSrcNaluDropped commandsMaxTimeDeltaOnLastSec");
+    fprintf(frameInfoFile, "streamingSrcBytesSent streamingSrcMeanPacketSize streamingSrcPacketSizeStdDev streamingSrcPacketsSent streamingSrcBytesDropped streamingSrcNaluDropped ");
+    fprintf(frameInfoFile, "commandsMaxTimeDeltaOnLastSec lastCommandTimeDelta lastCommandPsiValue");
 
     return 0;
 }
@@ -895,7 +900,10 @@ int BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(const BEAVER_Parrot_DragonFrameIn
         fprintf(frameInfoFile, "%lu %lu %lu %lu %lu %lu %lu %lu %lu %lu ",
                 (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0, (long unsigned int)0);
     }
-    fprintf(frameInfoFile, "%lu", (long unsigned int)frameInfo->commandsMaxTimeDeltaOnLastSec);
+    fprintf(frameInfoFile, "%lu %lu %lu", 
+            (long unsigned int)frameInfo->commandsMaxTimeDeltaOnLastSec,
+            (long unsigned int)frameInfo->lastCommandTimeDelta,
+            (long unsigned int)frameInfo->lastCommandPsiValue);
 
     return 0;
 }
