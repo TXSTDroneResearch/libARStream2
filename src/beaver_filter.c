@@ -1647,7 +1647,6 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                         fprintf(filter->fMonitorOut, " %llu ", (long long unsigned int)au.timestampShifted);
                         fprintf(filter->fMonitorOut, "%llu ", (long long unsigned int)au.firstNaluInputTime);
                         fprintf(filter->fMonitorOut, "%llu\n", (long long unsigned int)curTime2);
-                        fflush(filter->fMonitorOut);
                     }
 #endif
                 }
@@ -2032,7 +2031,6 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to write the frameInfo header to the file");
             }
             fprintf(filter->fMonitorOut, " acquisitionTsShifted beaverFirstNaluInputTime beaverAuOutputTime\n");
-            fflush(filter->fMonitorOut);
         }
     }
 #endif //#ifdef BEAVER_FILTER_MONITORING_OUTPUT
