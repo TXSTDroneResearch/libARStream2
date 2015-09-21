@@ -20,3 +20,17 @@ LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/Includes
 LOCAL_SRC_FILES := src/beaver_filter.c src/beaver_readerfilter.c src/beaver_parser.c src/beaver_writer.c src/beaver_parrot.c
 include $(BUILD_LIBRARY)
 
+
+ifeq ("$(TARGET_OS_FLAVOUR)","native")
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := beavertool
+LOCAL_DESCRIPTION := H.264 Elementary Stream Tools
+LOCAL_CATEGORY_PATH := dragon
+LOCAL_LIBRARIES := libBeaver
+LOCAL_SRC_FILES := tools/beavertool.c
+
+include $(BUILD_EXECUTABLE)
+
+endif
