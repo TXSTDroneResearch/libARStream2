@@ -3097,7 +3097,7 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
 }
 
 
-static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, unsigned long long fileSize)
+static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, unsigned long long fileSize, unsigned long long *startcodePosition)
 {
     int ret;
     unsigned long long initPos, pos, end, i = 0;
@@ -3139,7 +3139,8 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
         pos += 4;
         ret = fseek(fp, pos, SEEK_SET);
         if (ret != 0) return -1;
-        ret = pos;
+        ret = 0;
+        if (startcodePosition) *startcodePosition = pos - 4;
     }
     else
     {
@@ -3153,11 +3154,12 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
 
 
 
-int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize)
+int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize)
 {
     BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
     int ret = 0;
-    unsigned long long naluStart, naluEnd, naluSize = 0;
+    unsigned long long naluStart, naluEnd, startcodePosition = 0;
+    unsigned int _naluSize = 0;
 
     if (!parserHandle)
     {
@@ -3166,19 +3168,19 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
     }
     
     // Search for next NALU start code
-    ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize);
+    ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
     if (ret >= 0)
     {
         // Start code found
-        naluStart = ret;
-        if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(naluStart - 4));
-        
+        naluStart = startcodePosition + 4;
+        if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(startcodePosition));
+
         // Search for NALU end (next NALU start code or end of file)
-        ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize);
+        ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
         if (ret >= 0)
         {
             // Start code found
-            naluEnd = ret - 4;            
+            naluEnd = startcodePosition;
         }
         else if (ret == -2)
         {
@@ -3191,8 +3193,8 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
             return ret;
         }
         
-        naluSize = naluEnd - naluStart;
-        if (naluSize > 0)
+        _naluSize = (unsigned int)(naluEnd - naluStart);
+        if (_naluSize > 0)
         {
             ret = fseek(fp, naluStart, SEEK_SET);
             if (ret != 0)
@@ -3202,9 +3204,9 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
             }
             
             parser->naluBufManaged = 1;
-            if (naluSize > parser->naluBufSize)
+            if (_naluSize > parser->naluBufSize)
             {
-                parser->naluBufSize = naluSize;
+                parser->naluBufSize = _naluSize;
                 parser->pNaluBuf = (uint8_t*)realloc(parser->pNaluBuf, parser->naluBufSize);
                 if (!parser->pNaluBuf)
                 {
@@ -3213,14 +3215,14 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
                 }
             }
             
-            ret = fread(parser->pNaluBuf, naluSize, 1, fp);
+            ret = fread(parser->pNaluBuf, _naluSize, 1, fp);
             if (ret != 1)
             {
-                fprintf(stderr, "Error: failed to read %d bytes in file\n", naluSize);
+                fprintf(stderr, "Error: failed to read %d bytes in file\n", _naluSize);
                 return ret;
             }
-            parser->naluSize = naluSize;
-            parser->remNaluSize = naluSize;
+            parser->naluSize = _naluSize;
+            parser->remNaluSize = _naluSize;
             parser->pNaluBufCur = parser->pNaluBuf;
 
             // Reset the cache
@@ -3246,7 +3248,8 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
         return ret;
     }
 
-    return naluSize;
+    if (naluSize) *naluSize = _naluSize;
+    return 0;
 }
 
 

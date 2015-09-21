@@ -87,12 +87,13 @@ int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle);
  * @param parserHandle Instance handle.
  * @param fp Opened file to parse.
  * @param fileSize Total file size.
+ * @param naluSize Optional pointer to the NAL unit size.
  *
  * @return 0 if no error occurred.
  * @return -2 if no start code has been found.
  * @return -1 if an error occurred.
  */
-int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize);
+int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize);
 
 
 /**
