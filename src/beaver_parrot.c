@@ -797,11 +797,12 @@ int BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(FILE *frameInfoFile)
     }
 
     fprintf(frameInfoFile, "frameIndex acquisitionTs systemTs ");
-    fprintf(frameInfoFile, "batteryPercentage latitude longitude altitude absoluteHeight relativeHeight xSpeed ySpeed zSpeed distanceFromHome yaw pitch roll cameraPan cameraTilt ");
+    fprintf(frameInfoFile, "batteryPercentage gpsLatitude gpsLongitude gpsAltitude absoluteHeight relativeHeight xSpeed ySpeed zSpeed distanceFromHome yaw pitch roll cameraPan cameraTilt ");
     fprintf(frameInfoFile, "videoStreamingTargetBitrate videoStreamingDecimation videoStreamingGopLength videoStreamingPrevFrameType videoStreamingPrevFrameSize videoStreamingPrevFramePsnrY ");
     fprintf(frameInfoFile, "videoRecordingPrevFrameType videoRecordingPrevFrameSize videoRecordingPrevFramePsnrY ");
     fprintf(frameInfoFile, "wifiRssi wifiMcsRate wifiTxRate wifiRxRate wifiTxFailRate wifiTxErrorRate wifiTxFailEventCount ");
-    fprintf(frameInfoFile, "preReprojTimestampDelta postReprojTimestampDelta postEeTimestampDelta postScalingTimestampDelta postStreamingEncodingTimestampDelta postRecordingEncodingTimestampDelta postNetworkInputTimestampDelta ");
+    fprintf(frameInfoFile, "preReprojTimestampDelta postReprojTimestampDelta postEeTimestampDelta postScalingTimestampDelta ");
+    fprintf(frameInfoFile, "postStreamingEncodingTimestampDelta postRecordingEncodingTimestampDelta postNetworkInputTimestampDelta ");
     fprintf(frameInfoFile, "streamingSrcMonitorTimeInterval streamingSrcMeanAcqToNetworkTime streamingSrcAcqToNetworkJitter streamingSrcMeanNetworkTime streamingSrcNetworkJitter ");
     fprintf(frameInfoFile, "streamingSrcBytesSent streamingSrcMeanPacketSize streamingSrcPacketSizeStdDev streamingSrcPacketsSent streamingSrcBytesDropped streamingSrcNaluDropped ");
     fprintf(frameInfoFile, "commandsMaxTimeDeltaOnLastSec lastCommandTimeDelta lastCommandPsiValue");
