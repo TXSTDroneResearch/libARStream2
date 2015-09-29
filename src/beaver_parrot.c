@@ -141,9 +141,11 @@ int BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV1(const void* pBuf, unsig
     userDataSei->systemTsL = ntohl(*(pdwBuf++));
 
     pszBuf = (char*)pdwBuf;
-    strncpy(userDataSei->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(userDataSei->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    userDataSei->serialNumberH[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
     pszBuf += BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1;
-    strncpy(userDataSei->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(userDataSei->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    userDataSei->serialNumberL[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
 
     return 0;
 }
@@ -229,9 +231,11 @@ int BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV2(const void* pBuf, unsig
     userDataSei->streamingNaluDropped = ntohl(*(pdwBuf++));
 
     pszBuf = (char*)pdwBuf;
-    strncpy(userDataSei->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(userDataSei->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    userDataSei->serialNumberH[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
     pszBuf += BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1;
-    strncpy(userDataSei->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(userDataSei->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    userDataSei->serialNumberL[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
 
     return 0;
 }
@@ -561,9 +565,11 @@ int BEAVER_Parrot_SerializeDragonFrameInfoV1(const BEAVER_Parrot_DragonFrameInfo
     *(pdwBuf++) = htonl(frameInfo->postNetworkInputTimestampDelta);
 
     pszBuf = (char*)pdwBuf;
-    strncpy(pszBuf, frameInfo->serialNumberH, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(pszBuf, frameInfo->serialNumberH, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    pszBuf[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
     pszBuf += BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1;
-    strncpy(pszBuf, frameInfo->serialNumberL, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(pszBuf, frameInfo->serialNumberL, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    pszBuf[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
 
     if (size)
     {
@@ -648,9 +654,11 @@ int BEAVER_Parrot_DeserializeDragonFrameInfoV1(const void* pBuf, unsigned int bu
     frameInfo->postNetworkInputTimestampDelta = ntohl(*(pdwBuf++));
 
     pszBuf = (const char*)pdwBuf;
-    strncpy(frameInfo->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(frameInfo->serialNumberH, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    frameInfo->serialNumberH[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
     pszBuf += BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1;
-    strncpy(frameInfo->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH + 1);
+    strncpy(frameInfo->serialNumberL, pszBuf, BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH);
+    frameInfo->serialNumberL[BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH] = '\0';
 
     return 0;
 }
