@@ -873,7 +873,6 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                         if (tmpBuf)
                         {
                             memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
-                            free(tmpBuf);
                         }
 
                         filter->currentAuTimestamp = savedAuTimestamp;
@@ -909,7 +908,6 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     if (tmpBuf)
                     {
                         memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
-                        free(tmpBuf);
 
                         filter->currentAuSize = savedAuSize;
                         filter->currentAuIncomplete = savedAuIncomplete;
@@ -923,6 +921,8 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     }
                 }
             }
+
+            if (tmpBuf) free(tmpBuf);
         }
     }
 
@@ -1273,7 +1273,6 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Failed to copy the pending NALU to the currentNaluBuffer (size=%d)", naluSize);
                             }
-                            free(tmpBuf);
                         }
                     }
                     else
@@ -1292,9 +1291,10 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     {
                         memcpy(filter->currentNaluBuffer, tmpBuf, naluSize); //TODO: filter->currentNaluBufferSize must be > naluSize
                         naluBuffer = filter->currentNaluBuffer;
-                        free(tmpBuf);
                     }
                 }
+
+                if (tmpBuf) free(tmpBuf);
             }
 
             ret = BEAVER_Filter_processNalu(filter, naluBuffer, naluSize, &naluType);
