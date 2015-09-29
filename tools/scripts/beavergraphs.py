@@ -102,7 +102,7 @@ def createFrameInfoGraphs():
     axStreamingBitrates.set_ylim(0, 1.0)
     axStreamingPacketRates.set_title("Streaming packets sent / NALU dropped (#/s)", color='0.4')
     axStreamingPacketRates.set_ylim(0, 10)
-    axWifiErrors.set_title("Wifi error rate (#/s)", color='0.4')
+    axWifiErrors.set_title("Wifi TX fail events", color='0.4')
     axWifiErrors.set_ylim(0, 2)
     axFrameLatency.set_title("Video frame latency (ms)", color='0.4')
     axFrameLatency.set_ylim(0, 200)
