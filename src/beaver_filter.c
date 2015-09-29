@@ -368,7 +368,7 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
 
 static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t *naluType)
 {
-    int ret = 0;
+    int ret = 0, _ret = 0;
     BEAVER_Filter_H264SliceType_t sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
 
     if ((!naluBuffer) || (naluSize <= 4))
@@ -412,8 +412,8 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                 {
                     BEAVER_Parser_SliceInfo_t sliceInfo;
                     memset(&sliceInfo, 0, sizeof(sliceInfo));
-                    ret = BEAVER_Parser_GetSliceInfo(filter->parser, &sliceInfo);
-                    if (ret < 0)
+                    _ret = BEAVER_Parser_GetSliceInfo(filter->parser, &sliceInfo);
+                    if (_ret < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSliceInfo() failed (%d)", ret);
                     }
@@ -439,8 +439,8 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
                     BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
-                    ret = BEAVER_Parser_GetUserDataSei(filter->parser, &pUserDataSei, &userDataSeiSize);
-                    if (ret < 0)
+                    _ret = BEAVER_Parser_GetUserDataSei(filter->parser, &pUserDataSei, &userDataSeiSize);
+                    if (_ret < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetUserDataSei() failed (%d)", ret);
                     }
@@ -450,10 +450,10 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                         switch (userDataSeiType)
                         {
                             case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1:
-                                ret = BEAVER_Parrot_DeserializeDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                if (ret < 0)
+                                _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                if (_ret < 0)
                                 {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeDragonStreamingV1() failed (%d)", ret);
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
                                 }
                                 else
                                 {
@@ -461,9 +461,9 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                 }
                                 break;
                             case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
-                                ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
+                                _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
                                                                                                      &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                if (ret < 0)
+                                if (_ret < 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
                                 }
