@@ -13,6 +13,7 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
+#include <stdio.h>
 
 
 #define BEAVER_PARROT_DRAGON_SERIAL_NUMBER_PART_LENGTH 9                    /**< Serial number part length */

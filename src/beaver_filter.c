@@ -1625,7 +1625,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                         /* call the auReadyCallback */
                         filter->callbackInProgress = 1;
                         ARSAL_Mutex_Unlock(&(filter->mutex));
-                        cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, au.userPtr, filter->auReadyCallbackUserPtr);
+                        cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, (void*)&au.frameInfo, au.userPtr, filter->auReadyCallbackUserPtr);
                         ARSAL_Mutex_Lock(&(filter->mutex));
                         if (cbRet != 0)
                         {
