@@ -79,6 +79,7 @@ typedef struct BEAVER_Filter_Au_s
     uint64_t firstNaluInputTime;
     BEAVER_Filter_AuSyncType_t syncType;
     BEAVER_Parrot_DragonFrameInfoV1_t frameInfo;
+    int frameInfoAvailable;
     void *userPtr;
 
     struct BEAVER_Filter_Au_s* prev;
@@ -696,6 +697,7 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
         au.firstNaluInputTime = filter->currentAuFirstNaluInputTime;
         au.syncType = filter->currentAuSyncType;
         au.userPtr = filter->currentAuBufferUserPtr;
+        au.frameInfoAvailable = filter->currentAuFrameInfoAvailable;
         if (filter->currentAuFrameInfoAvailable)
         {
             memcpy(&au.frameInfo, &filter->currentAuFrameInfo, sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
@@ -1625,7 +1627,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
                         /* call the auReadyCallback */
                         filter->callbackInProgress = 1;
                         ARSAL_Mutex_Unlock(&(filter->mutex));
-                        cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, (void*)&au.frameInfo, au.userPtr, filter->auReadyCallbackUserPtr);
+                        cbRet = filter->auReadyCallback(au.buffer, au.size, au.timestamp, au.timestampShifted, au.syncType, (au.frameInfoAvailable) ? (void*)&au.frameInfo : NULL, au.userPtr, filter->auReadyCallbackUserPtr);
                         ARSAL_Mutex_Lock(&(filter->mutex));
                         if (cbRet != 0)
                         {
