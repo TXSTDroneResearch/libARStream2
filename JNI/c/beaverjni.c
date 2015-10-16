@@ -125,7 +125,7 @@ Java_com_parrot_arsdk_beaver_BeaverManager_nativeRunControlThread(JNIEnv *env, j
 
 static int BEAVER_JNI_ReaderFilter_SpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *thizz);
 static int BEAVER_JNI_ReaderFilter_GetAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *thizz);
-static int BEAVER_JNI_ReaderFilter_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auBufferUserPtr, void *userPtr);
+static int BEAVER_JNI_ReaderFilter_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr);
 
 JNIEXPORT void JNICALL
 Java_com_parrot_arsdk_beaver_BeaverReceiver_nativeInitClass(JNIEnv *env, jclass clazz)
@@ -308,7 +308,7 @@ static int BEAVER_JNI_ReaderFilter_GetAuBufferCallback(uint8_t **auBuffer, int *
     return ret;
 }
 
-static int BEAVER_JNI_ReaderFilter_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auBufferUserPtr, void *userPtr)
+static int BEAVER_JNI_ReaderFilter_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr)
 {
     int ret = -1;
     JNIEnv *env = NULL;
