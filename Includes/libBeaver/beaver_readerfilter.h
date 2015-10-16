@@ -67,7 +67,6 @@ typedef struct
     int maxBitrate;                                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
     int maxNetworkLatencyMs;                                        /**< Maximum acceptable network latency in milliseconds (should be provided by the server, can be 0) */
-    int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */

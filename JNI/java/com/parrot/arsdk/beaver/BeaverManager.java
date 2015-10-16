@@ -13,10 +13,10 @@ public class BeaverManager
     private final Thread filterThread;
 
     public BeaverManager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
-                         int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, int auFifoSize)
+                         int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
         this.nativeRef = nativeInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
-                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, auFifoSize);
+                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
         this.streamThread = new Thread(new Runnable()
         {
             @Override
@@ -97,7 +97,7 @@ public class BeaverManager
     private native long nativeInit(String serverAddress, int serverStreamPort, int serverControlPort,
                                    int clientStreamPort, int clientControlPort,
                                    int maxPacketSize, int maxBitrate, int maxLatency,
-                                   int maxNetworkLatency, int auFifoSize);
+                                   int maxNetworkLatency);
 
     private native boolean nativeStop(long nativeRef);
 

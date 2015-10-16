@@ -55,7 +55,6 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
 
         BEAVER_Filter_Config_t filterConfig;
         memset(&filterConfig, 0, sizeof(filterConfig));
-        filterConfig.auFifoSize = config->auFifoSize;
         filterConfig.waitForSync = config->waitForSync;
         filterConfig.outputIncompleteAu = config->outputIncompleteAu;
         filterConfig.filterOutSpsPps = config->filterOutSpsPps;
