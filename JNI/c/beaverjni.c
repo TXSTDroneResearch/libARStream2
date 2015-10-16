@@ -26,8 +26,7 @@ static JavaVM *g_vm = NULL;
 
 JNIEXPORT jlong JNICALL
 Java_com_parrot_arsdk_beaver_BeaverManager_nativeInit(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
-    jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency,
-    jint auFifoSize)
+    jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, BEAVER_JNI_TAG, "BeaverManager_nativeInit");
     BEAVER_ReaderFilter_Config_t config;
@@ -46,7 +45,6 @@ Java_com_parrot_arsdk_beaver_BeaverManager_nativeInit(JNIEnv *env, jobject thizz
     config.maxBitrate = maxBitrate;
     config.maxLatencyMs = maxLatency;
     config.maxNetworkLatencyMs = maxNetworkLatency;
-    config.auFifoSize = auFifoSize;
     config.waitForSync = 1;
     config.outputIncompleteAu = 1;
     config.filterOutSpsPps = 1;

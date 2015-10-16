@@ -55,7 +55,6 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
  */
 typedef struct
 {
-    int auFifoSize;                                                 /**< access unit FIFO size (should match the number of decoder buffers - 2 */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
