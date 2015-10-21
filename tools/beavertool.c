@@ -347,6 +347,7 @@ static void BEAVER_PrintFrameInfo(FILE *frameInfoFile, BEAVER_Parrot_UserDataSei
 static int BEAVER_ExtractFrameInfo(char *pszVideoFile, char *pszFrameInfoFile, char *pszKmlFile)
 {
     int ret, result = EXIT_SUCCESS;
+    int i, seiCount;
     BEAVER_Parser_Handle parser = NULL;
     BEAVER_Parser_Config_t parserConfig;
     FILE* fVideoFile = NULL;
@@ -494,188 +495,192 @@ static int BEAVER_ExtractFrameInfo(char *pszVideoFile, char *pszFrameInfoFile, c
                 frameSize = 0;
             }
 
-            ret = BEAVER_Parser_GetUserDataSei(parser, &pUserDataBuf, &userDataSize);
-            if (ret >= 0)
+            seiCount = BEAVER_Parser_GetUserDataSeiCount(parser);
+            for (i = 0; i < seiCount; i++)
             {
-                userDataSeiPresent = 1;
-                userDataType = BEAVER_Parrot_GetUserDataSeiType(pUserDataBuf, userDataSize);
-                pFrameInfo = NULL;
-
-                switch (userDataType)
+                ret = BEAVER_Parser_GetUserDataSei(parser, i, &pUserDataBuf, &userDataSize);
+                if (ret >= 0)
                 {
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V1:
-                        pFrameInfo = (void*)&userDataSeiDragonBasicV1;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1(pUserDataBuf, userDataSize, &userDataSeiDragonBasicV1);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)userDataSeiDragonBasicV1.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonBasicV1.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            if (previousFrameIndex != 0)
+                    userDataSeiPresent = 1;
+                    userDataType = BEAVER_Parrot_GetUserDataSeiType(pUserDataBuf, userDataSize);
+                    pFrameInfo = NULL;
+
+                    switch (userDataType)
+                    {
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V1:
+                            pFrameInfo = (void*)&userDataSeiDragonBasicV1;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1(pUserDataBuf, userDataSize, &userDataSeiDragonBasicV1);
+                            if (ret >= 0)
                             {
-                                estimatedLostFrames = userDataSeiDragonBasicV1.frameIndex - previousFrameIndex - 1;
+                                acquisitionTs = ((uint64_t)userDataSeiDragonBasicV1.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonBasicV1.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = userDataSeiDragonBasicV1.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = userDataSeiDragonBasicV1.frameIndex;
+                                if (userDataSeiDragonBasicV1.prevMse_fp8)
+                                {
+                                    videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonBasicV1.prevMse_fp8 / 256.);
+                                    psnrStreamingCumul += videoStreamingPrevFramePsnrY;
+                                    psnrStreamingCount++;
+                                }
                             }
-                            previousFrameIndex = userDataSeiDragonBasicV1.frameIndex;
-                            if (userDataSeiDragonBasicV1.prevMse_fp8)
+                            else
                             {
-                                videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonBasicV1.prevMse_fp8 / 256.);
-                                psnrStreamingCumul += videoStreamingPrevFramePsnrY;
-                                psnrStreamingCount++;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1() failed (%d)\n", ret);
                             }
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV1() failed (%d)\n", ret);
-                        }
-                        break;
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V2:
-                        pFrameInfo = (void*)&userDataSeiDragonBasicV2;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV2(pUserDataBuf, userDataSize, &userDataSeiDragonBasicV2);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)userDataSeiDragonBasicV2.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonBasicV2.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            if (previousFrameIndex != 0)
+                            break;
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V2:
+                            pFrameInfo = (void*)&userDataSeiDragonBasicV2;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV2(pUserDataBuf, userDataSize, &userDataSeiDragonBasicV2);
+                            if (ret >= 0)
                             {
-                                estimatedLostFrames = userDataSeiDragonBasicV2.frameIndex - previousFrameIndex - 1;
+                                acquisitionTs = ((uint64_t)userDataSeiDragonBasicV2.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonBasicV2.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = userDataSeiDragonBasicV2.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = userDataSeiDragonBasicV2.frameIndex;
                             }
-                            previousFrameIndex = userDataSeiDragonBasicV2.frameIndex;
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV2() failed (%d)\n", ret);
-                        }
-                        break;
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V1:
-                        pFrameInfo = (void*)&userDataSeiDragonExtendedV1;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV1(pUserDataBuf, userDataSize, &userDataSeiDragonExtendedV1);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)userDataSeiDragonExtendedV1.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonExtendedV1.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            systemTs = ((uint64_t)userDataSeiDragonExtendedV1.systemTsH << 32) + (uint64_t)userDataSeiDragonExtendedV1.systemTsL;
-                            if (previousFrameIndex != 0)
+                            else
                             {
-                                estimatedLostFrames = userDataSeiDragonExtendedV1.frameIndex - previousFrameIndex - 1;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonBasicV2() failed (%d)\n", ret);
                             }
-                            previousFrameIndex = userDataSeiDragonExtendedV1.frameIndex;
-                            if (userDataSeiDragonExtendedV1.prevMse_fp8)
+                            break;
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V1:
+                            pFrameInfo = (void*)&userDataSeiDragonExtendedV1;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV1(pUserDataBuf, userDataSize, &userDataSeiDragonExtendedV1);
+                            if (ret >= 0)
                             {
-                                videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV1.prevMse_fp8 / 256.);
-                                psnrStreamingCumul += videoStreamingPrevFramePsnrY;
-                                psnrStreamingCount++;
+                                acquisitionTs = ((uint64_t)userDataSeiDragonExtendedV1.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonExtendedV1.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                systemTs = ((uint64_t)userDataSeiDragonExtendedV1.systemTsH << 32) + (uint64_t)userDataSeiDragonExtendedV1.systemTsL;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = userDataSeiDragonExtendedV1.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = userDataSeiDragonExtendedV1.frameIndex;
+                                if (userDataSeiDragonExtendedV1.prevMse_fp8)
+                                {
+                                    videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV1.prevMse_fp8 / 256.);
+                                    psnrStreamingCumul += videoStreamingPrevFramePsnrY;
+                                    psnrStreamingCount++;
+                                }
                             }
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV1() failed (%d)\n", ret);
-                        }
-                        break;
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V2:
-                        pFrameInfo = (void*)&userDataSeiDragonExtendedV2;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV2(pUserDataBuf, userDataSize, &userDataSeiDragonExtendedV2);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)userDataSeiDragonExtendedV2.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonExtendedV2.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            systemTs = ((uint64_t)userDataSeiDragonExtendedV2.systemTsH << 32) + (uint64_t)userDataSeiDragonExtendedV2.systemTsL;
-                            if (previousFrameIndex != 0)
+                            else
                             {
-                                estimatedLostFrames = userDataSeiDragonExtendedV2.frameIndex - previousFrameIndex - 1;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV1() failed (%d)\n", ret);
                             }
-                            previousFrameIndex = userDataSeiDragonExtendedV2.frameIndex;
-                            if (userDataSeiDragonExtendedV2.videoStreamingPrevFrameMseY_fp8)
+                            break;
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V2:
+                            pFrameInfo = (void*)&userDataSeiDragonExtendedV2;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV2(pUserDataBuf, userDataSize, &userDataSeiDragonExtendedV2);
+                            if (ret >= 0)
                             {
-                                videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV2.videoStreamingPrevFrameMseY_fp8 / 256.);
-                                psnrStreamingCumul += videoStreamingPrevFramePsnrY;
-                                psnrStreamingCount++;
+                                acquisitionTs = ((uint64_t)userDataSeiDragonExtendedV2.acquisitionTsH << 32) + (uint64_t)userDataSeiDragonExtendedV2.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                systemTs = ((uint64_t)userDataSeiDragonExtendedV2.systemTsH << 32) + (uint64_t)userDataSeiDragonExtendedV2.systemTsL;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = userDataSeiDragonExtendedV2.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = userDataSeiDragonExtendedV2.frameIndex;
+                                if (userDataSeiDragonExtendedV2.videoStreamingPrevFrameMseY_fp8)
+                                {
+                                    videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV2.videoStreamingPrevFrameMseY_fp8 / 256.);
+                                    psnrStreamingCumul += videoStreamingPrevFramePsnrY;
+                                    psnrStreamingCount++;
+                                }
+                                if (userDataSeiDragonExtendedV2.videoRecordingPrevFrameMseY_fp8)
+                                {
+                                    videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV2.videoRecordingPrevFrameMseY_fp8 / 256.);
+                                    psnrRecordingCumul += videoRecordingPrevFramePsnrY;
+                                    psnrRecordingCount++;
+                                }
                             }
-                            if (userDataSeiDragonExtendedV2.videoRecordingPrevFrameMseY_fp8)
+                            else
                             {
-                                videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)userDataSeiDragonExtendedV2.videoRecordingPrevFrameMseY_fp8 / 256.);
-                                psnrRecordingCumul += videoRecordingPrevFramePsnrY;
-                                psnrRecordingCount++;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV2() failed (%d)\n", ret);
                             }
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonExtendedV2() failed (%d)\n", ret);
-                        }
-                        break;
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1:
-                        pFrameInfo = (void*)&dragonFrameInfoV1;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1(pUserDataBuf, userDataSize, &dragonFrameInfoV1);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)dragonFrameInfoV1.acquisitionTsH << 32) + (uint64_t)dragonFrameInfoV1.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            systemTs = ((uint64_t)dragonFrameInfoV1.systemTsH << 32) + (uint64_t)dragonFrameInfoV1.systemTsL;
-                            if (previousFrameIndex != 0)
+                            break;
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1:
+                            pFrameInfo = (void*)&dragonFrameInfoV1;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1(pUserDataBuf, userDataSize, &dragonFrameInfoV1);
+                            if (ret >= 0)
                             {
-                                estimatedLostFrames = dragonFrameInfoV1.frameIndex - previousFrameIndex - 1;
+                                acquisitionTs = ((uint64_t)dragonFrameInfoV1.acquisitionTsH << 32) + (uint64_t)dragonFrameInfoV1.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                systemTs = ((uint64_t)dragonFrameInfoV1.systemTsH << 32) + (uint64_t)dragonFrameInfoV1.systemTsL;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = dragonFrameInfoV1.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = dragonFrameInfoV1.frameIndex;
+                                if (dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8)
+                                {
+                                    videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8 / 256.);
+                                    psnrStreamingCumul += videoStreamingPrevFramePsnrY;
+                                    psnrStreamingCount++;
+                                }
+                                if (dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8)
+                                {
+                                    videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8 / 256.);
+                                    psnrRecordingCumul += videoRecordingPrevFramePsnrY;
+                                    psnrRecordingCount++;
+                                }
                             }
-                            previousFrameIndex = dragonFrameInfoV1.frameIndex;
-                            if (dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8)
+                            else
                             {
-                                videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8 / 256.);
-                                psnrStreamingCumul += videoStreamingPrevFramePsnrY;
-                                psnrStreamingCount++;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)\n", ret);
                             }
-                            if (dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8)
+                            break;
+                        case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
+                            pFrameInfo = (void*)&dragonFrameInfoV1;
+                            ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataBuf, userDataSize, &dragonFrameInfoV1, &streamingInfo, sliceMbCount);
+                            if (ret >= 0)
                             {
-                                videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8 / 256.);
-                                psnrRecordingCumul += videoRecordingPrevFramePsnrY;
-                                psnrRecordingCount++;
+                                acquisitionTs = ((uint64_t)dragonFrameInfoV1.acquisitionTsH << 32) + (uint64_t)dragonFrameInfoV1.acquisitionTsL;
+                                if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
+                                if (acquisitionTs) lastTs = acquisitionTs;
+                                systemTs = ((uint64_t)dragonFrameInfoV1.systemTsH << 32) + (uint64_t)dragonFrameInfoV1.systemTsL;
+                                if (previousFrameIndex != 0)
+                                {
+                                    estimatedLostFrames = dragonFrameInfoV1.frameIndex - previousFrameIndex - 1;
+                                }
+                                previousFrameIndex = dragonFrameInfoV1.frameIndex;
+                                if (dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8)
+                                {
+                                    videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8 / 256.);
+                                    psnrStreamingCumul += videoStreamingPrevFramePsnrY;
+                                    psnrStreamingCount++;
+                                }
+                                if (dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8)
+                                {
+                                    videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8 / 256.);
+                                    psnrRecordingCumul += videoRecordingPrevFramePsnrY;
+                                    psnrRecordingCount++;
+                                }
                             }
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)\n", ret);
-                        }
-                        break;
-                    case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
-                        pFrameInfo = (void*)&dragonFrameInfoV1;
-                        ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataBuf, userDataSize, &dragonFrameInfoV1, &streamingInfo, sliceMbCount);
-                        if (ret >= 0)
-                        {
-                            acquisitionTs = ((uint64_t)dragonFrameInfoV1.acquisitionTsH << 32) + (uint64_t)dragonFrameInfoV1.acquisitionTsL;
-                            if ((acquisitionTs) && (!firstTs)) firstTs = acquisitionTs;
-                            if (acquisitionTs) lastTs = acquisitionTs;
-                            systemTs = ((uint64_t)dragonFrameInfoV1.systemTsH << 32) + (uint64_t)dragonFrameInfoV1.systemTsL;
-                            if (previousFrameIndex != 0)
+                            else
                             {
-                                estimatedLostFrames = dragonFrameInfoV1.frameIndex - previousFrameIndex - 1;
+                                fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)\n", ret);
                             }
-                            previousFrameIndex = dragonFrameInfoV1.frameIndex;
-                            if (dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8)
-                            {
-                                videoStreamingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoStreamingPrevFrameMseY_fp8 / 256.);
-                                psnrStreamingCumul += videoStreamingPrevFramePsnrY;
-                                psnrStreamingCount++;
-                            }
-                            if (dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8)
-                            {
-                                videoRecordingPrevFramePsnrY = BEAVER_FRAMEINFO_PSNR_MAX - 10. * log10((double)dragonFrameInfoV1.videoRecordingPrevFrameMseY_fp8 / 256.);
-                                psnrRecordingCumul += videoRecordingPrevFramePsnrY;
-                                psnrRecordingCount++;
-                            }
-                        }
-                        else
-                        {
-                            fprintf(stderr, "Error: BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)\n", ret);
-                        }
-                        break;
-                    default:
-                        break;
+                            break;
+                        default:
+                            break;
+                    }
                 }
-            }
-            else
-            {
-                fprintf(stderr, "Error: BEAVER_Parser_GetUserDataSei() failed (%d)\n", ret);
+                else
+                {
+                    fprintf(stderr, "Error: BEAVER_Parser_GetUserDataSei() failed (%d)\n", ret);
+                }
             }
         }
         else if ((BEAVER_Parser_GetLastNaluType(parser) == 1) || (BEAVER_Parser_GetLastNaluType(parser) == 5))

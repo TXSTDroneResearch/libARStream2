@@ -173,22 +173,40 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
 
 
 /**
- * @brief Get the user data SEI.
+ * @brief Get the user data SEI count.
  *
- * The function gets a pointer to the last user data SEI parsed. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function. 
+ * The function returns the number of user data SEI of the last frame parsed. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function.
+ * Multiple user data SEI payloads can be present for the same frame.
+ * This function should only be called if the last NALU type is 6 and the library instance has been initialized with extractUserDataSei = 1 in the config.
+ * If no user data SEI has been found or if extractUserDataSei == 0 the function returns 0.
+ * 
+ * @param parserHandle Instance handle.
+ *
+ * @return the user data SEI count if no error occurred.
+ * @return -1 if an error occurred.
+ */
+int BEAVER_Parser_GetUserDataSeiCount(BEAVER_Parser_Handle parserHandle);
+
+
+/**
+ * @brief Get a user data SEI.
+ *
+ * The function gets a pointer to the user data SEI of the last frame parsed. A call to BEAVER_Parser_ParseNalu() must have been made prior to calling this function.
+ * User data SEI are identified by an index in case multiple user data SEI payloads are present for the same frame.
  * This function should only be called if the last NALU type is 6 and the library instance has been initialized with extractUserDataSei = 1 in the config.
  * If no user data SEI has been found or if extractUserDataSei == 0 the function fills pBuf with a NULL pointer.
  * 
  * @warning The returned pointer is managed by the library and must not be freed.
  *
  * @param parserHandle Instance handle.
+ * @param index Index of the user data SEI.
  * @param pBuf Pointer to the user data SEI buffer pointer (filled with NULL if no user data SEI is available).
  * @param bufSize Pointer to the user data SEI buffer size (filled with 0 if no user data SEI is available).
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf, unsigned int* bufSize);
+int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize);
 
 
 /**
