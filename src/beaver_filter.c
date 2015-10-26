@@ -978,7 +978,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
         return -2;
     }
 
-    if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuPreviousSliceIndex >= 0))
+    if (!filter->currentAuStreamingInfoAvailable)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
 /* DEBUG */
@@ -996,6 +996,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
 
         //TODO: slice context
         //UNSUPPORTED
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "No previous slice received"); //TODO: debug
         return -1;
     }
     else
