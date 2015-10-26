@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from beaver_frameinfo import *
 from beaver_rtpsender import *
 from beaver_rtpreader import *
+from beaver_pcmdmonitor import *
 
 
 frameInfoFile = ''
@@ -320,6 +321,222 @@ def updateFrameInfoGraphs(frameInfoFile):
 
 def onClickFrameInfo(event, frameInfoFile):
     updateFrameInfoGraphs(frameInfoFile)
+
+
+# PCMD graphs
+def createPcmdGraphs():
+    global axPcmdTimeDelta
+    global axPcmdTimeDeltaJitter
+    global axPcmdLatency
+    global axPcmdLatencyJitter
+    global axPcmdMissing
+    global linePcmdCreationTimeDelta
+    global linePcmdReceptionTimeDelta
+    global linePcmdUseTimeDelta
+    global linePcmdNetmonTimeDelta
+    global linePcmdCreationTimeDeltaJitter
+    global linePcmdReceptionTimeDeltaJitter
+    global linePcmdUseTimeDeltaJitter
+    global linePcmdReceptionLatency
+    global linePcmdUseLatency
+    global linePcmdReceptionLatencyJitter
+    global linePcmdUseLatencyJitter
+    global linePcmdMissing
+
+    plt.subplots_adjust(left=0.03, right=0.97, bottom=0.03, top=0.97)
+    axPcmdTimeDelta = fig1.add_subplot(5, 1, 1)
+    axPcmdTimeDeltaJitter = fig1.add_subplot(5, 1, 2, sharex=axPcmdTimeDelta)
+    axPcmdLatency = fig1.add_subplot(5, 1, 3, sharex=axPcmdTimeDelta)
+    axPcmdLatencyJitter = fig1.add_subplot(5, 1, 4, sharex=axPcmdTimeDelta)
+    axPcmdMissing = fig1.add_subplot(5, 1, 5, sharex=axPcmdTimeDelta)
+    axPcmdTimeDelta.set_title("Time delta (ms)", color='0.4')
+    axPcmdTimeDelta.set_xlim(0, 50)
+    axPcmdTimeDelta.set_ylim(0, 10)
+    axPcmdTimeDeltaJitter.set_title("Time jitter (ms)", color='0.4')
+    axPcmdTimeDeltaJitter.set_ylim(0, 10)
+    axPcmdLatency.set_title("Latency (ms)", color='0.4')
+    axPcmdLatency.set_ylim(0, 5)
+    axPcmdLatencyJitter.set_title("Latency jitter (ms)", color='0.4')
+    axPcmdLatencyJitter.set_ylim(0, 5)
+    axPcmdMissing.set_title("Missing commands", color='0.4')
+    axPcmdMissing.set_ylim(0, 10)
+
+    linePcmdNetmonTimeDelta, = axPcmdTimeDelta.plot([], [], c='g')
+    linePcmdUseTimeDelta, = axPcmdTimeDelta.plot([], [], c='r')
+    linePcmdReceptionTimeDelta, = axPcmdTimeDelta.plot([], [], c='b')
+    linePcmdCreationTimeDelta, = axPcmdTimeDelta.plot([], [], c='k')
+    linePcmdUseTimeDeltaJitter, = axPcmdTimeDeltaJitter.plot([], [], c='r')
+    linePcmdReceptionTimeDeltaJitter, = axPcmdTimeDeltaJitter.plot([], [], c='b')
+    linePcmdCreationTimeDeltaJitter, = axPcmdTimeDeltaJitter.plot([], [], c='k')
+    linePcmdUseLatency, = axPcmdLatency.plot([], [], c='r')
+    linePcmdReceptionLatency, = axPcmdLatency.plot([], [], c='b')
+    linePcmdUseLatencyJitter, = axPcmdLatencyJitter.plot([], [], c='r')
+    linePcmdReceptionLatencyJitter, = axPcmdLatencyJitter.plot([], [], c='b')
+    linePcmdMissing, = axPcmdMissing.plot([], [], c='r')
+
+
+def updatePcmdGraphs(pcmdFile):
+    global axPcmdTimeDelta
+    global axPcmdTimeDeltaJitter
+    global axPcmdLatency
+    global axPcmdLatencyJitter
+    global axPcmdMissing
+    global linePcmdCreationTimeDelta
+    global linePcmdReceptionTimeDelta
+    global linePcmdUseTimeDelta
+    global linePcmdNetmonTimeDelta
+    global linePcmdCreationTimeDeltaJitter
+    global linePcmdReceptionTimeDeltaJitter
+    global linePcmdUseTimeDeltaJitter
+    global linePcmdReceptionLatency
+    global linePcmdUseLatency
+    global linePcmdReceptionLatencyJitter
+    global linePcmdUseLatencyJitter
+    global linePcmdMissing
+
+    csvPcmdFile = open(pcmdFile, 'r')
+    csvPcmdFile.readline()
+    pcmdStats = PcmdMonitorStat(csvPcmdFile)
+    csvPcmdFile.close()
+    creationTimeDelta = divide(subtract(pcmdStats.getCreationTimestamp()[1:], pcmdStats.getCreationTimestamp()[:-1]), 1000.)
+    receptionTimeDelta = divide(subtract(pcmdStats.getReceptionTimestamp()[1:], pcmdStats.getReceptionTimestamp()[:-1]), 1000.)
+    useTimeDelta = divide(subtract(pcmdStats.getUseTimestamp()[1:], pcmdStats.getUseTimestamp()[:-1]), 1000.)
+    netmonTimeDelta = divide(subtract(pcmdStats.getNetmonTimestamp()[1:], pcmdStats.getNetmonTimestamp()[:-1]), 1000.)
+    receptionLatency = divide(subtract(pcmdStats.getReceptionTimestamp(), pcmdStats.getCreationTimestampShifted()), 1000.)
+    useLatency = divide(subtract(pcmdStats.getUseTimestamp(), pcmdStats.getCreationTimestampShifted()), 1000.)
+
+    creationTimeDeltaMin = amin(creationTimeDelta)
+    creationTimeDeltaMax = amax(creationTimeDelta)
+    creationTimeDeltaMean = mean(creationTimeDelta)
+    creationTimeDeltaMedian = median(creationTimeDelta)
+    creationTimeDeltaJitter = absolute(subtract(creationTimeDelta, creationTimeDeltaMean))
+    creationTimeDeltaJitterMin = amin(creationTimeDeltaJitter)
+    creationTimeDeltaJitterMax = amax(creationTimeDeltaJitter)
+    creationTimeDeltaJitterMean = mean(creationTimeDeltaJitter)
+    creationTimeDeltaJitterMedian = median(creationTimeDeltaJitter)
+    receptionTimeDeltaMin = amin(receptionTimeDelta)
+    receptionTimeDeltaMax = amax(receptionTimeDelta)
+    receptionTimeDeltaMean = mean(receptionTimeDelta)
+    receptionTimeDeltaMedian = median(receptionTimeDelta)
+    receptionTimeDeltaJitter = absolute(subtract(receptionTimeDelta, receptionTimeDeltaMean))
+    receptionTimeDeltaJitterMin = amin(receptionTimeDeltaJitter)
+    receptionTimeDeltaJitterMax = amax(receptionTimeDeltaJitter)
+    receptionTimeDeltaJitterMean = mean(receptionTimeDeltaJitter)
+    receptionTimeDeltaJitterMedian = median(receptionTimeDeltaJitter)
+    useTimeDeltaMin = amin(useTimeDelta)
+    useTimeDeltaMax = amax(useTimeDelta)
+    useTimeDeltaMean = mean(useTimeDelta)
+    useTimeDeltaMedian = median(useTimeDelta)
+    useTimeDeltaJitter = absolute(subtract(useTimeDelta, useTimeDeltaMedian))
+    useTimeDeltaJitterMin = amin(useTimeDeltaJitter)
+    useTimeDeltaJitterMax = amax(useTimeDeltaJitter)
+    useTimeDeltaJitterMean = mean(useTimeDeltaJitter)
+    useTimeDeltaJitterMedian = median(useTimeDeltaJitter)
+    receptionLatencyMin = amin(receptionLatency)
+    receptionLatencyMax = amax(receptionLatency)
+    receptionLatencyMean = mean(receptionLatency)
+    receptionLatencyMedian = median(receptionLatency)
+    receptionLatencyJitter = absolute(subtract(receptionLatency, receptionLatencyMean))
+    receptionLatencyJitterMin = amin(receptionLatencyJitter)
+    receptionLatencyJitterMax = amax(receptionLatencyJitter)
+    receptionLatencyJitterMean = mean(receptionLatencyJitter)
+    receptionLatencyJitterMedian = median(receptionLatencyJitter)
+    useLatencyMin = amin(useLatency)
+    useLatencyMax = amax(useLatency)
+    useLatencyMean = mean(useLatency)
+    useLatencyMedian = median(useLatency)
+    useLatencyJitter = absolute(subtract(useLatency, useLatencyMedian))
+    useLatencyJitterMin = amin(useLatencyJitter)
+    useLatencyJitterMax = amax(useLatencyJitter)
+    useLatencyJitterMean = mean(useLatencyJitter)
+    useLatencyJitterMedian = median(useLatencyJitter)
+
+    droppedPcmd = float(sum(pcmdStats.getMissingPcmdBefore())) * 100. / (amax(pcmdStats.getPcmdIndex()) - amin(pcmdStats.getPcmdIndex()))
+    if creationTimeDeltaJitterMean != 0:
+        receptionDeltaJitterRatio = float(receptionTimeDeltaJitterMean) / float(creationTimeDeltaJitterMean)
+        useDeltaJitterRatio = float(useTimeDeltaJitterMean) / float(creationTimeDeltaJitterMean)
+    else:
+        receptionDeltaJitterRatio = 0.
+        useDeltaJitterRatio = 0.
+    print "Creation time delta: mean " + str(creationTimeDeltaMean) + " ms, median " + str(creationTimeDeltaMedian) + " ms, min " + str(creationTimeDeltaMin) + " ms, max " + str(creationTimeDeltaMax) + " ms"
+    print "Creation time delta jitter: mean " + str(creationTimeDeltaJitterMean) + " ms, median " + str(creationTimeDeltaJitterMedian) + " ms, min " + str(creationTimeDeltaJitterMin) + " ms, max " + str(creationTimeDeltaJitterMax) + " ms"
+    print "Reception time delta: mean " + str(receptionTimeDeltaMean) + " ms, median " + str(receptionTimeDeltaMedian) + " ms, min " + str(receptionTimeDeltaMin) + " ms, max " + str(receptionTimeDeltaMax) + " ms"
+    print "Reception time delta jitter: mean " + str(receptionTimeDeltaJitterMean) + " ms (x" + str(receptionDeltaJitterRatio) + "), median " + str(receptionTimeDeltaJitterMedian) + " ms, min " + str(receptionTimeDeltaJitterMin) + " ms, max " + str(receptionTimeDeltaJitterMax) + " ms"
+    print "Use time delta: mean " + str(useTimeDeltaMean) + " ms, median " + str(useTimeDeltaMedian) + " ms, min " + str(useTimeDeltaMin) + " ms, max " + str(useTimeDeltaMax) + " ms"
+    print "Use time delta jitter: mean " + str(useTimeDeltaJitterMean) + " ms (x" + str(useDeltaJitterRatio) + "), median " + str(useTimeDeltaJitterMedian) + " ms, min " + str(useTimeDeltaJitterMin) + " ms, max " + str(useTimeDeltaJitterMax) + " ms"
+    print "Reception latency: mean " + str(receptionLatencyMean) + " ms, median " + str(receptionLatencyMedian) + " ms, min " + str(receptionLatencyMin) + " ms, max " + str(receptionLatencyMax) + " ms"
+    print "Reception latency jitter: mean " + str(receptionLatencyJitterMean) + " ms, median " + str(receptionLatencyJitterMedian) + " ms, min " + str(receptionLatencyJitterMin) + " ms, max " + str(receptionLatencyJitterMax) + " ms"
+    print "Use latency: mean " + str(useLatencyMean) + " ms, median " + str(useLatencyMedian) + " ms, min " + str(useLatencyMin) + " ms, max " + str(useLatencyMax) + " ms"
+    print "Use latency jitter: mean " + str(useLatencyJitterMean) + " ms, median " + str(useLatencyJitterMedian) + " ms, min " + str(useLatencyJitterMin) + " ms, max " + str(useLatencyJitterMax) + " ms"
+    print "Dropped commands: " + str(droppedPcmd) + "%"
+
+    pcmdIndexMax = amax(pcmdStats.getPcmdIndex())
+    xmin, xmax = axPcmdTimeDelta.get_xlim()
+    if pcmdIndexMax > xmax:
+        axPcmdTimeDelta.set_xlim(xmin, pcmdIndexMax * 1.2)
+
+    netmonTimeDeltaMax = amax(netmonTimeDelta)
+    ymin, ymax = axPcmdTimeDelta.get_ylim()
+    if creationTimeDeltaMax > ymax:
+        ymax = creationTimeDeltaMax
+    if receptionTimeDeltaMax > ymax:
+        ymax = receptionTimeDeltaMax
+    if useTimeDeltaMax > ymax:
+        ymax = useTimeDeltaMax
+    if netmonTimeDeltaMax > ymax:
+        ymax = netmonTimeDeltaMax
+    axPcmdTimeDelta.set_ylim(ymin, ymax)
+
+    ymin, ymax = axPcmdTimeDeltaJitter.get_ylim()
+    if creationTimeDeltaJitterMax > ymax:
+        ymax = creationTimeDeltaJitterMax
+    if receptionTimeDeltaJitterMax > ymax:
+        ymax = receptionTimeDeltaJitterMax
+    if useTimeDeltaJitterMax > ymax:
+        ymax = useTimeDeltaJitterMax
+    axPcmdTimeDeltaJitter.set_ylim(ymin, ymax)
+
+    ymin, ymax = axPcmdLatency.get_ylim()
+    if receptionLatencyMax > ymax:
+        ymax = receptionLatencyMax
+    if useLatencyMax > ymax:
+        ymax = useLatencyMax
+    axPcmdLatency.set_ylim(ymin, ymax)
+
+    ymin, ymax = axPcmdLatencyJitter.get_ylim()
+    if receptionLatencyJitterMax > ymax:
+        ymax = receptionLatencyJitterMax
+    if useLatencyJitterMax > ymax:
+        ymax = useLatencyJitterMax
+    axPcmdLatencyJitter.set_ylim(ymin, ymax)
+
+    missingPcmdBeforeMax = amax(pcmdStats.getMissingPcmdBefore())
+    ymin, ymax = axPcmdMissing.get_ylim()
+    if missingPcmdBeforeMax > ymax:
+        axPcmdMissing.set_ylim(ymin, missingPcmdBeforeMax * 1.2)
+
+    axPcmdTimeDelta.figure.canvas.draw()
+    axPcmdTimeDeltaJitter.figure.canvas.draw()
+    axPcmdLatency.figure.canvas.draw()
+    axPcmdLatencyJitter.figure.canvas.draw()
+    axPcmdMissing.figure.canvas.draw()
+    linePcmdCreationTimeDelta.set_data(pcmdStats.getPcmdIndex()[1:], creationTimeDelta)
+    linePcmdReceptionTimeDelta.set_data(pcmdStats.getPcmdIndex()[1:], receptionTimeDelta)
+    linePcmdUseTimeDelta.set_data(pcmdStats.getPcmdIndex()[1:], useTimeDelta)
+    linePcmdNetmonTimeDelta.set_data(pcmdStats.getPcmdIndex()[1:], netmonTimeDelta)
+    linePcmdCreationTimeDeltaJitter.set_data(pcmdStats.getPcmdIndex()[1:], creationTimeDeltaJitter)
+    linePcmdReceptionTimeDeltaJitter.set_data(pcmdStats.getPcmdIndex()[1:], receptionTimeDeltaJitter)
+    linePcmdUseTimeDeltaJitter.set_data(pcmdStats.getPcmdIndex()[1:], useTimeDeltaJitter)
+    linePcmdReceptionLatency.set_data(pcmdStats.getPcmdIndex(), receptionLatency)
+    linePcmdUseLatency.set_data(pcmdStats.getPcmdIndex(), useLatency)
+    linePcmdReceptionLatencyJitter.set_data(pcmdStats.getPcmdIndex(), receptionLatencyJitter)
+    linePcmdUseLatencyJitter.set_data(pcmdStats.getPcmdIndex(), useLatencyJitter)
+    linePcmdMissing.set_data(pcmdStats.getPcmdIndex(), pcmdStats.getMissingPcmdBefore())
+    plt.draw()
+
+
+def onClickPcmd(event, pcmdFile):
+    updatePcmdGraphs(pcmdFile)
 
 
 # Sender graphs
@@ -676,6 +893,7 @@ def onClickSenderReader(event, senderFile, readerFile):
 def usage():
     print 'Usage:'
     print '    ' + sys.argv[0] + ' -f <frameinfo_file>'
+    print '    ' + sys.argv[0] + ' -p <pcmd_monitor_file>'
     print '    ' + sys.argv[0] + ' -s <rtp_sender_file>'
     print '    ' + sys.argv[0] + ' -r <rtp_reader_file>'
     print '    ' + sys.argv[0] + ' -s <rtp_sender_file> -r <rtp_reader_file>'
@@ -685,10 +903,11 @@ def main(argv):
     global frameInfoFile
     global senderFile
     global readerFile
+    global pcmdFile
     
     # command-line arguments
     try:
-        opts, args = getopt.getopt(argv,"hf:s:r:",["frameinfo=", "sender=", "reader="])
+        opts, args = getopt.getopt(argv,"hf:s:r:p:",["frameinfo=", "sender=", "reader=", "pcmd="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -703,8 +922,10 @@ def main(argv):
             senderFile = arg
         elif opt in ("-r", "--reader"):
             readerFile = arg
+        elif opt in ("-p", "--pcmd"):
+            pcmdFile = arg
 
-    if frameInfoFile == '' and senderFile == '' and readerFile == '':
+    if frameInfoFile == '' and senderFile == '' and readerFile == '' and pcmdFile == '':
         usage()
         sys.exit(2)
 
@@ -739,6 +960,14 @@ def main(argv):
         createReaderGraphs()
         updateReaderGraphs(readerFile)
         cid = fig1.canvas.mpl_connect('button_press_event', lambda event: onClickReader(event, readerFile))
+        plt.show()
+
+
+    elif pcmdFile != '':
+        fillPcmdMonitorColIndex(pcmdFile)
+        createPcmdGraphs()
+        updatePcmdGraphs(pcmdFile)
+        cid = fig1.canvas.mpl_connect('button_press_event', lambda event: onClickPcmd(event, pcmdFile))
         plt.show()
 
 
