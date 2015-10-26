@@ -16,6 +16,9 @@
 #include "beaver_h264.h"
 
 
+#define BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT (16)
+
+
 typedef struct BEAVER_Parser_s
 {
     BEAVER_Parser_Config_t config;
@@ -43,9 +46,10 @@ typedef struct BEAVER_Parser_s
     BEAVER_H264_SliceContext_t sliceContext;
 
     // User data SEI
-    uint8_t* pUserDataBuf;
-    int userDataBufSize;
-    int userDataSize;
+    uint8_t* pUserDataBuf[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
+    int userDataBufSize[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
+    int userDataSize[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
+    unsigned int userDataCount;
 
 } BEAVER_Parser_t;
 
@@ -1765,16 +1769,17 @@ static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* p
     uuid4 = val;
     if (parser->config.printLogs) printf("------ uuid_iso_iec_11578 = %08x-%04x-%04x-%08x-%08x\n", uuid1, uuid2 >> 16, uuid2 & 0xFFFF, uuid3, uuid4);
 
-    if (parser->config.extractUserDataSei)
+    if ((parser->config.extractUserDataSei) && (parser->userDataCount < BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT))
     {
-        if ((!parser->pUserDataBuf) || (parser->userDataBufSize < payloadSize))
+        if ((!parser->pUserDataBuf[parser->userDataCount]) || (parser->userDataBufSize[parser->userDataCount] < payloadSize))
         {
-            parser->pUserDataBuf = (uint8_t*)realloc(parser->pUserDataBuf, payloadSize);
-            if (!parser->pUserDataBuf)
+            parser->pUserDataBuf[parser->userDataCount] = (uint8_t*)realloc(parser->pUserDataBuf[parser->userDataCount], payloadSize);
+            if (!parser->pUserDataBuf[parser->userDataCount])
             {
                 fprintf(stderr, "error: allocation failed (size %d)\n", payloadSize);
                 return -1;
             }
+            parser->userDataBufSize[parser->userDataCount] = payloadSize;
         }
 
         ret = seekToByte(parser, -(_readBits / 8), SEEK_CUR);
@@ -1794,9 +1799,10 @@ static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* p
                 return ret;
             }
             _readBits += ret;
-            parser->pUserDataBuf[i] = (uint8_t)val;
+            parser->pUserDataBuf[parser->userDataCount][i] = (uint8_t)val;
         }
-        parser->userDataSize = payloadSize;
+        parser->userDataSize[parser->userDataCount] = payloadSize;
+        parser->userDataCount++;
     }
     else
     {
@@ -2151,7 +2157,8 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
     // sei_rbsp
     if (parser->config.printLogs) printf("-- sei_rbsp()\n");
     
-    parser->userDataSize = 0;
+    parser->userDataCount = 0;
+    memset(parser->userDataSize, 0, sizeof(parser->userDataSize));
     
     do
     {
@@ -3451,7 +3458,28 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
 }
 
 
-int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf, unsigned int* bufSize)
+int BEAVER_Parser_GetUserDataSeiCount(BEAVER_Parser_Handle parserHandle)
+{
+    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+
+    if (!parserHandle)
+    {
+        fprintf(stderr, "Error: invalid handle\n");
+        return -1;
+    }
+
+    if (parser->config.extractUserDataSei)
+    {
+        return (int)parser->userDataCount;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+
+int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize)
 {
     BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
     int ret = 0;
@@ -3462,10 +3490,16 @@ int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, void** pBuf,
         return -1;
     }
 
-    if ((parser->config.extractUserDataSei) && (parser->pUserDataBuf) && (parser->userDataSize))
+    if ((!parser->userDataCount) || (index >= parser->userDataCount))
     {
-        if (bufSize) *bufSize = parser->userDataSize;
-        if (pBuf) *pBuf = (void*)parser->pUserDataBuf;
+        fprintf(stderr, "Error: invalid index\n");
+        return -1;
+    }
+    
+    if ((parser->config.extractUserDataSei) && (parser->pUserDataBuf[index]) && (parser->userDataSize[index]))
+    {
+        if (bufSize) *bufSize = parser->userDataSize[index];
+        if (pBuf) *pBuf = (void*)parser->pUserDataBuf[index];
     }
     else
     {
@@ -3571,6 +3605,7 @@ int BEAVER_Parser_Init(BEAVER_Parser_Handle* parserHandle, BEAVER_Parser_Config_
 int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle)
 {
     BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    int i;
 
     if (!parserHandle)
     {
@@ -3582,9 +3617,12 @@ int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle)
         free(parser->pNaluBuf);
     }
 
-    if (parser->pUserDataBuf)
+    for (i = 0; i < BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT; i++)
     {
-        free(parser->pUserDataBuf);
+        if (parser->pUserDataBuf[i])
+        {
+            free(parser->pUserDataBuf[i]);
+        }
     }
 
     free(parser);

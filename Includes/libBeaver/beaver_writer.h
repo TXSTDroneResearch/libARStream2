@@ -80,8 +80,9 @@ int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void
  * The function writes a Supplemental Enhancement Information NAL unit.
  *
  * @param[in] writerHandle Instance handle.
- * @param[in] pbUserDataUnregistered User data input buffer
- * @param[in] userDataUnregisteredSize User data input buffer size
+ * @param[in] userDataUnregisteredCount User data count
+ * @param[in] pbUserDataUnregistered User data input buffer array
+ * @param[in] userDataUnregisteredSize User data input buffer size array
  * @param[in] pbOutputBuf Bitstream output buffer
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
@@ -89,7 +90,7 @@ int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t *pbUserDataUnregistered, unsigned int userDataUnregisteredSize, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**

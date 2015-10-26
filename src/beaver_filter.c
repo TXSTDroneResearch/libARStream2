@@ -39,7 +39,7 @@
     //#define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
     #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/frameinfo"
     #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/storage/emulated/legacy/FF/frameinfo"
+    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/frameinfo"
     #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
     #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX "./frameinfo"
 
@@ -271,45 +271,61 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                 /* SEI */
                 if (filter->sync)
                 {
+                    int i, count;
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
                     BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
-                    _ret = BEAVER_Parser_GetUserDataSei(filter->parser, &pUserDataSei, &userDataSeiSize);
-                    if (_ret < 0)
+                    count = BEAVER_Parser_GetUserDataSeiCount(filter->parser);
+                    for (i = 0; i < count; i++)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetUserDataSei() failed (%d)", ret);
-                    }
-                    else
-                    {
-                        userDataSeiType = BEAVER_Parrot_GetUserDataSeiType(pUserDataSei, userDataSeiSize);
-                        switch (userDataSeiType)
+                        _ret = BEAVER_Parser_GetUserDataSei(filter->parser, (unsigned int)i, &pUserDataSei, &userDataSeiSize);
+                        if (_ret < 0)
                         {
-                            case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1:
-                                _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                if (_ret < 0)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
-                                }
-                                else
-                                {
-                                    filter->currentAuStreamingInfoAvailable = 1;
-                                }
-                                break;
-                            case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
-                                _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
-                                                                                                     &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                if (_ret < 0)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
-                                }
-                                else
-                                {
-                                    filter->currentAuStreamingInfoAvailable = 1;
-                                    filter->currentAuFrameInfoAvailable = 1;
-                                }
-                                break;
-                            default:
-                                break;
+                            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetUserDataSei() failed (%d)", ret);
+                        }
+                        else
+                        {
+                            userDataSeiType = BEAVER_Parrot_GetUserDataSeiType(pUserDataSei, userDataSeiSize);
+                            switch (userDataSeiType)
+                            {
+                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1:
+                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                    if (_ret < 0)
+                                    {
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
+                                    }
+                                    else
+                                    {
+                                        filter->currentAuStreamingInfoAvailable = 1;
+                                    }
+                                    break;
+                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1:
+                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo);
+                                    if (_ret < 0)
+                                    {
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)", ret);
+                                    }
+                                    else
+                                    {
+                                        filter->currentAuFrameInfoAvailable = 1;
+                                    }
+                                    break;
+                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
+                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
+                                                                                                         &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                    if (_ret < 0)
+                                    {
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
+                                    }
+                                    else
+                                    {
+                                        filter->currentAuStreamingInfoAvailable = 1;
+                                        filter->currentAuFrameInfoAvailable = 1;
+                                    }
+                                    break;
+                                default:
+                                    break;
+                            }
                         }
                     }
                 }
@@ -962,7 +978,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
         return -2;
     }
 
-    if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuPreviousSliceIndex >= 0))
+    if (!filter->currentAuStreamingInfoAvailable)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
 /* DEBUG */
@@ -980,6 +996,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
 
         //TODO: slice context
         //UNSUPPORTED
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "No previous slice received"); //TODO: debug
         return -1;
     }
     else

@@ -277,10 +277,11 @@ static int BEAVER_Writer_WriteSeiPayload_userDataUnregistered(BEAVER_Writer_t* w
 }
 
 
-int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t *pbUserDataUnregistered, unsigned int userDataUnregisteredSize, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
     BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
+    unsigned int i;
     unsigned int payloadType, payloadSize;
 
     if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
@@ -318,56 +319,59 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, const uint8_t 
     }
     bitsWritten += ret;
 
-    if ((pbUserDataUnregistered) && (userDataUnregisteredSize >= 16))
+    for (i = 0; i < userDataUnregisteredCount; i++)
     {
-        payloadType = BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
-        payloadSize = userDataUnregisteredSize;
-
-        while (payloadType > 255)
+        if ((pbUserDataUnregistered[i]) && (userDataUnregisteredSize[i] >= 16))
         {
-            // ff_byte
-            ret = writeBits(writer, 8, 0xFF, 1);
+            payloadType = BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
+            payloadSize = userDataUnregisteredSize[i];
+
+            while (payloadType > 255)
+            {
+                // ff_byte
+                ret = writeBits(writer, 8, 0xFF, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                bitsWritten += ret;
+                payloadType -= 255;
+            }
+            // last_payload_type_byte
+            ret = writeBits(writer, 8, payloadType, 1);
             if (ret < 0)
             {
                 return -1;
             }
             bitsWritten += ret;
-            payloadType -= 255;
-        }
-        // last_payload_type_byte
-        ret = writeBits(writer, 8, payloadType, 1);
-        if (ret < 0)
-        {
-            return -1;
-        }
-        bitsWritten += ret;
 
-        while (payloadSize > 255)
-        {
-            // ff_byte
-            ret = writeBits(writer, 8, 0xFF, 1);
+            while (payloadSize > 255)
+            {
+                // ff_byte
+                ret = writeBits(writer, 8, 0xFF, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                bitsWritten += ret;
+                payloadSize -= 255;
+            }
+            // last_payload_type_byte
+            ret = writeBits(writer, 8, payloadSize, 1);
             if (ret < 0)
             {
                 return -1;
             }
             bitsWritten += ret;
-            payloadSize -= 255;
-        }
-        // last_payload_type_byte
-        ret = writeBits(writer, 8, payloadSize, 1);
-        if (ret < 0)
-        {
-            return -1;
-        }
-        bitsWritten += ret;
 
-        // user_data_payload_byte
-        ret = BEAVER_Writer_WriteSeiPayload_userDataUnregistered(writer, pbUserDataUnregistered, userDataUnregisteredSize);
-        if (ret < 0)
-        {
-            return -1;
+            // user_data_payload_byte
+            ret = BEAVER_Writer_WriteSeiPayload_userDataUnregistered(writer, pbUserDataUnregistered[i], userDataUnregisteredSize[i]);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            bitsWritten += ret;
         }
-        bitsWritten += ret;
     }
 
     // rbsp_trailing_bits
