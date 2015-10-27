@@ -409,7 +409,7 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
     filter->currentAuStreamingInfoAvailable = 0;
     memset(&filter->currentAuStreamingInfo, 0, sizeof(BEAVER_Parrot_DragonStreamingV1_t));
     filter->currentAuFrameInfoAvailable = 0;
-    memset(&filter->currentAuFrameInfo, 0 sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
+    memset(&filter->currentAuFrameInfo, 0, sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
