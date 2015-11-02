@@ -1818,6 +1818,58 @@ static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* p
 }
 
 
+static int BEAVER_Parser_ParseSeiPayload_recoveryPoint(BEAVER_Parser_t* parser, int payloadSize)
+{
+    int ret = 0;
+    uint32_t val = 0;
+    int _readBits = 0;
+
+    if (parser->config.printLogs) printf("---- SEI: recovery_point\n");
+
+    // recovery_frame_count
+    ret = readBits_expGolomb_ue(parser, &val, 1);
+    if (ret < 0)
+    {
+        fprintf(stderr, "error: failed to read from file\n");
+        return ret;
+    }
+    _readBits += ret;
+    if (parser->config.printLogs) printf("------ recovery_frame_count = %d\n", val);
+
+    // exact_match_flag
+    ret = readBits(parser, 1, &val, 1);
+    if (ret < 0)
+    {
+        fprintf(stderr, "error: failed to read from file\n");
+        return ret;
+    }
+    _readBits += ret;
+    if (parser->config.printLogs) printf("------ exact_match_flag = %d\n", val);
+
+    // broken_link_flag
+    ret = readBits(parser, 1, &val, 1);
+    if (ret < 0)
+    {
+        fprintf(stderr, "error: failed to read from file\n");
+        return ret;
+    }
+    _readBits += ret;
+    if (parser->config.printLogs) printf("------ broken_link_flag = %d\n", val);
+
+    // changing_slice_group_idc
+    ret = readBits(parser, 2, &val, 1);
+    if (ret < 0)
+    {
+        fprintf(stderr, "error: failed to read from file\n");
+        return ret;
+    }
+    _readBits += ret;
+    if (parser->config.printLogs) printf("------ changing_slice_group_idc = %d\n", val);
+
+    return _readBits;
+}
+
+
 static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser, int payloadSize)
 {
     int ret = 0;
@@ -2219,6 +2271,15 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
                 }
                 _readBits2 += ret;
                 break;*/ //TODO
+            case BEAVER_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT:
+                ret = BEAVER_Parser_ParseSeiPayload_recoveryPoint(parser, payloadSize);
+                if (ret < 0)
+                {
+                    fprintf(stderr, "error: BEAVER_Parser_ParseSeiPayload_recoveryPoint() failed (%d)\n", ret);
+                    return ret;
+                }
+                _readBits2 += ret;
+                break;
             case BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED:
                 ret = BEAVER_Parser_ParseSeiPayload_userDataUnregistered(parser, payloadSize);
                 if (ret < 0)
@@ -3080,7 +3141,7 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
     parser->sliceContext.nal_ref_idc = (val >> 5) & 0x3;
     parser->sliceContext.nal_unit_type = val & 0x1F;
 
-    if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->nal_ref_idc, parser->nal_unit_type, BEAVER_Parser_naluTypeStr[parser->nal_unit_type]);
+    if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->sliceContext.nal_ref_idc, parser->sliceContext.nal_unit_type, BEAVER_Parser_naluTypeStr[parser->sliceContext.nal_unit_type]);
 
     parser->sliceContext.idrPicFlag = (parser->sliceContext.nal_unit_type == 5) ? 1 : 0;
     

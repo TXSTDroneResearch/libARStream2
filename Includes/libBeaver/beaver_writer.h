@@ -33,6 +33,19 @@ typedef struct
 
 
 /**
+ * @brief Recovery point SEI syntax elements.
+ */
+typedef struct
+{
+    unsigned int recoveryFrameCnt;          /**< recovery_frame_cnt syntax element */
+    unsigned int exactMatchFlag;            /**< exact_match_flag syntax element */
+    unsigned int brokenLinkFlag;            /**< broken_link_flag syntax element */
+    unsigned int changingSliceGroupIdc;     /**< changing_slice_group_idc syntax element */
+
+} BEAVER_Writer_RecoveryPointSei_t;
+
+
+/**
  * @brief Initialize a Beaver Writer instance.
  *
  * The library allocates the required resources. The user must call BEAVER_Writer_Free() to free the resources.
@@ -78,8 +91,11 @@ int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void
  * @brief Write a SEI NAL unit.
  *
  * The function writes a Supplemental Enhancement Information NAL unit.
+ * If recoveryPoint is not NULL, a recovery point SEI message is generated.
+ * If userDataUnregisteredCount is not null, one or more user data unregistered messages are generated.
  *
  * @param[in] writerHandle Instance handle.
+ * @param[in] recoveryPoint Recovery point syntax elements
  * @param[in] userDataUnregisteredCount User data count
  * @param[in] pbUserDataUnregistered User data input buffer array
  * @param[in] userDataUnregisteredSize User data input buffer size array
@@ -90,7 +106,7 @@ int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**
