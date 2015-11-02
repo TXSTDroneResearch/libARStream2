@@ -222,7 +222,7 @@ static inline int writeBits_expGolomb_code(BEAVER_Writer_t* _writer, uint32_t _v
         _bitsWritten += _ret;
     }
 
-    return _leadingZeroBits * 2 + 1;
+    return _halfLength * 2 + 1;
 }
 
 
