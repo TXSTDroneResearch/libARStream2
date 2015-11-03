@@ -102,6 +102,7 @@ typedef struct BEAVER_Filter_s
     uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
     BEAVER_Filter_AuSyncType_t currentAuSyncType;
+    int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
     int currentAuFrameInfoAvailable;
@@ -407,6 +408,7 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
     filter->currentAuIncomplete = 0;
     filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_NONE;
     filter->currentAuSlicesAllI = 1;
+    filter->currentAuSlicesReceived = 0;
     filter->currentAuStreamingInfoAvailable = 0;
     memset(&filter->currentAuStreamingInfo, 0, sizeof(BEAVER_Parrot_DragonStreamingV1_t));
     filter->currentAuFrameInfoAvailable = 0;
@@ -420,25 +422,29 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
 
 static void BEAVER_Filter_updateCurrentAu(BEAVER_Filter_t *filter, BEAVER_Filter_H264NaluType_t naluType)
 {
-    if (((naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) || (naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE)) && (filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT))
+    if ((naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) || (naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE))
     {
-        // Update slice index and firstMb
-        if (filter->currentAuPreviousSliceIndex < 0)
+        filter->currentAuSlicesReceived = 1;
+        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT))
         {
-            filter->currentAuPreviousSliceFirstMb = 0;
-            filter->currentAuPreviousSliceIndex = 0;
-        }
-        while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingInfo.sliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
-        {
-            filter->currentAuPreviousSliceFirstMb += filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
-            filter->currentAuPreviousSliceIndex++;
-        }
-        filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
-        //ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
+            // Update slice index and firstMb
+            if (filter->currentAuPreviousSliceIndex < 0)
+            {
+                filter->currentAuPreviousSliceFirstMb = 0;
+                filter->currentAuPreviousSliceIndex = 0;
+            }
+            while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingInfo.sliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
+            {
+                filter->currentAuPreviousSliceFirstMb += filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
+                filter->currentAuPreviousSliceIndex++;
+            }
+            filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
+            //ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
 /* DEBUG */
-        //fprintf(filter->fDebug, "updateCurrentAu: previousSliceIndex: %d - previousSliceFirstMb: %d\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
-        //fflush(filter->fDebug);
+            //fprintf(filter->fDebug, "updateCurrentAu: previousSliceIndex: %d - previousSliceFirstMb: %d\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
+            //fflush(filter->fDebug);
 /* /DEBUG */
+        }
     }
 }
 
@@ -844,7 +850,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         return -2;
     }
 
-    if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuPreviousSliceIndex >= 0))
+    if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuSlicesReceived))
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
 /* DEBUG */
@@ -891,8 +897,8 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         // Slices have been received before
         firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
         missingMb = filter->currentAuCurrentSliceFirstMb - firstMbInSlice;
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d",
-                    filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d - firstMbInSlice: %d",
+                    filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb, firstMbInSlice); //TODO: debug
 /* DEBUG */
             /*fprintf(filter->fDebug, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d\n",
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb);
@@ -1181,8 +1187,8 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
             }
 
-            /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Received NALU type=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)",
-                        naluType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);*/ //TODO: debug
+            /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Received NALU type=%d sliceType=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)",
+                        naluType, sliceType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);*/ //TODO: debug
 /* DEBUG */
             /*fprintf(filter->fDebug, "Received NALU type=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)\n",
                     naluType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);
