@@ -854,6 +854,12 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         return -2;
     }
 
+    if (sliceType != BEAVER_FILTER_H264_SLICE_TYPE_P)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Current slice is not a P-slice, aborting"); //TODO: debug
+        return -2;
+    }
+
     if (filter->currentAuPreviousSliceIndex < 0)
     {
         // No previous slice received
@@ -955,7 +961,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
 }
 
 
-static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
+static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_Filter_H264SliceType_t sliceType)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
@@ -1011,6 +1017,11 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter)
         // Slices have been received before
         firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
         missingMb = filter->mbWidth * filter->mbHeight - firstMbInSlice;
+        if (sliceType != BEAVER_FILTER_H264_SLICE_TYPE_P)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Previous slice is not a P-slice, aborting"); //TODO: debug
+            return -2;
+        }
     }
 
     if (missingMb > 0)
@@ -1102,7 +1113,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
 
                 // Fill the missing slices with fake bitstream
-                ret = BEAVER_Filter_fillMissingEndOfFrame(filter);
+                ret = BEAVER_Filter_fillMissingEndOfFrame(filter, sliceType);
                 if (ret < 0)
                 {
                     if (ret != -2)
