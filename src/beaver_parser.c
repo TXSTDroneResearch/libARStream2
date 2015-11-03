@@ -3128,6 +3128,8 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
         return -1;
     }
 
+    memset(&parser->sliceContext, 0, sizeof(BEAVER_H264_SliceContext_t));
+
     ret = readBits(parser, 8, &val, 0);
     if (ret != 8)
     {
@@ -3503,6 +3505,11 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
         return -1;
     }
 
+    if ((parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE_IDR))
+    {
+        return -1;
+    }
+
     sliceInfo->idrPicFlag = parser->sliceContext.idrPicFlag;
     sliceInfo->nal_ref_idc = parser->sliceContext.nal_ref_idc;
     sliceInfo->nal_unit_type = parser->sliceContext.nal_unit_type;
@@ -3615,8 +3622,7 @@ int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **slic
         return -1;
     }
 
-    int lastNaluType = BEAVER_Parser_GetLastNaluType(parserHandle);
-    if ((lastNaluType != BEAVER_H264_NALU_TYPE_SLICE) && (lastNaluType != BEAVER_H264_NALU_TYPE_SLICE_IDR))
+    if ((parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE_IDR))
     {
         return -1;
     }
