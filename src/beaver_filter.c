@@ -112,6 +112,7 @@ typedef struct BEAVER_Filter_s
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
     int currentAuCurrentSliceFirstMb;
+    BEAVER_Filter_H264SliceType_t previousSliceType;
 
     BEAVER_Parser_Handle parser;
     BEAVER_Writer_Handle writer;
@@ -417,6 +418,7 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
     filter->currentAuFirstNaluInputTime = 0;
+    filter->previousSliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
 }
 
 
@@ -1119,7 +1121,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
 
                 // Fill the missing slices with fake bitstream
-                ret = BEAVER_Filter_fillMissingEndOfFrame(filter, sliceType);
+                ret = BEAVER_Filter_fillMissingEndOfFrame(filter, filter->previousSliceType);
                 if (ret < 0)
                 {
                     if (ret != -2)
@@ -1206,6 +1208,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 filter->currentAuTimestamp = auTimestamp;
                 filter->currentAuTimestampShifted = auTimestampShifted;
                 if (filter->currentAuFirstNaluInputTime == 0) filter->currentAuFirstNaluInputTime = curTime;
+                filter->previousSliceType = sliceType;
 
                 if (filter->firstGrayIFramePending)
                 {
