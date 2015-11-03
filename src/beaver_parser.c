@@ -2693,7 +2693,6 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     uint32_t val = 0;
     int32_t val_se = 0;
     int readBytes = 0, _readBits = 0;
-    int field_pic_flag = 0;
 
     if ((!parser->spsSync) || (!parser->ppsSync))
     {
@@ -2820,7 +2819,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         parser->sliceContext.pic_order_cnt_lsb = val;
         if (parser->config.printLogs) printf("------ pic_order_cnt_lsb = %d\n", val);
 
-        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
+        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!parser->sliceContext.field_pic_flag))
         {
             // delta_pic_order_cnt_bottom
             ret = readBits_expGolomb_se(parser, &val_se, 1);
@@ -2848,7 +2847,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         parser->sliceContext.delta_pic_order_cnt_0 = val_se;
         if (parser->config.printLogs) printf("------ delta_pic_order_cnt[0] = %d\n", val_se);
 
-        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!field_pic_flag))
+        if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!parser->sliceContext.field_pic_flag))
         {
             // delta_pic_order_cnt[1]
             ret = readBits_expGolomb_se(parser, &val_se, 1);
