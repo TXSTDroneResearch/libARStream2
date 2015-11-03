@@ -876,6 +876,8 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
             //fprintf(filter->fDebug, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
             //fflush(filter->fDebug);
 /* /DEBUG */
+            missingMb = 0;
+            ret = -1;
         }
     }
     else if ((filter->currentAuCurrentSliceFirstMb > filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex]))
@@ -900,6 +902,8 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb);
             fflush(filter->fDebug);*/
 /* /DEBUG */
+        missingMb = 0;
+        ret = -1;
     }
 
     if (missingMb > 0)
