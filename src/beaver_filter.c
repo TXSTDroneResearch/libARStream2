@@ -201,10 +201,10 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
 }
 
 
-static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t *naluType)
+static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t *naluType, BEAVER_Filter_H264SliceType_t *sliceType)
 {
     int ret = 0, _ret = 0;
-    BEAVER_Filter_H264SliceType_t sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
+    BEAVER_Filter_H264SliceType_t _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
 
     if ((!naluBuffer) || (naluSize <= 4))
     {
@@ -256,13 +256,14 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     {
                         if (sliceInfo.sliceTypeMod5 == 2)
                         {
-                            sliceType = BEAVER_FILTER_H264_SLICE_TYPE_I;
+                            _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_I;
                         }
                         else if (sliceInfo.sliceTypeMod5 == 0)
                         {
-                            sliceType = BEAVER_FILTER_H264_SLICE_TYPE_P;
+                            _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_P;
                             filter->currentAuSlicesAllI = 0;
                         }
+                        if (sliceType) *sliceType = _sliceType;
                         filter->currentAuCurrentSliceFirstMb = sliceInfo.first_mb_in_slice;
                     }
                 }
@@ -785,7 +786,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
 }
 
 
-static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t naluType, int isFirstNaluInAu)
+static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t naluType, BEAVER_Filter_H264SliceType_t sliceType, int isFirstNaluInAu)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
@@ -1062,6 +1063,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)custom;
     BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
+    BEAVER_Filter_H264SliceType_t sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
     int ret = 0;
     uint8_t *retPtr = NULL;
     uint64_t curTime;
@@ -1153,7 +1155,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 if (tmpBuf) free(tmpBuf);
             }
 
-            ret = BEAVER_Filter_processNalu(filter, naluBuffer, naluSize, &naluType);
+            ret = BEAVER_Filter_processNalu(filter, naluBuffer, naluSize, &naluType, &sliceType);
             if (ret < 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_processNalu() failed (%d)", ret);
@@ -1217,7 +1219,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                     if (missingPacketsBefore)
                     {
                         // Fill the missing slices with fake bitstream
-                        ret = BEAVER_Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, isFirstNaluInAu);
+                        ret = BEAVER_Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu);
                         if (ret < 0)
                         {
                             if (ret != -2)
