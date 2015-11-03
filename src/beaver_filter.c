@@ -565,6 +565,10 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
             if (cbRet != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
+                if (filter->generateFirstGrayIFrame)
+                {
+                    filter->firstGrayIFramePending = 1;
+                }
             }
             else
             {
