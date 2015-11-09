@@ -46,6 +46,22 @@
     #define BEAVER_FILTER_MONITORING_OUTPUT_FILENAME "beaver_frameinfo"
 #endif
 
+#define BEAVER_FILTER_STREAM_OUTPUT
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+    #include <stdio.h>
+
+    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
+    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/stream"
+    //#define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
+    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/stream"
+    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
+    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/stream"
+    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
+    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX "./stream"
+
+    #define BEAVER_FILTER_STREAM_OUTPUT_FILENAME "beaver_stream"
+#endif
+
 
 typedef enum
 {
@@ -141,6 +157,9 @@ typedef struct BEAVER_Filter_s
 #ifdef BEAVER_FILTER_MONITORING_OUTPUT
     FILE* fMonitorOut;
 #endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+    FILE* fStreamOut;
+#endif
 
 /* DEBUG */
     //FILE *fDebug;
@@ -178,6 +197,13 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "spsPpsCallback failed (returned %d)", cbRet);
         }
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+        if (filter->fStreamOut)
+        {
+            fwrite(filter->pSps, filter->spsSize, 1, filter->fStreamOut);
+            fwrite(filter->pPps, filter->ppsSize, 1, filter->fStreamOut);
+        }
+#endif
     }
 
     /* Configure the writer */
@@ -586,6 +612,12 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
                 fprintf(filter->fMonitorOut, " %llu ", (long long unsigned int)filter->currentAuTimestampShifted);
                 fprintf(filter->fMonitorOut, "%llu ", (long long unsigned int)filter->currentAuFirstNaluInputTime);
                 fprintf(filter->fMonitorOut, "%llu\n", (long long unsigned int)curTime);
+            }
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+            if (filter->fStreamOut)
+            {
+                fwrite(auBuffer, auSize, 1, filter->fStreamOut);
             }
 #endif
         }
@@ -1722,6 +1754,65 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
     }
 #endif //#ifdef BEAVER_FILTER_MONITORING_OUTPUT
 
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+    if (ret == 0)
+    {
+        int i;
+        char szOutputFileName[128];
+        char *pszFilePath = NULL;
+        szOutputFileName[0] = '\0';
+        if (0)
+        {
+        }
+#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
+        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB;
+        }
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
+        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL;
+        }
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
+        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL;
+        }
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
+        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX, W_OK) == 0))
+        {
+            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX;
+        }
+#endif
+        if (pszFilePath)
+        {
+            for (i = 0; i < 1000; i++)
+            {
+                snprintf(szOutputFileName, 128, "%s/%s_%03d.264", pszFilePath, BEAVER_FILTER_STREAM_OUTPUT_FILENAME, i);
+                if (access(szOutputFileName, F_OK) == -1)
+                {
+                    // file does not exist
+                    break;
+                }
+                szOutputFileName[0] = '\0';
+            }
+        }
+
+        if (strlen(szOutputFileName))
+        {
+            filter->fStreamOut = fopen(szOutputFileName, "w");
+            if (!filter->fStreamOut)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Unable to open stream output file '%s'", szOutputFileName);
+            }
+        }
+    }
+#endif //#ifdef BEAVER_FILTER_STREAM_OUTPUT
+
     if (ret == 0)
     {
         *filterHandle = (BEAVER_Filter_Handle*)filter;
@@ -1739,6 +1830,9 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             if (filter->writer) BEAVER_Writer_Free(filter->writer);
 #ifdef BEAVER_FILTER_MONITORING_OUTPUT
             if (filter->fMonitorOut) fclose(filter->fMonitorOut);
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+            if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
             free(filter);
         }
@@ -1782,6 +1876,9 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
 #ifdef BEAVER_FILTER_MONITORING_OUTPUT
         if (filter->fMonitorOut) fclose(filter->fMonitorOut);
+#endif
+#ifdef BEAVER_FILTER_STREAM_OUTPUT
+        if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
 
 /* DEBUG */
