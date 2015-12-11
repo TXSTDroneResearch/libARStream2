@@ -16,7 +16,7 @@
 #include <libARStream2/arstream2_h264_filter.h>
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
-#include <libBeaver/beaver_parrot.h>
+#include <libARStream2/arstream2_h264_sei.h>
 
 #include "arstream2_h264.h"
 
@@ -29,22 +29,7 @@
 
 #define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
 #define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
-
-#define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-    #include <stdio.h>
-
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/frameinfo"
-    //#define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/frameinfo"
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/frameinfo"
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX "./frameinfo"
-
-    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_FILENAME "frameinfo"
-#endif
+#define ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE (1024)
 
 #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
@@ -121,10 +106,10 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
-    int currentAuFrameInfoAvailable;
-    BEAVER_Parrot_DragonStreamingV1_t currentAuStreamingInfo;
-    BEAVER_Parrot_DragonFrameInfoV1_t currentAuFrameInfo;
-    uint16_t currentAuStreamingSliceMbCount[BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT];
+    int currentAuUserDataSize;
+    uint8_t *currentAuUserData;
+    ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfo;
+    uint16_t currentAuStreamingSliceMbCount[ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT];
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
     int currentAuCurrentSliceFirstMb;
@@ -303,7 +288,6 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
                     int i, count;
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
-                    BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
                     count = ARSTREAM2_H264Parser_GetUserDataSeiCount(filter->parser);
                     for (i = 0; i < count; i++)
                     {
@@ -314,46 +298,21 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
                         }
                         else
                         {
-                            userDataSeiType = BEAVER_Parrot_GetUserDataSeiType(pUserDataSei, userDataSeiSize);
-                            switch (userDataSeiType)
+                            if (ARSTREAM2_H264Sei_IsUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize) == 1)
                             {
-                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1:
-                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                    if (_ret < 0)
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
-                                    }
-                                    else
-                                    {
-                                        filter->currentAuStreamingInfoAvailable = 1;
-                                    }
-                                    break;
-                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1:
-                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo);
-                                    if (_ret < 0)
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)", ret);
-                                    }
-                                    else
-                                    {
-                                        filter->currentAuFrameInfoAvailable = 1;
-                                    }
-                                    break;
-                                case BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1:
-                                    _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo,
-                                                                                                         &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
-                                    if (_ret < 0)
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
-                                    }
-                                    else
-                                    {
-                                        filter->currentAuStreamingInfoAvailable = 1;
-                                        filter->currentAuFrameInfoAvailable = 1;
-                                    }
-                                    break;
-                                default:
-                                    break;
+                                _ret = ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                if (_ret < 0)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1() failed (%d)", ret);
+                                }
+                                else
+                                {
+                                    filter->currentAuStreamingInfoAvailable = 1;
+                                }
+                            }
+                            else
+                            {
+                                //TODO
                             }
                         }
                     }
@@ -437,9 +396,9 @@ static void ARSTREAM2_H264Filter_resetCurrentAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuSlicesAllI = 1;
     filter->currentAuSlicesReceived = 0;
     filter->currentAuStreamingInfoAvailable = 0;
-    memset(&filter->currentAuStreamingInfo, 0, sizeof(BEAVER_Parrot_DragonStreamingV1_t));
-    filter->currentAuFrameInfoAvailable = 0;
-    memset(&filter->currentAuFrameInfo, 0, sizeof(BEAVER_Parrot_DragonFrameInfoV1_t));
+    memset(&filter->currentAuStreamingInfo, 0, sizeof(ARSTREAM2_H264Sei_ParrotStreamingV1_t));
+    filter->currentAuUserDataSize = 0;
+    memset(&filter->currentAuUserData, 0, sizeof(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE));
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
@@ -453,7 +412,7 @@ static void ARSTREAM2_H264Filter_updateCurrentAu(ARSTREAM2_H264Filter_t *filter,
     if ((naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR) || (naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE))
     {
         filter->currentAuSlicesReceived = 1;
-        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT))
+        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT))
         {
             // Update slice index and firstMb
             if (filter->currentAuPreviousSliceIndex < 0)
@@ -581,7 +540,8 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             ARSAL_Mutex_Unlock(&(filter->mutex));
 
             int cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
-                                                (filter->currentAuFrameInfoAvailable) ? &filter->currentAuFrameInfo : NULL, auBufferUserPtr, filter->auReadyCallbackUserPtr);
+                                                (filter->currentAuUserDataSize > 0) ? &filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
+                                                auBufferUserPtr, filter->auReadyCallbackUserPtr);
 
             ARSAL_Mutex_Lock(&(filter->mutex));
             filter->callbackInProgress = 0;
@@ -601,19 +561,6 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
                 ret = 1;
             }
 
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-            if (filter->fMonitorOut)
-            {
-                int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(&filter->currentAuFrameInfo, filter->fMonitorOut);
-                if (beaverRet != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Failed to write the frameInfo to the file");
-                }
-                fprintf(filter->fMonitorOut, " %llu ", (long long unsigned int)filter->currentAuTimestampShifted);
-                fprintf(filter->fMonitorOut, "%llu ", (long long unsigned int)filter->currentAuFirstNaluInputTime);
-                fprintf(filter->fMonitorOut, "%llu\n", (long long unsigned int)curTime);
-            }
-#endif
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
             if (filter->fStreamOut)
             {
@@ -675,7 +622,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             ARSTREAM2_H264Filter_AuSyncType_t savedAuSyncType = filter->currentAuSyncType;
             int savedAuSlicesAllI = filter->currentAuSlicesAllI;
             int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
-            int savedAuFrameInfoAvailable = filter->currentAuFrameInfoAvailable;
+            int savedAuUserDataSize = filter->currentAuUserDataSize;
             int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
             int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
             int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
@@ -783,7 +730,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         filter->currentAuSyncType = savedAuSyncType;
                         filter->currentAuSlicesAllI = savedAuSlicesAllI;
                         filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
-                        filter->currentAuFrameInfoAvailable = savedAuFrameInfoAvailable;
+                        filter->currentAuUserDataSize = savedAuUserDataSize;
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                         filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
@@ -814,7 +761,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         filter->currentAuSyncType = savedAuSyncType;
                         filter->currentAuSlicesAllI = savedAuSlicesAllI;
                         filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
-                        filter->currentAuFrameInfoAvailable = savedAuFrameInfoAvailable;
+                        filter->currentAuUserDataSize = savedAuUserDataSize;
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                         filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
@@ -1685,74 +1632,15 @@ int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREA
         filter->tempSliceNaluBufferSize = ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE;
     }
 
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
     if (ret == 0)
     {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        szOutputFileName[0] = '\0';
-        if (0)
+        filter->currentAuUserData = malloc(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE);
+        if (!filter->currentAuUserData)
         {
-        }
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
-        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
-        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX;
-        }
-#endif
-        if (pszFilePath)
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_FILENAME, i);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            filter->fMonitorOut = fopen(szOutputFileName, "w");
-            if (!filter->fMonitorOut)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
-            }
-        }
-
-        if (filter->fMonitorOut)
-        {
-            int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(filter->fMonitorOut);
-            if (beaverRet != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Failed to write the frameInfo header to the file");
-            }
-            fprintf(filter->fMonitorOut, " acquisitionTsShifted filterFirstNaluInputTime filterAuOutputTime\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE);
+            ret = -1;
         }
     }
-#endif //#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
 
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
     if (ret == 0)
@@ -1827,6 +1715,7 @@ int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREA
             if (filter->parser) ARSTREAM2_H264Parser_Free(filter->parser);
             if (filter->tempAuBuffer) free(filter->tempAuBuffer);
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+            if (filter->currentAuUserData) free(filter->currentAuUserData);
             if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
 #ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
             if (filter->fMonitorOut) fclose(filter->fMonitorOut);
@@ -1874,6 +1763,7 @@ int ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle)
         if (filter->pPps) free(filter->pPps);
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+        if (filter->currentAuUserData) free(filter->currentAuUserData);
 #ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
         if (filter->fMonitorOut) fclose(filter->fMonitorOut);
 #endif

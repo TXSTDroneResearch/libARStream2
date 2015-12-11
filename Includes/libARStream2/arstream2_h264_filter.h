@@ -42,7 +42,7 @@ typedef int (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, in
 
 
 /* ARSTREAM2_H264Filter functions must not be called within the callback function */
-typedef int (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr);
+typedef int (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
 
 
 uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
