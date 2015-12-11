@@ -1,6 +1,6 @@
 /**
  * @file beaver_filter.c
- * @brief H.264 Elementary Stream Tools Library - Filter
+ * @brief Parrot Reception Library - H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -11,8 +11,8 @@
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
-#include <libARStream/ARSTREAM_Reader2.h>
 
+#include <libBeaver/beaver_reader.h>
 #include <libBeaver/beaver_filter.h>
 #include <libBeaver/beaver_parser.h>
 #include <libBeaver/beaver_writer.h>
@@ -1116,9 +1116,9 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
 }
 
 
-uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                   uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
-                                                   int missingPacketsBefore, int *newNaluBufferSize, void *custom)
+uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+                                          uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                          int missingPacketsBefore, int *newNaluBufferSize, void *custom)
 {
     BEAVER_Filter_t* filter = (BEAVER_Filter_t*)custom;
     BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
@@ -1136,7 +1136,7 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
 
     switch (cause)
     {
-        case ARSTREAM_READER2_CAUSE_NALU_COMPLETE:
+        case ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE:
             ARSAL_Time_GetTime(&t1);
             curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
@@ -1332,8 +1332,8 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
                 }
             }
             break;
-        case ARSTREAM_READER2_CAUSE_NALU_BUFFER_TOO_SMALL:
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "ARStream_Reader2 NALU buffer is too small, truncated AU (or maybe it's the first call)");
+        case ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL:
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "ARSTREAM2_RtpReceiver NALU buffer is too small, truncated AU (or maybe it's the first call)");
 
             ret = 1;
             if ((filter->currentAuBuffer) && (filter->currentAuSize > 0))
@@ -1368,11 +1368,11 @@ uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause
             *newNaluBufferSize = filter->currentNaluBufferSize;
             retPtr = filter->currentNaluBuffer;
             break;
-        case ARSTREAM_READER2_CAUSE_NALU_COPY_COMPLETE:
+        case ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE:
             *newNaluBufferSize = filter->currentNaluBufferSize;
             retPtr = filter->currentNaluBuffer;
             break;
-        case ARSTREAM_READER2_CAUSE_CANCEL:
+        case ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL:
             //TODO?
             *newNaluBufferSize = 0;
             retPtr = NULL;

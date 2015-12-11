@@ -1,6 +1,6 @@
 /**
  * @file beaver.c
- * @brief H.264 Elementary Stream Tools
+ * @brief Parrot Streaming Library Tools
  * @date 09/21/2015
  * @author aurelien.barre@parrot.com
  */

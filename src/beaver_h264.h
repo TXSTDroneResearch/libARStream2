@@ -1,6 +1,6 @@
 /**
  * @file beaver_h264.h
- * @brief H.264 Elementary Stream Tools Library - H.264 common definitions
+ * @brief Parrot Streaming Library - H.264 definitions
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -11,8 +11,14 @@
 
 #include <inttypes.h>
 
+/*
+ * Macros
+ */
 
 #define BEAVER_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
+#define BEAVER_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
+#define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
+#define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
 
 #define BEAVER_H264_NALU_TYPE_SLICE 1
 #define BEAVER_H264_NALU_TYPE_SLICE_IDR 5
@@ -38,7 +44,9 @@
 #define BEAVER_H264_SLICE_TYPE_SP_ALL 8
 #define BEAVER_H264_SLICE_TYPE_SI_ALL 9
 
-
+/*
+ * Types
+ */
 
 typedef struct BEAVER_H264_SpsContext_s
 {

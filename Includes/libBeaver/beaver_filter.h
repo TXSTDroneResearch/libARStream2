@@ -1,6 +1,6 @@
 /**
  * @file beaver_filter.h
- * @brief H.264 Elementary Stream Tools Library - Filter
+ * @brief Parrot Streaming Library - H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -13,7 +13,7 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
-#include <libARStream/ARSTREAM_Reader2.h>
+#include <libBeaver/beaver_reader.h>
 
 
 /**
@@ -45,9 +45,9 @@ typedef int (*BEAVER_Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBu
 typedef int (*BEAVER_Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr);
 
 
-uint8_t* BEAVER_Filter_ArstreamReader2NaluCallback(eARSTREAM_READER2_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                   uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
-                                                   int missingPacketsBefore, int *newNaluBufferSize, void *custom);
+uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+                                               uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                               int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
 /**
@@ -109,7 +109,7 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle);
 /**
  * @brief Start a Beaver Filter instance.
  *
- * The function starts processing the ARSTREAM_Reader2 input.
+ * The function starts processing the ARSTREAM2_RtpReceiver input.
  * The processing can be stopped using BEAVER_Filter_Pause().
  *
  * @param filterHandle Instance handle.
@@ -131,7 +131,7 @@ int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsC
 /**
  * @brief Pause a Beaver Filter instance.
  *
- * The function stops processing the ARSTREAM_Reader2 input.
+ * The function stops processing the ARSTREAM2_RtpReceiver input.
  * The callback functions provided to BEAVER_Filter_Start() will not be called any more.
  * The filter can be started again by a new call to BEAVER_Filter_Start().
  *

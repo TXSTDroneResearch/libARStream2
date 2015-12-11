@@ -1,13 +1,12 @@
 /**
- * @file beaver_jni_readerfilter.c
- * @brief H.264 Elementary Stream Reader and Filter
+ * @file beaverjni.c
+ * @brief Parrot Streaming Library - JNI
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
 
 #include <jni.h>
 #include <libBeaver/beaver_readerfilter.h>
-#include <libARStream/ARSTREAM_Reader2.h>
 #include <libARSAL/ARSAL_Print.h>
 
 

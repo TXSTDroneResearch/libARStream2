@@ -1,6 +1,6 @@
 /**
  * @file beaver_readerfilter.c
- * @brief H.264 Elementary Stream Reader and Filter
+ * @brief Parrot Streaming Library - RTP Receiver and H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -19,7 +19,7 @@
 typedef struct BEAVER_ReaderFilter_s
 {
     BEAVER_Filter_Handle filter;
-    ARSTREAM_Reader2_t *reader;
+    ARSTREAM2_RtpReceiver_t *receiver;
 
 } BEAVER_ReaderFilter_t;
 
@@ -28,7 +28,7 @@ typedef struct BEAVER_ReaderFilter_s
 int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEAVER_ReaderFilter_Config_t *config)
 {
     int ret = 0;
-    eARSTREAM_ERROR err = ARSTREAM_OK;
+    eARSTREAM2_ERROR err = ARSTREAM2_OK;
     BEAVER_ReaderFilter_t *readerFilter = NULL;
 
     if (!readerFilterHandle)
@@ -73,28 +73,28 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
 
     if (ret == 0)
     {
-        ARSTREAM_Reader2_Config_t readerConfig;
-        memset(&readerConfig, 0, sizeof(readerConfig));
+        ARSTREAM2_RtpReceiver_Config_t receiverConfig;
+        memset(&receiverConfig, 0, sizeof(receiverConfig));
 
-        readerConfig.serverAddr = config->serverAddr;
-        readerConfig.mcastAddr = config->mcastAddr;
-        readerConfig.mcastIfaceAddr = config->mcastIfaceAddr;
-        readerConfig.serverStreamPort = config->serverStreamPort;
-        readerConfig.serverControlPort = config->serverControlPort;
-        readerConfig.clientStreamPort = config->clientStreamPort;
-        readerConfig.clientControlPort = config->clientControlPort;
-        readerConfig.naluCallback = BEAVER_Filter_ArstreamReader2NaluCallback;
-        readerConfig.naluCallbackUserPtr = (void*)readerFilter->filter;
-        readerConfig.maxPacketSize = config->maxPacketSize;
-        readerConfig.maxBitrate = config->maxBitrate;
-        readerConfig.maxLatencyMs = config->maxLatencyMs;
-        readerConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
-        readerConfig.insertStartCodes = 1;
+        receiverConfig.serverAddr = config->serverAddr;
+        receiverConfig.mcastAddr = config->mcastAddr;
+        receiverConfig.mcastIfaceAddr = config->mcastIfaceAddr;
+        receiverConfig.serverStreamPort = config->serverStreamPort;
+        receiverConfig.serverControlPort = config->serverControlPort;
+        receiverConfig.clientStreamPort = config->clientStreamPort;
+        receiverConfig.clientControlPort = config->clientControlPort;
+        receiverConfig.naluCallback = BEAVER_Filter_RtpReceiverNaluCallback;
+        receiverConfig.naluCallbackUserPtr = (void*)readerFilter->filter;
+        receiverConfig.maxPacketSize = config->maxPacketSize;
+        receiverConfig.maxBitrate = config->maxBitrate;
+        receiverConfig.maxLatencyMs = config->maxLatencyMs;
+        receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+        receiverConfig.insertStartCodes = 1;
 
-        readerFilter->reader = ARSTREAM_Reader2_New(&readerConfig, &err);
-        if (err != ARSTREAM_OK)
+        readerFilter->receiver = ARSTREAM2_RtpReceiver_New(&receiverConfig, &err);
+        if (err != ARSTREAM2_OK)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating reader : %s", ARSTREAM_Error_ToString(err));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating receiver : %s", ARSTREAM2_Error_ToString(err));
             ret = -1;
         }
     }
@@ -107,7 +107,7 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
     {
         if (readerFilter)
         {
-            if (readerFilter->reader) ARSTREAM_Reader2_Delete(&(readerFilter->reader));
+            if (readerFilter->receiver) ARSTREAM2_RtpReceiver_Delete(&(readerFilter->receiver));
             if (readerFilter->filter) BEAVER_Filter_Free(&(readerFilter->filter));
             free(readerFilter);
         }
@@ -122,7 +122,7 @@ int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle)
 {
     BEAVER_ReaderFilter_t* readerFilter;
     int ret = 0;
-    eARSTREAM_ERROR err;
+    eARSTREAM2_ERROR err;
 
     if ((!readerFilterHandle) || (!*readerFilterHandle))
     {
@@ -132,10 +132,10 @@ int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle)
 
     readerFilter = (BEAVER_ReaderFilter_t*)*readerFilterHandle;
 
-    err = ARSTREAM_Reader2_Delete(&readerFilter->reader);
-    if (err != ARSTREAM_OK)
+    err = ARSTREAM2_RtpReceiver_Delete(&readerFilter->receiver);
+    if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to delete reader: %s", ARSTREAM_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to delete receiver: %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
 
@@ -177,7 +177,7 @@ void* BEAVER_ReaderFilter_RunStreamThread(void *readerFilterHandle)
         return NULL;
     }
 
-    return ARSTREAM_Reader2_RunStreamThread((void*)readerFilter->reader);
+    return ARSTREAM2_RtpReceiver_RunStreamThread((void*)readerFilter->receiver);
 }
 
 
@@ -191,7 +191,7 @@ void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle)
         return NULL;
     }
 
-    return ARSTREAM_Reader2_RunControlThread((void*)readerFilter->reader);
+    return ARSTREAM2_RtpReceiver_RunControlThread((void*)readerFilter->receiver);
 }
 
 
@@ -239,7 +239,7 @@ int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
         return ret;
     }
 
-    ARSTREAM_Reader2_InvalidateNaluBuffer(readerFilter->reader);
+    ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(readerFilter->receiver);
 
     return ret;
 }
@@ -256,7 +256,7 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle)
         return -1;
     }
 
-    ARSTREAM_Reader2_StopReader(readerFilter->reader);
+    ARSTREAM2_RtpReceiver_Stop(readerFilter->receiver);
 
     ret = BEAVER_Filter_Stop(readerFilter->filter);
     if (ret != 0)
@@ -286,8 +286,8 @@ int BEAVER_ReaderFilter_GetSpsPps(BEAVER_ReaderFilter_Handle readerFilterHandle,
 int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_ReaderFilter_ResenderHandle *resenderHandle, BEAVER_ReaderFilter_ResenderConfig_t *config)
 {
     BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
-    eARSTREAM_ERROR err = ARSTREAM_OK;
-    ARSTREAM_Reader2_Resender_t* retResender = NULL;
+    eARSTREAM2_ERROR err = ARSTREAM2_OK;
+    ARSTREAM2_RtpReceiver_RtpResender_t* retResender = NULL;
     int ret = 0;
 
     if (!readerFilterHandle)
@@ -306,7 +306,7 @@ int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHand
         return -1;
     }
 
-    ARSTREAM_Reader2_Resender_Config_t resenderConfig;
+    ARSTREAM2_RtpReceiver_RtpResender_Config_t resenderConfig;
     memset(&resenderConfig, 0, sizeof(resenderConfig));
 
     resenderConfig.clientAddr = config->clientAddr;
@@ -321,10 +321,10 @@ int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHand
     resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
 
-    retResender = ARSTREAM_Reader2_Resender_New(readerFilter->reader, &resenderConfig, &err);
-    if (err != ARSTREAM_OK)
+    retResender = ARSTREAM2_RtpReceiver_RtpResender_New(readerFilter->receiver, &resenderConfig, &err);
+    if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating resender : %s", ARSTREAM_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating resender : %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
     else
@@ -339,12 +339,12 @@ int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHand
 int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resenderHandle)
 {
     int ret = 0;
-    eARSTREAM_ERROR err = ARSTREAM_OK;
+    eARSTREAM2_ERROR err = ARSTREAM2_OK;
 
-    err = ARSTREAM_Reader2_Resender_Delete((ARSTREAM_Reader2_Resender_t**)resenderHandle);
-    if (err != ARSTREAM_OK)
+    err = ARSTREAM2_RtpReceiver_RtpResender_Delete((ARSTREAM2_RtpReceiver_RtpResender_t**)resenderHandle);
+    if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while deleting resender : %s", ARSTREAM_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while deleting resender : %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
 
@@ -354,19 +354,19 @@ int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resende
 
 void* BEAVER_ReaderFilter_RunResenderStreamThread(void *resenderHandle)
 {
-    return ARSTREAM_Reader2_Resender_RunStreamThread(resenderHandle);
+    return ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread(resenderHandle);
 }
 
 
 void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle)
 {
-    return ARSTREAM_Reader2_Resender_RunControlThread(resenderHandle);
+    return ARSTREAM2_RtpReceiver_RtpResender_RunControlThread(resenderHandle);
 }
 
 
 int BEAVER_ReaderFilter_StopResender(BEAVER_ReaderFilter_ResenderHandle resenderHandle)
 {
-    ARSTREAM_Reader2_Resender_Stop((ARSTREAM_Reader2_Resender_t*)resenderHandle);
+    ARSTREAM2_RtpReceiver_RtpResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
 
     return 0;
 }

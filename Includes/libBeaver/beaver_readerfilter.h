@@ -1,6 +1,6 @@
 /**
  * @file beaver_readerfilter.h
- * @brief H.264 Elementary Stream Reader and Filter
+ * @brief Parrot Streaming Library - RTP Receiver and H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -13,30 +13,30 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
-#include <libARStream/ARSTREAM_Reader2.h>
-#include <libARStream/ARSTREAM_Sender2.h>
-#include "beaver_filter.h"
+#include <libBeaver/beaver_reader.h>
+#include <libBeaver/beaver_sender.h>
+#include <libBeaver/beaver_filter.h>
 
 
 /**
  * @brief Default client-side stream port
  */
-#define BEAVER_READERFILTER_DEFAULT_CLIENT_STREAM_PORT      ARSTREAM_READER2_DEFAULT_CLIENT_STREAM_PORT
+#define BEAVER_READERFILTER_DEFAULT_CLIENT_STREAM_PORT      BEAVER_READER_DEFAULT_CLIENT_STREAM_PORT
 
 /**
  * @brief Default client-side control port
  */
-#define BEAVER_READERFILTER_DEFAULT_CLIENT_CONTROL_PORT     ARSTREAM_READER2_DEFAULT_CLIENT_CONTROL_PORT
+#define BEAVER_READERFILTER_DEFAULT_CLIENT_CONTROL_PORT     BEAVER_READER_DEFAULT_CLIENT_CONTROL_PORT
 
 /**
  * @brief Default server-side resender stream port
  */
-#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_STREAM_PORT      ARSTREAM_SENDER2_DEFAULT_SERVER_STREAM_PORT
+#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_STREAM_PORT      BEAVER_SENDER_DEFAULT_SERVER_STREAM_PORT
 
 /**
  * @brief Default server-side resender control port
  */
-#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     ARSTREAM_SENDER2_DEFAULT_SERVER_CONTROL_PORT
+#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     BEAVER_SENDER_DEFAULT_SERVER_CONTROL_PORT
 
 
 /**
@@ -86,8 +86,8 @@ typedef struct BEAVER_ReaderFilter_ResenderConfig_t
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
-    int serverStreamPort;                           /**< Server stream port, @see ARSTREAM_SENDER2_DEFAULT_SERVER_STREAM_PORT */
-    int serverControlPort;                          /**< Server control port, @see ARSTREAM_SENDER2_DEFAULT_SERVER_CONTROL_PORT */
+    int serverStreamPort;                           /**< Server stream port, @see BEAVER_SENDER_DEFAULT_SERVER_STREAM_PORT */
+    int serverControlPort;                          /**< Server control port, @see BEAVER_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
@@ -167,7 +167,7 @@ void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle);
 /**
  * @brief Start the filter.
  *
- * The function starts processing the ARSTREAM_Reader2 input.
+ * The function starts processing the BEAVER_Reader input.
  * The processing can be stopped using BEAVER_ReaderFilter_PauseFilter().
  *
  * @param readerFilterHandle Instance handle.
@@ -189,7 +189,7 @@ int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
 /**
  * @brief Pause the filter.
  *
- * The function stops processing the ARSTREAM_Reader2 input.
+ * The function stops processing the BEAVER_Reader input.
  * The callback functions provided to BEAVER_ReaderFilter_StartFilter() will not be called any more.
  * The filter can be started again by a new call to BEAVER_ReaderFilter_StartFilter().
  *
@@ -292,10 +292,10 @@ void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle);
 
 
 /**
- * @brief Stops a running Reader2 Resender
- * @warning Once stopped, a Reader2 Resender cannot be restarted
+ * @brief Stops a running Reader Resender
+ * @warning Once stopped, a Reader Resender cannot be restarted
  *
- * @param[in] resender The Reader2 Resender instance
+ * @param[in] resender The Reader Resender instance
  *
  * @note Calling this function multiple times has no effect
  */

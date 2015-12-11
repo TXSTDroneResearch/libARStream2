@@ -1,6 +1,6 @@
 /**
  * @file beaver_writer.c
- * @brief H.264 Elementary Stream Tools Library - Writer
+ * @brief Parrot Streaming Library - H.264 Writer
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */

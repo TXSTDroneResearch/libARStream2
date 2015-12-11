@@ -59,11 +59,13 @@ OBJCFLAGS+="$LOCAL_CFLAGS"
 # Add libARxxx deps
 
 AR_DEPENDS([libARSAL], [Y], [libARSAL/ARSAL.h])
-AR_DEPENDS([libARStream], [Y], [libARStream/ARStream.h])
 
 ##########################################################################
 # Check headers
 ##########################################################################
+
+# Check for SO_NOSIGPIPE macros
+AC_CHECK_DECLS([SO_NOSIGPIPE, MSG_NOSIGNAL],[],[],[[#include <sys/socket.h>]])
 
 # Checks for generic headers
 AC_CHECK_HEADERS([inttypes.h],,AC_MSG_ERROR(The inttypes.h header is required in order to build the library!))
@@ -96,6 +98,7 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_CHECK_LIB([m],[log])
+AC_CHECK_LIB([m],[sqrt])
 
 # Generate libtool version info number
 if test x"$sover" = x"yes"; then

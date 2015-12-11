@@ -1,6 +1,6 @@
 /**
  * @file beaver_parrot.c
- * @brief H.264 Elementary Stream Tools Library - Parrot user data SEI definition and serializer
+ * @brief Parrot Streaming Library - Parrot H.264 user data SEI definition and serializer
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
