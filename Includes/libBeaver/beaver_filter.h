@@ -1,12 +1,12 @@
 /**
- * @file beaver_filter.h
+ * @file arstream2_h264_filter.h
  * @brief Parrot Streaming Library - H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
 
-#ifndef _BEAVER_FILTER_H_
-#define _BEAVER_FILTER_H_
+#ifndef _ARSTREAM2_H264_FILTER_H_
+#define _ARSTREAM2_H264_FILTER_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,41 +17,41 @@ extern "C" {
 
 
 /**
- * @brief Beaver Filter instance handle.
+ * @brief ARSTREAM2 H264Filter instance handle.
  */
-typedef void* BEAVER_Filter_Handle;
+typedef void* ARSTREAM2_H264Filter_Handle;
 
 
 typedef enum
 {
-    BEAVER_FILTER_AU_SYNC_TYPE_NONE = 0,    /**< The Access Unit is not a synchronization point */
-    BEAVER_FILTER_AU_SYNC_TYPE_IDR,         /**< The Access Unit is an IDR picture */
-    BEAVER_FILTER_AU_SYNC_TYPE_IFRAME,      /**< The Access Unit is an I-frame */
-    BEAVER_FILTER_AU_SYNC_TYPE_PIR_START,   /**< The Access Unit is a Periodic Intra Refresh start */
-    BEAVER_FILTER_AU_SYNC_TYPE_MAX,
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE = 0,    /**< The Access Unit is not a synchronization point */
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR,         /**< The Access Unit is an IDR picture */
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME,      /**< The Access Unit is an I-frame */
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START,   /**< The Access Unit is a Periodic Intra Refresh start */
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX,
 
-} BEAVER_Filter_AuSyncType_t;
-
-
-/* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+} ARSTREAM2_H264Filter_AuSyncType_t;
 
 
-/* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
+/* ARSTREAM2_H264Filter functions must not be called within the callback function */
+typedef int (*ARSTREAM2_H264Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 
 
-/* BEAVER_Filter functions must not be called within the callback function */
-typedef int (*BEAVER_Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, BEAVER_Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr);
+/* ARSTREAM2_H264Filter functions must not be called within the callback function */
+typedef int (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
 
 
-uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+/* ARSTREAM2_H264Filter functions must not be called within the callback function */
+typedef int (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auMetadata, void *auBufferUserPtr, void *userPtr);
+
+
+uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
                                                uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
                                                int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
 /**
- * @brief Beaver Filter configuration for initialization.
+ * @brief ARSTREAM2 H264Filter configuration for initialization.
  */
 typedef struct
 {
@@ -63,13 +63,13 @@ typedef struct
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
-} BEAVER_Filter_Config_t;
+} ARSTREAM2_H264Filter_Config_t;
 
 
 /**
- * @brief Initialize a Beaver Filter instance.
+ * @brief Initialize an H264Filter instance.
  *
- * The library allocates the required resources. The user must call BEAVER_Filter_Free() to free the resources.
+ * The library allocates the required resources. The user must call ARSTREAM2_H264Filter_Free() to free the resources.
  *
  * @param filterHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
@@ -77,11 +77,11 @@ typedef struct
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_t *config);
+int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREAM2_H264Filter_Config_t *config);
 
 
 /**
- * @brief Free a Beaver Filter instance.
+ * @brief Free an H264Filter instance.
  *
  * The library frees the allocated resources. On success the filterHandle is set to NULL.
  *
@@ -90,27 +90,27 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle);
+int ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle);
 
 
 /**
- * @brief Run a Beaver Filter main thread.
+ * @brief Run an H264Filter main thread.
  *
- * The instance must be correctly allocated using BEAVER_Filter_Init().
- * @warning This function never returns until BEAVER_Filter_Stop() is called. The tread can then be joined.
+ * The instance must be correctly allocated using ARSTREAM2_H264Filter_Init().
+ * @warning This function never returns until ARSTREAM2_H264Filter_Stop() is called. The tread can then be joined.
  *
  * @param filterHandle Instance handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_Filter_RunFilterThread(void *filterHandle);
+void* ARSTREAM2_H264Filter_RunFilterThread(void *filterHandle);
 
 
 /**
- * @brief Start a Beaver Filter instance.
+ * @brief Start an H264Filter instance.
  *
  * The function starts processing the ARSTREAM2_RtpReceiver input.
- * The processing can be stopped using BEAVER_Filter_Pause().
+ * The processing can be stopped using ARSTREAM2_H264Filter_Pause().
  *
  * @param filterHandle Instance handle.
  * @param spsPpsCallback SPS/PPS callback function.
@@ -123,28 +123,28 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                        BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                        BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
+int ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                        ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                        ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
 
 
 /**
- * @brief Pause a Beaver Filter instance.
+ * @brief Pause an H264Filter instance.
  *
  * The function stops processing the ARSTREAM2_RtpReceiver input.
- * The callback functions provided to BEAVER_Filter_Start() will not be called any more.
- * The filter can be started again by a new call to BEAVER_Filter_Start().
+ * The callback functions provided to ARSTREAM2_H264Filter_Start() will not be called any more.
+ * The filter can be started again by a new call to ARSTREAM2_H264Filter_Start().
  *
  * @param filterHandle Instance handle.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle);
+int ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 /**
- * @brief Stop a Beaver Filter instance.
+ * @brief Stop an H264Filter instance.
  *
  * The function ends the filter thread before it can be joined.
  * A stopped filter cannot be restarted.
@@ -154,7 +154,7 @@ int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle);
+int ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 /**
@@ -174,12 +174,11 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle);
  * @return -1 if an error occurred.
  * @return -2 if SPS/PPS are not available (no sync).
  */
-int BEAVER_Filter_GetSpsPps(BEAVER_Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+int ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
 
 
 #ifdef __cplusplus
 }
 #endif /* #ifdef __cplusplus */
 
-#endif /* #ifndef _BEAVER_FILTER_H_ */
-
+#endif /* #ifndef _ARSTREAM2_H264_FILTER_H_ */

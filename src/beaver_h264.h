@@ -1,13 +1,13 @@
 /**
- * @file beaver_h264.h
+ * @file arstream2_h264.h
  * @brief Parrot Streaming Library - H.264 definitions
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
 
 
-#ifndef _BEAVER_H264_H_
-#define _BEAVER_H264_H_
+#ifndef _ARSTREAM2_H264_H_
+#define _ARSTREAM2_H264_H_
 
 #include <inttypes.h>
 
@@ -15,40 +15,40 @@
  * Macros
  */
 
-#define BEAVER_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
-#define BEAVER_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
+#define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
+#define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
 #define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
 #define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
 
-#define BEAVER_H264_NALU_TYPE_SLICE 1
-#define BEAVER_H264_NALU_TYPE_SLICE_IDR 5
-#define BEAVER_H264_NALU_TYPE_SEI 6
-#define BEAVER_H264_NALU_TYPE_SPS 7
-#define BEAVER_H264_NALU_TYPE_PPS 8
-#define BEAVER_H264_NALU_TYPE_AUD 9
-#define BEAVER_H264_NALU_TYPE_FILLER_DATA 12
+#define ARSTREAM2_H264_NALU_TYPE_SLICE 1
+#define ARSTREAM2_H264_NALU_TYPE_SLICE_IDR 5
+#define ARSTREAM2_H264_NALU_TYPE_SEI 6
+#define ARSTREAM2_H264_NALU_TYPE_SPS 7
+#define ARSTREAM2_H264_NALU_TYPE_PPS 8
+#define ARSTREAM2_H264_NALU_TYPE_AUD 9
+#define ARSTREAM2_H264_NALU_TYPE_FILLER_DATA 12
 
-#define BEAVER_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD 0
-#define BEAVER_H264_SEI_PAYLOAD_TYPE_PIC_TIMING 1
-#define BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED 5
-#define BEAVER_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT 6
+#define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD 0
+#define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_PIC_TIMING 1
+#define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED 5
+#define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT 6
 
-#define BEAVER_H264_SLICE_TYPE_P 0
-#define BEAVER_H264_SLICE_TYPE_B 1
-#define BEAVER_H264_SLICE_TYPE_I 2
-#define BEAVER_H264_SLICE_TYPE_SP 3
-#define BEAVER_H264_SLICE_TYPE_SI 4
-#define BEAVER_H264_SLICE_TYPE_P_ALL 5
-#define BEAVER_H264_SLICE_TYPE_B_ALL 6
-#define BEAVER_H264_SLICE_TYPE_I_ALL 7
-#define BEAVER_H264_SLICE_TYPE_SP_ALL 8
-#define BEAVER_H264_SLICE_TYPE_SI_ALL 9
+#define ARSTREAM2_H264_SLICE_TYPE_P 0
+#define ARSTREAM2_H264_SLICE_TYPE_B 1
+#define ARSTREAM2_H264_SLICE_TYPE_I 2
+#define ARSTREAM2_H264_SLICE_TYPE_SP 3
+#define ARSTREAM2_H264_SLICE_TYPE_SI 4
+#define ARSTREAM2_H264_SLICE_TYPE_P_ALL 5
+#define ARSTREAM2_H264_SLICE_TYPE_B_ALL 6
+#define ARSTREAM2_H264_SLICE_TYPE_I_ALL 7
+#define ARSTREAM2_H264_SLICE_TYPE_SP_ALL 8
+#define ARSTREAM2_H264_SLICE_TYPE_SI_ALL 9
 
 /*
  * Types
  */
 
-typedef struct BEAVER_H264_SpsContext_s
+typedef struct ARSTREAM2_H264_SpsContext_s
 {
     unsigned int chroma_format_idc;
     unsigned int separate_colour_plane_flag;
@@ -72,10 +72,10 @@ typedef struct BEAVER_H264_SpsContext_s
     unsigned int dpb_output_delay_length_minus1;
     unsigned int time_offset_length;
 
-} BEAVER_H264_SpsContext_t;
+} ARSTREAM2_H264_SpsContext_t;
 
 
-typedef struct BEAVER_H264_PpsContext_s
+typedef struct ARSTREAM2_H264_PpsContext_s
 {
     unsigned int entropy_coding_mode_flag;
     unsigned int bottom_field_pic_order_in_frame_present_flag;
@@ -89,10 +89,10 @@ typedef struct BEAVER_H264_PpsContext_s
     unsigned int deblocking_filter_control_present_flag;
     unsigned int redundant_pic_cnt_present_flag;
 
-} BEAVER_H264_PpsContext_t;
+} ARSTREAM2_H264_PpsContext_t;
 
 
-typedef struct BEAVER_H264_SliceContext_s
+typedef struct ARSTREAM2_H264_SliceContext_s
 {
     unsigned int nal_ref_idc;
     unsigned int nal_unit_type;
@@ -130,8 +130,7 @@ typedef struct BEAVER_H264_SliceContext_s
     int slice_beta_offset_div2;
     unsigned int slice_group_change_cycle;
 
-} BEAVER_H264_SliceContext_t;
+} ARSTREAM2_H264_SliceContext_t;
 
 
-#endif /* #ifndef _BEAVER_H264_H_ */
-
+#endif /* #ifndef _ARSTREAM2_H264_H_ */

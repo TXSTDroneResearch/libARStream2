@@ -1,5 +1,5 @@
 /**
- * @file beaver_filter.c
+ * @file arstream2_h264_filter.c
  * @brief Parrot Reception Library - H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
@@ -25,74 +25,74 @@
 /* /DEBUG */
 
 
-#define BEAVER_FILTER_TAG "BEAVER_Filter"
+#define ARSTREAM2_H264_FILTER_TAG "ARSTREAM2_H264Filter"
 
-#define BEAVER_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
-#define BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
+#define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
+#define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
 
-#define BEAVER_FILTER_MONITORING_OUTPUT
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
     #include <stdio.h>
 
-    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
-    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/frameinfo"
-    //#define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/frameinfo"
-    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/frameinfo"
-    #define BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
-    #define BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX "./frameinfo"
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/frameinfo"
+    //#define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/frameinfo"
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/frameinfo"
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX "./frameinfo"
 
-    #define BEAVER_FILTER_MONITORING_OUTPUT_FILENAME "beaver_frameinfo"
+    #define ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_FILENAME "frameinfo"
 #endif
 
-#define BEAVER_FILTER_STREAM_OUTPUT
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#define ARSTREAM2_H264_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
     #include <stdio.h>
 
-    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
-    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/stream"
-    //#define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
-    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/stream"
-    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/stream"
-    #define BEAVER_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
-    #define BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX "./stream"
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/stream"
+    //#define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/stream"
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/stream"
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX "./stream"
 
-    #define BEAVER_FILTER_STREAM_OUTPUT_FILENAME "beaver_stream"
+    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_FILENAME "stream"
 #endif
 
 
 typedef enum
 {
-    BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN = 0,
-    BEAVER_FILTER_H264_NALU_TYPE_SLICE = 1,
-    BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR = 5,
-    BEAVER_FILTER_H264_NALU_TYPE_SEI = 6,
-    BEAVER_FILTER_H264_NALU_TYPE_SPS = 7,
-    BEAVER_FILTER_H264_NALU_TYPE_PPS = 8,
-    BEAVER_FILTER_H264_NALU_TYPE_AUD = 9,
-    BEAVER_FILTER_H264_NALU_TYPE_FILLER_DATA = 12,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_UNKNOWN = 0,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE = 1,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR = 5,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SEI = 6,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SPS = 7,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_PPS = 8,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_AUD = 9,
+    ARSTREAM2_H264_FILTER_H264_NALU_TYPE_FILLER_DATA = 12,
 
-} BEAVER_Filter_H264NaluType_t;
+} ARSTREAM2_H264Filter_H264NaluType_t;
 
 
 typedef enum
 {
-    BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL = 0,
-    BEAVER_FILTER_H264_SLICE_TYPE_I,
-    BEAVER_FILTER_H264_SLICE_TYPE_P,
+    ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_NON_VCL = 0,
+    ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_I,
+    ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_P,
 
-} BEAVER_Filter_H264SliceType_t;
+} ARSTREAM2_H264Filter_H264SliceType_t;
 
 
-typedef struct BEAVER_Filter_s
+typedef struct ARSTREAM2_H264Filter_s
 {
-    BEAVER_Filter_SpsPpsCallback_t spsPpsCallback;
+    ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback;
     void* spsPpsCallbackUserPtr;
-    BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback;
+    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback;
     void* getAuBufferCallbackUserPtr;
-    BEAVER_Filter_AuReadyCallback_t auReadyCallback;
+    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback;
     void* auReadyCallbackUserPtr;
     int callbackInProgress;
 
@@ -117,7 +117,7 @@ typedef struct BEAVER_Filter_s
     uint64_t currentAuTimestampShifted;
     uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
-    BEAVER_Filter_AuSyncType_t currentAuSyncType;
+    ARSTREAM2_H264Filter_AuSyncType_t currentAuSyncType;
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
@@ -128,10 +128,10 @@ typedef struct BEAVER_Filter_s
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
     int currentAuCurrentSliceFirstMb;
-    BEAVER_Filter_H264SliceType_t previousSliceType;
+    ARSTREAM2_H264Filter_H264SliceType_t previousSliceType;
 
-    BEAVER_Parser_Handle parser;
-    BEAVER_Writer_Handle writer;
+    ARSTREAM2_H264Parser_Handle parser;
+    ARSTREAM2_H264Writer_Handle writer;
     uint8_t *tempSliceNaluBuffer;
     int tempSliceNaluBufferSize;
 
@@ -154,10 +154,10 @@ typedef struct BEAVER_Filter_s
     int threadShouldStop;
     int threadStarted;
 
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
     FILE* fMonitorOut;
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
     FILE* fStreamOut;
 #endif
 
@@ -165,14 +165,14 @@ typedef struct BEAVER_Filter_s
     //FILE *fDebug;
 /* /DEBUG */
 
-} BEAVER_Filter_t;
+} ARSTREAM2_H264Filter_t;
 
 
-static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize)
+static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize)
 {
     int ret = 0;
-    BEAVER_H264_SpsContext_t *spsContext = NULL;
-    BEAVER_H264_PpsContext_t *ppsContext = NULL;
+    ARSTREAM2_H264_SpsContext_t *spsContext = NULL;
+    ARSTREAM2_H264_PpsContext_t *ppsContext = NULL;
 
     filter->sync = 1;
 
@@ -180,7 +180,7 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
     {
         filter->firstGrayIFramePending = 1;
     }
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "SPS/PPS sync OK"); //TODO: debug
+    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK"); //TODO: debug
 /* DEBUG */
     //fprintf(filter->fDebug, "SPS/PPS sync OK\n");
     //fflush(filter->fDebug);
@@ -195,9 +195,9 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
         ARSAL_Mutex_Lock(&(filter->mutex));
         if (cbRet != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "spsPpsCallback failed (returned %d)", cbRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed (returned %d)", cbRet);
         }
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
         if (filter->fStreamOut)
         {
             fwrite(filter->pSps, filter->spsSize, 1, filter->fStreamOut);
@@ -207,20 +207,20 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
     }
 
     /* Configure the writer */
-    ret = BEAVER_Parser_GetSpsPpsContext(filter->parser, (void**)&spsContext, (void**)&ppsContext);
+    ret = ARSTREAM2_H264Parser_GetSpsPpsContext(filter->parser, (void**)&spsContext, (void**)&ppsContext);
     if (ret != 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSpsPpsContext() failed (%d)", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSpsPpsContext() failed (%d)", ret);
         ret = -1;
     }
     if (ret == 0)
     {
         filter->mbWidth = spsContext->pic_width_in_mbs_minus1 + 1;
         filter->mbHeight = (spsContext->pic_height_in_map_units_minus1 + 1) * ((spsContext->frame_mbs_only_flag) ? 1 : 2);
-        ret = BEAVER_Writer_SetSpsPpsContext(filter->writer, (void*)spsContext, (void*)ppsContext);
+        ret = ARSTREAM2_H264Writer_SetSpsPpsContext(filter->writer, (void*)spsContext, (void*)ppsContext);
         if (ret != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSpsPpsContext() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSpsPpsContext() failed (%d)", ret);
             ret = -1;
         }
     }
@@ -229,10 +229,10 @@ static int BEAVER_Filter_sync(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int 
 }
 
 
-static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t *naluType, BEAVER_Filter_H264SliceType_t *sliceType)
+static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize, ARSTREAM2_H264Filter_H264NaluType_t *naluType, ARSTREAM2_H264Filter_H264SliceType_t *sliceType)
 {
     int ret = 0, _ret = 0;
-    BEAVER_Filter_H264SliceType_t _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
+    ARSTREAM2_H264Filter_H264SliceType_t _sliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_NON_VCL;
 
     if ((!naluBuffer) || (naluSize <= 4))
     {
@@ -245,50 +245,50 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
         *((uint32_t*)naluBuffer) = htonl((uint32_t)naluSize - 4);
     }
 
-    ret = BEAVER_Parser_SetupNalu_buffer(filter->parser, naluBuffer + 4, naluSize - 4);
+    ret = ARSTREAM2_H264Parser_SetupNalu_buffer(filter->parser, naluBuffer + 4, naluSize - 4);
     if (ret < 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_SetupNalu_buffer() failed (%d)", ret);
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_SetupNalu_buffer() failed (%d)", ret);
     }
 
     if (ret >= 0)
     {
-        ret = BEAVER_Parser_ParseNalu(filter->parser);
+        ret = ARSTREAM2_H264Parser_ParseNalu(filter->parser);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_ParseNalu() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_ParseNalu() failed (%d)", ret);
         }
     }
 
     if (ret >= 0)
     {
-        BEAVER_Filter_H264NaluType_t _naluType = BEAVER_Parser_GetLastNaluType(filter->parser);
+        ARSTREAM2_H264Filter_H264NaluType_t _naluType = ARSTREAM2_H264Parser_GetLastNaluType(filter->parser);
         if (naluType) *naluType = _naluType;
         switch (_naluType)
         {
-            case BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR:
-                filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_IDR;
-            case BEAVER_FILTER_H264_NALU_TYPE_SLICE:
+            case ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR:
+                filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
+            case ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE:
                 /* Slice */
                 filter->currentAuCurrentSliceFirstMb = -1;
                 if (filter->sync)
                 {
-                    BEAVER_Parser_SliceInfo_t sliceInfo;
+                    ARSTREAM2_H264Parser_SliceInfo_t sliceInfo;
                     memset(&sliceInfo, 0, sizeof(sliceInfo));
-                    _ret = BEAVER_Parser_GetSliceInfo(filter->parser, &sliceInfo);
+                    _ret = ARSTREAM2_H264Parser_GetSliceInfo(filter->parser, &sliceInfo);
                     if (_ret < 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSliceInfo() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSliceInfo() failed (%d)", ret);
                     }
                     else
                     {
                         if (sliceInfo.sliceTypeMod5 == 2)
                         {
-                            _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_I;
+                            _sliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_I;
                         }
                         else if (sliceInfo.sliceTypeMod5 == 0)
                         {
-                            _sliceType = BEAVER_FILTER_H264_SLICE_TYPE_P;
+                            _sliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_P;
                             filter->currentAuSlicesAllI = 0;
                         }
                         if (sliceType) *sliceType = _sliceType;
@@ -296,7 +296,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     }
                 }
                 break;
-            case BEAVER_FILTER_H264_NALU_TYPE_SEI:
+            case ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SEI:
                 /* SEI */
                 if (filter->sync)
                 {
@@ -304,13 +304,13 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
                     BEAVER_Parrot_UserDataSeiTypes_t userDataSeiType;
-                    count = BEAVER_Parser_GetUserDataSeiCount(filter->parser);
+                    count = ARSTREAM2_H264Parser_GetUserDataSeiCount(filter->parser);
                     for (i = 0; i < count; i++)
                     {
-                        _ret = BEAVER_Parser_GetUserDataSei(filter->parser, (unsigned int)i, &pUserDataSei, &userDataSeiSize);
+                        _ret = ARSTREAM2_H264Parser_GetUserDataSei(filter->parser, (unsigned int)i, &pUserDataSei, &userDataSeiSize);
                         if (_ret < 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parser_GetUserDataSei() failed (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetUserDataSei() failed (%d)", ret);
                         }
                         else
                         {
@@ -321,7 +321,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                     _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
                                     if (_ret < 0)
                                     {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingV1() failed (%d)", ret);
                                     }
                                     else
                                     {
@@ -332,7 +332,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                     _ret = BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1(pUserDataSei, userDataSeiSize, &filter->currentAuFrameInfo);
                                     if (_ret < 0)
                                     {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)", ret);
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonFrameInfoV1() failed (%d)", ret);
                                     }
                                     else
                                     {
@@ -344,7 +344,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                                                                                                          &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
                                     if (_ret < 0)
                                     {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "BEAVER_Parrot_DeserializeUserDataSeiDragonStreamingFrameInfoV1() failed (%d)", ret);
                                     }
                                     else
                                     {
@@ -359,14 +359,14 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     }
                 }
                 break;
-            case BEAVER_FILTER_H264_NALU_TYPE_SPS:
+            case ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SPS:
                 /* SPS */
                 if (!filter->spsSync)
                 {
                     filter->pSps = malloc(naluSize);
                     if (!filter->pSps)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Allocation failed for SPS (size %d)", naluSize);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed for SPS (size %d)", naluSize);
                     }
                     else
                     {
@@ -376,14 +376,14 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
                     }
                 }
                 break;
-            case BEAVER_FILTER_H264_NALU_TYPE_PPS:
+            case ARSTREAM2_H264_FILTER_H264_NALU_TYPE_PPS:
                 /* PPS */
                 if (!filter->ppsSync)
                 {
                     filter->pPps = malloc(naluSize);
                     if (!filter->pPps)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Allocation failed for PPS (size %d)", naluSize);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed for PPS (size %d)", naluSize);
                     }
                     else
                     {
@@ -402,10 +402,10 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
 
     if ((filter->running) && (filter->spsSync) && (filter->ppsSync) && (!filter->sync))
     {
-        ret = BEAVER_Filter_sync(filter, naluBuffer, naluSize);
+        ret = ARSTREAM2_H264Filter_sync(filter, naluBuffer, naluSize);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_Sync() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_Sync() failed (%d)", ret);
         }
     }
 
@@ -417,7 +417,7 @@ static int BEAVER_Filter_processNalu(BEAVER_Filter_t *filter, uint8_t *naluBuffe
 }
 
 
-static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
+static int ARSTREAM2_H264Filter_getNewAuBuffer(ARSTREAM2_H264Filter_t *filter)
 {
     int ret = 0;
 
@@ -429,11 +429,11 @@ static int BEAVER_Filter_getNewAuBuffer(BEAVER_Filter_t *filter)
 }
 
 
-static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
+static void ARSTREAM2_H264Filter_resetCurrentAu(ARSTREAM2_H264Filter_t *filter)
 {
     filter->currentAuSize = 0;
     filter->currentAuIncomplete = 0;
-    filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_NONE;
+    filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE;
     filter->currentAuSlicesAllI = 1;
     filter->currentAuSlicesReceived = 0;
     filter->currentAuStreamingInfoAvailable = 0;
@@ -444,13 +444,13 @@ static void BEAVER_Filter_resetCurrentAu(BEAVER_Filter_t *filter)
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
     filter->currentAuFirstNaluInputTime = 0;
-    filter->previousSliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
+    filter->previousSliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_NON_VCL;
 }
 
 
-static void BEAVER_Filter_updateCurrentAu(BEAVER_Filter_t *filter, BEAVER_Filter_H264NaluType_t naluType)
+static void ARSTREAM2_H264Filter_updateCurrentAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264Filter_H264NaluType_t naluType)
 {
-    if ((naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) || (naluType == BEAVER_FILTER_H264_NALU_TYPE_SLICE))
+    if ((naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR) || (naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE))
     {
         filter->currentAuSlicesReceived = 1;
         if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= BEAVER_PARROT_DRAGON_MAX_SLICE_COUNT))
@@ -467,7 +467,7 @@ static void BEAVER_Filter_updateCurrentAu(BEAVER_Filter_t *filter, BEAVER_Filter
                 filter->currentAuPreviousSliceIndex++;
             }
             filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
-            //ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
+            //ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
 /* DEBUG */
             //fprintf(filter->fDebug, "updateCurrentAu: previousSliceIndex: %d - previousSliceFirstMb: %d\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
             //fflush(filter->fDebug);
@@ -477,16 +477,16 @@ static void BEAVER_Filter_updateCurrentAu(BEAVER_Filter_t *filter, BEAVER_Filter
 }
 
 
-static void BEAVER_Filter_addNaluToCurrentAu(BEAVER_Filter_t *filter, BEAVER_Filter_H264NaluType_t naluType, int naluSize)
+static void ARSTREAM2_H264Filter_addNaluToCurrentAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264Filter_H264NaluType_t naluType, int naluSize)
 {
     int filterOut = 0;
 
-    if ((filter->filterOutSpsPps) && ((naluType == BEAVER_FILTER_H264_NALU_TYPE_SPS) || (naluType == BEAVER_FILTER_H264_NALU_TYPE_PPS)))
+    if ((filter->filterOutSpsPps) && ((naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SPS) || (naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_PPS)))
     {
         filterOut = 1;
     }
 
-    if ((filter->filterOutSei) && (naluType == BEAVER_FILTER_H264_NALU_TYPE_SEI))
+    if ((filter->filterOutSei) && (naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SEI))
     {
         filterOut = 1;
     }
@@ -498,27 +498,27 @@ static void BEAVER_Filter_addNaluToCurrentAu(BEAVER_Filter_t *filter, BEAVER_Fil
 }
 
 
-static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
+static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
 {
     int ret = 0;
     int cancelAuOutput = 0;
 
-    if (filter->currentAuSyncType != BEAVER_FILTER_AU_SYNC_TYPE_IDR)
+    if (filter->currentAuSyncType != ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR)
     {
         if (filter->currentAuSlicesAllI)
         {
-            filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_IFRAME;
+            filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME;
         }
         else if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.indexInGop == 0))
         {
-            filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_PIR_START;
+            filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START;
         }
     }
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
     {
         cancelAuOutput = 1;
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (!outputIncompleteAu)"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "AU output cancelled (!outputIncompleteAu)"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "AU output cancelled (!outputIncompleteAu)\n");
         //fflush(filter->fDebug);
@@ -534,7 +534,7 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
             cancelAuOutput = 1;
             if (filter->running)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
 /* DEBUG */
                 //fprintf(filter->fDebug, "AU output cancelled (waitForSync)\n");
                 //fflush(filter->fDebug);
@@ -563,7 +563,7 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
 
         if ((cbRet != 0) || (!auBuffer) || (!auBufferSize))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "getAuBufferCallback failed (returned %d)", cbRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "getAuBufferCallback failed (returned %d)", cbRet);
             filter->callbackInProgress = 0;
             ARSAL_Mutex_Unlock(&(filter->mutex));
             ARSAL_Cond_Signal(&(filter->callbackCond));
@@ -590,7 +590,7 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
 
             if (cbRet != 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
                 if (filter->generateFirstGrayIFrame)
                 {
                     filter->firstGrayIFramePending = 1;
@@ -601,20 +601,20 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
                 ret = 1;
             }
 
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
             if (filter->fMonitorOut)
             {
                 int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1ToFile(&filter->currentAuFrameInfo, filter->fMonitorOut);
                 if (beaverRet != 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to write the frameInfo to the file");
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Failed to write the frameInfo to the file");
                 }
                 fprintf(filter->fMonitorOut, " %llu ", (long long unsigned int)filter->currentAuTimestampShifted);
                 fprintf(filter->fMonitorOut, "%llu ", (long long unsigned int)filter->currentAuFirstNaluInputTime);
                 fprintf(filter->fMonitorOut, "%llu\n", (long long unsigned int)curTime);
             }
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
             if (filter->fStreamOut)
             {
                 fwrite(auBuffer, auSize, 1, filter->fStreamOut);
@@ -627,22 +627,22 @@ static int BEAVER_Filter_enqueueCurrentAu(BEAVER_Filter_t *filter)
 }
 
 
-static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t naluType)
+static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize, ARSTREAM2_H264Filter_H264NaluType_t naluType)
 {
     int ret = 0;
-    BEAVER_H264_SliceContext_t *sliceContextNext = NULL;
-    BEAVER_H264_SliceContext_t sliceContext;
+    ARSTREAM2_H264_SliceContext_t *sliceContextNext = NULL;
+    ARSTREAM2_H264_SliceContext_t sliceContext;
 
-    if ((naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE))
+    if ((naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE))
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Waiting for a slice to generate gray I-frame"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Waiting for a slice to generate gray I-frame"); //TODO: debug
         return -2;
     }
 
-    ret = BEAVER_Parser_GetSliceContext(filter->parser, (void**)&sliceContextNext);
+    ret = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, (void**)&sliceContextNext);
     if (ret < 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSliceContext() failed (%d)", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSliceContext() failed (%d)", ret);
         ret = -1;
     }
     memcpy(&sliceContext, sliceContextNext, sizeof(sliceContext));
@@ -653,18 +653,18 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
 
         mbCount = filter->mbWidth * filter->mbHeight;
         sliceContext.nal_ref_idc = 3;
-        sliceContext.nal_unit_type = BEAVER_H264_NALU_TYPE_SLICE_IDR;
+        sliceContext.nal_unit_type = ARSTREAM2_H264_NALU_TYPE_SLICE_IDR;
         sliceContext.idrPicFlag = 1;
-        sliceContext.slice_type = BEAVER_H264_SLICE_TYPE_I;
+        sliceContext.slice_type = ARSTREAM2_H264_SLICE_TYPE_I;
         sliceContext.frame_num = 0;
         sliceContext.idr_pic_id = 0;
         sliceContext.no_output_of_prior_pics_flag = 0;
         sliceContext.long_term_reference_flag = 0;
 
-        ret = BEAVER_Writer_WriteGrayISliceNalu(filter->writer, 0, mbCount, (void*)&sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
+        ret = ARSTREAM2_H264Writer_WriteGrayISliceNalu(filter->writer, 0, mbCount, (void*)&sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Writer_WriteGrayISliceNalu() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Writer_WriteGrayISliceNalu() failed (%d)", ret);
             ret = -1;
         }
         else
@@ -672,7 +672,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             uint8_t *tmpBuf = NULL;
             int savedAuSize = filter->currentAuSize;
             int savedAuIncomplete = filter->currentAuIncomplete;
-            BEAVER_Filter_AuSyncType_t savedAuSyncType = filter->currentAuSyncType;
+            ARSTREAM2_H264Filter_AuSyncType_t savedAuSyncType = filter->currentAuSyncType;
             int savedAuSlicesAllI = filter->currentAuSlicesAllI;
             int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
             int savedAuFrameInfoAvailable = filter->currentAuFrameInfoAvailable;
@@ -684,7 +684,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             uint64_t savedAuFirstNaluInputTime = filter->currentAuFirstNaluInputTime;
             ret = 0;
 
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
 /* DEBUG */
             //fprintf(filter->fDebug, "Gray I slice NALU output size: %d\n", outputSize);
             //fflush(filter->fDebug);
@@ -705,8 +705,8 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                 }
             }
 
-            BEAVER_Filter_resetCurrentAu(filter);
-            filter->currentAuSyncType = BEAVER_FILTER_AU_SYNC_TYPE_IDR;
+            ARSTREAM2_H264Filter_resetCurrentAu(filter);
+            filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
             filter->currentAuTimestamp -= ((filter->currentAuTimestamp >= 1000) ? 1000 : ((filter->currentAuTimestamp >= 1) ? 1 : 0));
             filter->currentAuTimestampShifted -= ((filter->currentAuTimestampShifted >= 1000) ? 1000 : ((filter->currentAuTimestampShifted >= 1) ? 1 : 0));
             filter->currentAuFirstNaluInputTime -= ((filter->currentAuFirstNaluInputTime >= 1000) ? 1000 : ((filter->currentAuFirstNaluInputTime >= 1) ? 1 : 0));
@@ -723,7 +723,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Access unit buffer is too small for the SPS NALU (size %d, access unit size %s)", filter->spsSize, filter->currentAuSize);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer is too small for the SPS NALU (size %d, access unit size %s)", filter->spsSize, filter->currentAuSize);
                         ret = -1;
                     }
                 }
@@ -736,7 +736,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Access unit buffer is too small for the PPS NALU (size %d, access unit size %s)", filter->ppsSize, filter->currentAuSize);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer is too small for the PPS NALU (size %d, access unit size %s)", filter->ppsSize, filter->currentAuSize);
                         ret = -1;
                     }
                 }
@@ -752,7 +752,7 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Access unit buffer is too small for the I-frame (size %d, access unit size %s)", outputSize, filter->currentAuSize);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer is too small for the I-frame (size %d, access unit size %s)", outputSize, filter->currentAuSize);
                     ret = -1;
                 }
             }
@@ -760,15 +760,15 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
             // Output access unit
             if (ret == 0)
             {
-                ret = BEAVER_Filter_enqueueCurrentAu(filter);
+                ret = ARSTREAM2_H264Filter_enqueueCurrentAu(filter);
 
                 if ((ret > 0) || (filter->auBufferChangePending))
                 {
                     // The access unit has been enqueued or a buffer change is pending
-                    ret = BEAVER_Filter_getNewAuBuffer(filter);
+                    ret = ARSTREAM2_H264Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
-                        BEAVER_Filter_resetCurrentAu(filter);
+                        ARSTREAM2_H264Filter_resetCurrentAu(filter);
 
                         if (tmpBuf)
                         {
@@ -793,14 +793,14 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_getNewAuBuffer() failed (%d)", ret);
                         ret = -1;
                     }
                 }
                 else
                 {
                     // The access unit has not been enqueued: reuse current auBuffer
-                    BEAVER_Filter_resetCurrentAu(filter);
+                    ARSTREAM2_H264Filter_resetCurrentAu(filter);
                     filter->currentAuTimestamp = savedAuTimestamp;
                     filter->currentAuTimestampShifted = savedAuTimestampShifted;
                     filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
@@ -830,13 +830,13 @@ static int BEAVER_Filter_generateGrayIFrame(BEAVER_Filter_t *filter, uint8_t *na
 }
 
 
-static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *naluBuffer, int naluSize, BEAVER_Filter_H264NaluType_t naluType, BEAVER_Filter_H264SliceType_t sliceType, int isFirstNaluInAu)
+static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize, ARSTREAM2_H264Filter_H264NaluType_t naluType, ARSTREAM2_H264Filter_H264SliceType_t sliceType, int isFirstNaluInAu)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
     if (isFirstNaluInAu)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably on previous AU => OK"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably on previous AU => OK"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Missing NALU is probably on previous AU => OK\n");
         //fflush(filter->fDebug);
@@ -848,9 +848,9 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         }
         return 0;
     }
-    else if (((naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != BEAVER_FILTER_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
+    else if (((naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK\n");
         //fflush(filter->fDebug);
@@ -864,7 +864,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     }
     else if (!filter->generateSkippedPSlices)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
         //fflush(filter->fDebug);
@@ -872,7 +872,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         return -2;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
 /* DEBUG */
     //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
     //fflush(filter->fDebug);
@@ -880,7 +880,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
 
     if (!filter->sync)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "No sync, abort"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "No sync, abort"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "No sync, abort\n");
         //fflush(filter->fDebug);
@@ -890,7 +890,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
 
     if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuSlicesReceived))
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Streaming info is not available"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Streaming info is not available\n");
         //fflush(filter->fDebug);
@@ -898,9 +898,9 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         return -2;
     }
 
-    if (sliceType != BEAVER_FILTER_H264_SLICE_TYPE_P)
+    if (sliceType != ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_P)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Current slice is not a P-slice, aborting"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Current slice is not a P-slice, aborting"); //TODO: debug
         return -2;
     }
 
@@ -911,7 +911,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         {
             firstMbInSlice = 0;
             missingMb = filter->currentAuCurrentSliceFirstMb;
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "currentSliceFirstMb: %d - missingMb: %d",
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "currentSliceFirstMb: %d - missingMb: %d",
                         filter->currentAuCurrentSliceFirstMb, missingMb); //TODO: debug
 /* DEBUG */
             //fprintf(filter->fDebug, "currentSliceFirstMb: %d - missingMb: %d\n", filter->currentAuCurrentSliceFirstMb, missingMb);
@@ -920,7 +920,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         }
         else
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!",
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!",
                         filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
 /* DEBUG */
             //fprintf(filter->fDebug, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
@@ -935,7 +935,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
         // Slices have been received before
         firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
         missingMb = filter->currentAuCurrentSliceFirstMb - firstMbInSlice;
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d - firstMbInSlice: %d",
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d - firstMbInSlice: %d",
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb, firstMbInSlice); //TODO: debug
 /* DEBUG */
             /*fprintf(filter->fDebug, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d\n",
@@ -945,7 +945,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     }
     else
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Error: previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - this should not happen!",
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Error: previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - this should not happen!",
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb); //TODO: debug
 /* DEBUG */
             /*fprintf(filter->fDebug, "Error: previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - this should not happen!\n",
@@ -959,24 +959,24 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
     if (missingMb > 0)
     {
         void *sliceContext;
-        ret = BEAVER_Parser_GetSliceContext(filter->parser, &sliceContext);
+        ret = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, &sliceContext);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSliceContext() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSliceContext() failed (%d)", ret);
             ret = -1;
         }
         if (ret == 0)
         {
             unsigned int outputSize;
-            ret = BEAVER_Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
+            ret = ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
             if (ret < 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Writer_WriteSkippedPSliceNalu() failed (%d)", ret);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Writer_WriteSkippedPSliceNalu() failed (%d)", ret);
                 ret = -1;
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
 /* DEBUG */
                 //fprintf(filter->fDebug, "Skipped P slice NALU generated size=%d (firstMb=%d, mbCount=%d)\n", outputSize, firstMbInSlice, missingMb);
                 //fflush(filter->fDebug);
@@ -994,7 +994,7 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Access unit buffer is too small for the generated skipped P slice (size %d, access unit size %s)", outputSize, filter->currentAuSize + naluSize);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer is too small for the generated skipped P slice (size %d, access unit size %s)", outputSize, filter->currentAuSize + naluSize);
                     ret = -1;
                 }
             }
@@ -1005,13 +1005,13 @@ static int BEAVER_Filter_fillMissingSlices(BEAVER_Filter_t *filter, uint8_t *nal
 }
 
 
-static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_Filter_H264SliceType_t sliceType)
+static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264Filter_H264SliceType_t sliceType)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
     if (!filter->generateSkippedPSlices)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
         //fflush(filter->fDebug);
@@ -1019,7 +1019,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
         return -2;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
+    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
 /* DEBUG */
     //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
     //fflush(filter->fDebug);
@@ -1027,7 +1027,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
 
     if (!filter->sync)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "No sync, abort"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "No sync, abort"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "No sync, abort\n");
         //fflush(filter->fDebug);
@@ -1037,7 +1037,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
 
     if (!filter->currentAuStreamingInfoAvailable)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Streaming info is not available"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Streaming info is not available"); //TODO: debug
 /* DEBUG */
         //fprintf(filter->fDebug, "Streaming info is not available\n");
         //fflush(filter->fDebug);
@@ -1053,7 +1053,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
 
         //TODO: slice context
         //UNSUPPORTED
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "No previous slice received"); //TODO: debug
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "No previous slice received"); //TODO: debug
         return -1;
     }
     else
@@ -1061,9 +1061,9 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
         // Slices have been received before
         firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
         missingMb = filter->mbWidth * filter->mbHeight - firstMbInSlice;
-        if (sliceType != BEAVER_FILTER_H264_SLICE_TYPE_P)
+        if (sliceType != ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_P)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Previous slice is not a P-slice, aborting"); //TODO: debug
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Previous slice is not a P-slice, aborting"); //TODO: debug
             return -2;
         }
     }
@@ -1071,24 +1071,24 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
     if (missingMb > 0)
     {
         void *sliceContext;
-        ret = BEAVER_Parser_GetSliceContext(filter->parser, &sliceContext);
+        ret = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, &sliceContext);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_GetSliceContext() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSliceContext() failed (%d)", ret);
             ret = -1;
         }
         if (ret == 0)
         {
             unsigned int outputSize;
-            ret = BEAVER_Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
+            ret = ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext, filter->tempSliceNaluBuffer, filter->tempSliceNaluBufferSize, &outputSize);
             if (ret < 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Writer_WriteSkippedPSliceNalu() failed (%d)", ret);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Writer_WriteSkippedPSliceNalu() failed (%d)", ret);
                 ret = -1;
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
 /* DEBUG */
                 //fprintf(filter->fDebug, "Skipped P slice NALU generated size=%d (firstMb=%d, mbCount=%d)\n", outputSize, firstMbInSlice, missingMb);
                 //fflush(filter->fDebug);
@@ -1105,7 +1105,7 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Access unit buffer is too small for the generated skipped P slice (size %d, access unit size %s)", outputSize, filter->currentAuSize);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer is too small for the generated skipped P slice (size %d, access unit size %s)", outputSize, filter->currentAuSize);
                     ret = -1;
                 }
             }
@@ -1116,13 +1116,13 @@ static int BEAVER_Filter_fillMissingEndOfFrame(BEAVER_Filter_t *filter, BEAVER_F
 }
 
 
-uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
                                           uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
                                           int missingPacketsBefore, int *newNaluBufferSize, void *custom)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)custom;
-    BEAVER_Filter_H264NaluType_t naluType = BEAVER_FILTER_H264_NALU_TYPE_UNKNOWN;
-    BEAVER_Filter_H264SliceType_t sliceType = BEAVER_FILTER_H264_SLICE_TYPE_NON_VCL;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)custom;
+    ARSTREAM2_H264Filter_H264NaluType_t naluType = ARSTREAM2_H264_FILTER_H264_NALU_TYPE_UNKNOWN;
+    ARSTREAM2_H264Filter_H264SliceType_t sliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_NON_VCL;
     int ret = 0;
     uint8_t *retPtr = NULL;
     uint64_t curTime;
@@ -1130,7 +1130,7 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
 
     if (!filter)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid filter instance");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid filter instance");
         return retPtr;
     }
 
@@ -1142,7 +1142,7 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
 
             if ((!naluBuffer) || (naluSize <= 0))
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid NALU buffer");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid NALU buffer");
                 return retPtr;
             }
 
@@ -1157,24 +1157,24 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                 }
 
                 // Fill the missing slices with fake bitstream
-                ret = BEAVER_Filter_fillMissingEndOfFrame(filter, filter->previousSliceType);
+                ret = ARSTREAM2_H264Filter_fillMissingEndOfFrame(filter, filter->previousSliceType);
                 if (ret < 0)
                 {
                     if (ret != -2)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_fillMissingEndOfFrame() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_fillMissingEndOfFrame() failed (%d)", ret);
                     }
                     filter->currentAuIncomplete = 1;
                 }
 
                 // Output the access unit
-                ret = BEAVER_Filter_enqueueCurrentAu(filter);
-                BEAVER_Filter_resetCurrentAu(filter);
+                ret = ARSTREAM2_H264Filter_enqueueCurrentAu(filter);
+                ARSTREAM2_H264Filter_resetCurrentAu(filter);
 
                 if ((ret > 0) || (filter->auBufferChangePending))
                 {
                     // The access unit has been enqueued or a buffer change is pending
-                    ret = BEAVER_Filter_getNewAuBuffer(filter);
+                    ret = ARSTREAM2_H264Filter_getNewAuBuffer(filter);
                     if (ret == 0)
                     {
                         filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1188,13 +1188,13 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Failed to copy the pending NALU to the currentNaluBuffer (size=%d)", naluSize);
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to copy the pending NALU to the currentNaluBuffer (size=%d)", naluSize);
                             }
                         }
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_getNewAuBuffer() failed (%d)", ret);
                         filter->currentNaluBuffer = NULL;
                         filter->currentNaluBufferSize = 0;
                     }
@@ -1214,10 +1214,10 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                 if (tmpBuf) free(tmpBuf);
             }
 
-            ret = BEAVER_Filter_processNalu(filter, naluBuffer, naluSize, &naluType, &sliceType);
+            ret = ARSTREAM2_H264Filter_processNalu(filter, naluBuffer, naluSize, &naluType, &sliceType);
             if (ret < 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "BEAVER_Filter_processNalu() failed (%d)", ret);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_processNalu() failed (%d)", ret);
                 if ((!filter->currentAuBuffer) || (filter->currentAuBufferSize <= 0))
                 {
                     filter->currentNaluBuffer = NULL;
@@ -1225,7 +1225,7 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                 }
             }
 
-            /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Received NALU type=%d sliceType=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)",
+            /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Received NALU type=%d sliceType=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)",
                         naluType, sliceType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);*/ //TODO: debug
 /* DEBUG */
             /*fprintf(filter->fDebug, "Received NALU type=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)\n",
@@ -1249,12 +1249,12 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                 if (filter->firstGrayIFramePending)
                 {
                     // Generate fake bitstream
-                    ret = BEAVER_Filter_generateGrayIFrame(filter, naluBuffer, naluSize, naluType);
+                    ret = ARSTREAM2_H264Filter_generateGrayIFrame(filter, naluBuffer, naluSize, naluType);
                     if (ret < 0)
                     {
                         if (ret != -2)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_generateGrayIFrame() failed (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_generateGrayIFrame() failed (%d)", ret);
                             if ((!filter->currentAuBuffer) || (filter->currentAuBufferSize <= 0))
                             {
                                 filter->currentNaluBuffer = NULL;
@@ -1279,30 +1279,30 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                     if (missingPacketsBefore)
                     {
                         // Fill the missing slices with fake bitstream
-                        ret = BEAVER_Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu);
+                        ret = ARSTREAM2_H264Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu);
                         if (ret < 0)
                         {
                             if (ret != -2)
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_fillMissingSlices() failed (%d)", ret);
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_fillMissingSlices() failed (%d)", ret);
                             }
                             filter->currentAuIncomplete = 1;
                         }
                     }
-                    BEAVER_Filter_updateCurrentAu(filter, naluType);
+                    ARSTREAM2_H264Filter_updateCurrentAu(filter, naluType);
 
-                    BEAVER_Filter_addNaluToCurrentAu(filter, naluType, naluSize);
+                    ARSTREAM2_H264Filter_addNaluToCurrentAu(filter, naluType, naluSize);
 
                     if (isLastNaluInAu)
                     {
                         // Output the access unit
-                        ret = BEAVER_Filter_enqueueCurrentAu(filter);
-                        BEAVER_Filter_resetCurrentAu(filter);
+                        ret = ARSTREAM2_H264Filter_enqueueCurrentAu(filter);
+                        ARSTREAM2_H264Filter_resetCurrentAu(filter);
 
                         if ((ret > 0) || (filter->auBufferChangePending))
                         {
                             // The access unit has been enqueued or a buffer change is pending
-                            ret = BEAVER_Filter_getNewAuBuffer(filter);
+                            ret = ARSTREAM2_H264Filter_getNewAuBuffer(filter);
                             if (ret == 0)
                             {
                                 filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1310,7 +1310,7 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_getNewAuBuffer() failed (%d)", ret);
                                 filter->currentNaluBuffer = NULL;
                                 filter->currentNaluBufferSize = 0;
                             }
@@ -1333,20 +1333,20 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
             }
             break;
         case ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL:
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "ARSTREAM2_RtpReceiver NALU buffer is too small, truncated AU (or maybe it's the first call)");
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_RtpReceiver NALU buffer is too small, truncated AU (or maybe it's the first call)");
 
             ret = 1;
             if ((filter->currentAuBuffer) && (filter->currentAuSize > 0))
             {
                 // Output the access unit
-                ret = BEAVER_Filter_enqueueCurrentAu(filter);
+                ret = ARSTREAM2_H264Filter_enqueueCurrentAu(filter);
             }
-            BEAVER_Filter_resetCurrentAu(filter);
+            ARSTREAM2_H264Filter_resetCurrentAu(filter);
 
             if ((ret > 0) || (filter->auBufferChangePending))
             {
                 // The access unit has been enqueued or no AU was pending or a buffer change is pending
-                ret = BEAVER_Filter_getNewAuBuffer(filter);
+                ret = ARSTREAM2_H264Filter_getNewAuBuffer(filter);
                 if (ret == 0)
                 {
                     filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
@@ -1354,7 +1354,7 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Filter_getNewAuBuffer() failed (%d)", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_getNewAuBuffer() failed (%d)", ret);
                     filter->currentNaluBuffer = NULL;
                     filter->currentNaluBufferSize = 0;
                 }
@@ -1385,9 +1385,9 @@ uint8_t* BEAVER_Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cau
 }
 
 
-int BEAVER_Filter_GetSpsPps(BEAVER_Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
+int ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
     int ret = 0;
 
     if (!filterHandle)
@@ -1436,16 +1436,16 @@ int BEAVER_Filter_GetSpsPps(BEAVER_Filter_Handle filterHandle, uint8_t *spsBuffe
 }
 
 
-void* BEAVER_Filter_RunFilterThread(void *filterHandle)
+void* ARSTREAM2_H264Filter_RunFilterThread(void *filterHandle)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
 
     if (!filter)
     {
         return (void *)0;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter thread is started");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Filter thread is started");
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadStarted = 1;
     ARSAL_Mutex_Unlock(&(filter->mutex));
@@ -1455,17 +1455,17 @@ void* BEAVER_Filter_RunFilterThread(void *filterHandle)
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadStarted = 0;
     ARSAL_Mutex_Unlock(&(filter->mutex));
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter thread has ended");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Filter thread has ended");
 
     return (void *)0;
 }
 
 
-int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                        BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                        BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
+int ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                        ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                        ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
     int ret = 0;
 
     if (!filterHandle)
@@ -1474,12 +1474,12 @@ int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsC
     }
     if (!getAuBufferCallback)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid getAuBufferCallback function pointer");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid getAuBufferCallback function pointer");
         return -1;
     }
     if (!auReadyCallback)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid auReadyCallback function pointer");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid auReadyCallback function pointer");
         return -1;
     }
 
@@ -1491,7 +1491,7 @@ int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsC
     filter->auReadyCallback = auReadyCallback;
     filter->auReadyCallbackUserPtr = auReadyCallbackUserPtr;
     filter->running = 1;
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is running");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Filter is running");
     ARSAL_Mutex_Unlock(&(filter->mutex));
     ARSAL_Cond_Signal(&(filter->startCond));
 
@@ -1499,9 +1499,9 @@ int BEAVER_Filter_Start(BEAVER_Filter_Handle filterHandle, BEAVER_Filter_SpsPpsC
 }
 
 
-int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle)
+int ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
     int ret = 0;
 
     if (!filterHandle)
@@ -1523,16 +1523,16 @@ int BEAVER_Filter_Pause(BEAVER_Filter_Handle filterHandle)
     filter->running = 0;
     filter->sync = 0;
     filter->auBufferChangePending = 1;
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Filter is paused");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Filter is paused");
     ARSAL_Mutex_Unlock(&(filter->mutex));
 
     return ret;
 }
 
 
-int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
+int ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle)
 {
-    BEAVER_Filter_t* filter = (BEAVER_Filter_t*)filterHandle;
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
     int ret = 0;
 
     if (!filterHandle)
@@ -1540,7 +1540,7 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
         return -1;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "Stopping Filter...");
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Stopping Filter...");
     ARSAL_Mutex_Lock(&(filter->mutex));
     filter->threadShouldStop = 1;
     ARSAL_Mutex_Unlock(&(filter->mutex));
@@ -1551,26 +1551,26 @@ int BEAVER_Filter_Stop(BEAVER_Filter_Handle filterHandle)
 }
 
 
-int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_t *config)
+int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREAM2_H264Filter_Config_t *config)
 {
-    BEAVER_Filter_t* filter;
+    ARSTREAM2_H264Filter_t* filter;
     int ret = 0, mutexWasInit = 0, startCondWasInit = 0, callbackCondWasInit = 0;
 
     if (!filterHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid pointer for handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer for handle");
         return -1;
     }
     if (!config)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Invalid pointer for config");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer for config");
         return -1;
     }
 
-    filter = (BEAVER_Filter_t*)malloc(sizeof(*filter));
+    filter = (ARSTREAM2_H264Filter_t*)malloc(sizeof(*filter));
     if (!filter)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Allocation failed (size %ld)", sizeof(*filter));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %ld)", sizeof(*filter));
         ret = -1;
     }
 
@@ -1593,15 +1593,15 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
 
     if (ret == 0)
     {
-        filter->tempAuBuffer = malloc(BEAVER_FILTER_TEMP_AU_BUFFER_SIZE);
+        filter->tempAuBuffer = malloc(ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE);
         if (filter->tempAuBuffer == NULL)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Allocation failed (size %d)", BEAVER_FILTER_TEMP_AU_BUFFER_SIZE);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE);
             ret = -1;
         }
         else
         {
-            filter->tempAuBufferSize = BEAVER_FILTER_TEMP_AU_BUFFER_SIZE;
+            filter->tempAuBufferSize = ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE;
         }
     }
 
@@ -1610,7 +1610,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         int mutexInitRet = ARSAL_Mutex_Init(&(filter->mutex));
         if (mutexInitRet != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Mutex creation failed (%d)", mutexInitRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Mutex creation failed (%d)", mutexInitRet);
             ret = -1;
         }
         else
@@ -1623,7 +1623,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         int condInitRet = ARSAL_Cond_Init(&(filter->startCond));
         if (condInitRet != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Cond creation failed (%d)", condInitRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Cond creation failed (%d)", condInitRet);
             ret = -1;
         }
         else
@@ -1636,7 +1636,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         int condInitRet = ARSAL_Cond_Init(&(filter->callbackCond));
         if (condInitRet != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Cond creation failed (%d)", condInitRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Cond creation failed (%d)", condInitRet);
             ret = -1;
         }
         else
@@ -1647,45 +1647,45 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
 
     if (ret == 0)
     {
-        BEAVER_Parser_Config_t parserConfig;
+        ARSTREAM2_H264Parser_Config_t parserConfig;
         memset(&parserConfig, 0, sizeof(parserConfig));
         parserConfig.extractUserDataSei = 1;
         parserConfig.printLogs = 0;
 
-        ret = BEAVER_Parser_Init(&(filter->parser), &parserConfig);
+        ret = ARSTREAM2_H264Parser_Init(&(filter->parser), &parserConfig);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Parser_Init() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_Init() failed (%d)", ret);
             ret = -1;
         }
     }
 
     if (ret == 0)
     {
-        BEAVER_Writer_Config_t writerConfig;
+        ARSTREAM2_H264Writer_Config_t writerConfig;
         memset(&writerConfig, 0, sizeof(writerConfig));
         writerConfig.naluPrefix = 1;
 
-        ret = BEAVER_Writer_Init(&(filter->writer), &writerConfig);
+        ret = ARSTREAM2_H264Writer_Init(&(filter->writer), &writerConfig);
         if (ret < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "BEAVER_Writer_Init() failed (%d)", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Writer_Init() failed (%d)", ret);
             ret = -1;
         }
     }
 
     if (ret == 0)
     {
-        filter->tempSliceNaluBuffer = malloc(BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE);
+        filter->tempSliceNaluBuffer = malloc(ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE);
         if (!filter->tempSliceNaluBuffer)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Allocation failed (size %d)", BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE);
             ret = -1;
         }
-        filter->tempSliceNaluBufferSize = BEAVER_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE;
+        filter->tempSliceNaluBufferSize = ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE;
     }
 
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
     if (ret == 0)
     {
         int i;
@@ -1695,35 +1695,35 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         if (0)
         {
         }
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
-        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_USB
+        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_USB;
+            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_USB;
         }
 #endif
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
+        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
+            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
         }
 #endif
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
+        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
+            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
         }
 #endif
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
-        else if ((access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_ALLOW_PCLINUX
+        else if ((access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_MONITORING_OUTPUT_PATH_PCLINUX;
+            pszFilePath = ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_PATH_PCLINUX;
         }
 #endif
         if (pszFilePath)
         {
             for (i = 0; i < 1000; i++)
             {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, BEAVER_FILTER_MONITORING_OUTPUT_FILENAME, i);
+                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, ARSTREAM2_H264_FILTER_MONITORING_OUTPUT_FILENAME, i);
                 if (access(szOutputFileName, F_OK) == -1)
                 {
                     // file does not exist
@@ -1738,7 +1738,7 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             filter->fMonitorOut = fopen(szOutputFileName, "w");
             if (!filter->fMonitorOut)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
             }
         }
 
@@ -1747,14 +1747,14 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             int beaverRet = BEAVER_Parrot_WriteDragonFrameInfoV1HeaderToFile(filter->fMonitorOut);
             if (beaverRet != 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Failed to write the frameInfo header to the file");
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Failed to write the frameInfo header to the file");
             }
-            fprintf(filter->fMonitorOut, " acquisitionTsShifted beaverFirstNaluInputTime beaverAuOutputTime\n");
+            fprintf(filter->fMonitorOut, " acquisitionTsShifted filterFirstNaluInputTime filterAuOutputTime\n");
         }
     }
-#endif //#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#endif //#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
 
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
     if (ret == 0)
     {
         int i;
@@ -1764,35 +1764,35 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
         if (0)
         {
         }
-#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
-        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
+        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_USB;
+            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB;
         }
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
+        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL;
+            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL;
         }
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
+        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL;
+            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL;
         }
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
-        else if ((access(BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX, W_OK) == 0))
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
+        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX, W_OK) == 0))
         {
-            pszFilePath = BEAVER_FILTER_STREAM_OUTPUT_PATH_PCLINUX;
+            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX;
         }
 #endif
         if (pszFilePath)
         {
             for (i = 0; i < 1000; i++)
             {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.264", pszFilePath, BEAVER_FILTER_STREAM_OUTPUT_FILENAME, i);
+                snprintf(szOutputFileName, 128, "%s/%s_%03d.264", pszFilePath, ARSTREAM2_H264_FILTER_STREAM_OUTPUT_FILENAME, i);
                 if (access(szOutputFileName, F_OK) == -1)
                 {
                     // file does not exist
@@ -1807,15 +1807,15 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             filter->fStreamOut = fopen(szOutputFileName, "w");
             if (!filter->fStreamOut)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, BEAVER_FILTER_TAG, "Unable to open stream output file '%s'", szOutputFileName);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Unable to open stream output file '%s'", szOutputFileName);
             }
         }
     }
-#endif //#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#endif //#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
 
     if (ret == 0)
     {
-        *filterHandle = (BEAVER_Filter_Handle*)filter;
+        *filterHandle = (ARSTREAM2_H264Filter_Handle*)filter;
     }
     else
     {
@@ -1824,14 +1824,14 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
             if (mutexWasInit) ARSAL_Mutex_Destroy(&(filter->mutex));
             if (startCondWasInit) ARSAL_Cond_Destroy(&(filter->startCond));
             if (callbackCondWasInit) ARSAL_Cond_Destroy(&(filter->callbackCond));
-            if (filter->parser) BEAVER_Parser_Free(filter->parser);
+            if (filter->parser) ARSTREAM2_H264Parser_Free(filter->parser);
             if (filter->tempAuBuffer) free(filter->tempAuBuffer);
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
-            if (filter->writer) BEAVER_Writer_Free(filter->writer);
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+            if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
             if (filter->fMonitorOut) fclose(filter->fMonitorOut);
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
             if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
             free(filter);
@@ -1843,9 +1843,9 @@ int BEAVER_Filter_Init(BEAVER_Filter_Handle *filterHandle, BEAVER_Filter_Config_
 }
 
 
-int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
+int ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle)
 {
-    BEAVER_Filter_t* filter;
+    ARSTREAM2_H264Filter_t* filter;
     int ret = -1, canDelete = 0;
 
     if ((!filterHandle) || (!*filterHandle))
@@ -1853,12 +1853,12 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
         return ret;
     }
 
-    filter = (BEAVER_Filter_t*)*filterHandle;
+    filter = (ARSTREAM2_H264Filter_t*)*filterHandle;
 
     ARSAL_Mutex_Lock(&(filter->mutex));
     if (filter->threadStarted == 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_DEBUG, BEAVER_FILTER_TAG, "All threads are stopped");
+        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "All threads are stopped");
         canDelete = 1;
     }
 
@@ -1867,17 +1867,17 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
         ARSAL_Mutex_Destroy(&(filter->mutex));
         ARSAL_Cond_Destroy(&(filter->startCond));
         ARSAL_Cond_Destroy(&(filter->callbackCond));
-        BEAVER_Parser_Free(filter->parser);
-        BEAVER_Writer_Free(filter->writer);
+        ARSTREAM2_H264Parser_Free(filter->parser);
+        ARSTREAM2_H264Writer_Free(filter->writer);
 
         if (filter->pSps) free(filter->pSps);
         if (filter->pPps) free(filter->pPps);
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
-#ifdef BEAVER_FILTER_MONITORING_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
         if (filter->fMonitorOut) fclose(filter->fMonitorOut);
 #endif
-#ifdef BEAVER_FILTER_STREAM_OUTPUT
+#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
         if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
 
@@ -1892,9 +1892,8 @@ int BEAVER_Filter_Free(BEAVER_Filter_Handle *filterHandle)
     else
     {
         ARSAL_Mutex_Unlock(&(filter->mutex));
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_FILTER_TAG, "Call BEAVER_Filter_Stop before calling this function");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Call ARSTREAM2_H264Filter_Stop before calling this function");
     }
 
     return ret;
 }
-

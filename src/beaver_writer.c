@@ -1,5 +1,5 @@
 /**
- * @file beaver_writer.c
+ * @file arstream2_h264_writer.c
  * @brief Parrot Streaming Library - H.264 Writer
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
@@ -16,9 +16,12 @@
 #include "beaver_h264.h"
 
 
-typedef struct BEAVER_Writer_s
+#define log2(x) (log(x) / log(2)) //TODO
+
+
+typedef struct ARSTREAM2_H264Writer_s
 {
-    BEAVER_Writer_Config_t config;
+    ARSTREAM2_H264Writer_Config_t config;
 
     // NALU buffer
     uint8_t* pNaluBuf;
@@ -31,22 +34,15 @@ typedef struct BEAVER_Writer_s
     int oldZeroCount;
 
     // Context
-    BEAVER_H264_SpsContext_t spsContext;
-    BEAVER_H264_PpsContext_t ppsContext;
+    ARSTREAM2_H264_SpsContext_t spsContext;
+    ARSTREAM2_H264_PpsContext_t ppsContext;
     int isSpsPpsContextValid;
-    BEAVER_H264_SliceContext_t sliceContext;
+    ARSTREAM2_H264_SliceContext_t sliceContext;
 
-} BEAVER_Writer_t;
-
-
-#ifndef BEAVER_VERBOSE
-    #define printf(...) {} //TODO
-    #define fprintf(...) {} //TODO
-    #define log2(x) (log(x) / log(2)) //TODO
-#endif
+} ARSTREAM2_H264Writer_t;
 
 
-static inline int writeBits(BEAVER_Writer_t* _writer, unsigned int _numBits, uint32_t _value, int _emulationPrevention)
+static inline int writeBits(ARSTREAM2_H264Writer_t* _writer, unsigned int _numBits, uint32_t _value, int _emulationPrevention)
 {
     int _cacheBits, _remBits, _i;
     uint8_t _write8;
@@ -123,7 +119,7 @@ static inline int writeBits(BEAVER_Writer_t* _writer, unsigned int _numBits, uin
 }
 
 
-static inline int bitstreamByteAlign(BEAVER_Writer_t* _writer, int _emulationPrevention)
+static inline int bitstreamByteAlign(ARSTREAM2_H264Writer_t* _writer, int _emulationPrevention)
 {
     int _bitsWritten = 0, _i;
     uint8_t _write8;
@@ -188,7 +184,7 @@ static inline int bitstreamByteAlign(BEAVER_Writer_t* _writer, int _emulationPre
 }
 
 
-static inline int writeBits_expGolomb_code(BEAVER_Writer_t* _writer, uint32_t _value, int _emulationPrevention)
+static inline int writeBits_expGolomb_code(ARSTREAM2_H264Writer_t* _writer, uint32_t _value, int _emulationPrevention)
 {
     int _ret, _leadingZeroBits, _halfLength, _bitsWritten = 0;
     uint32_t _val;
@@ -226,7 +222,7 @@ static inline int writeBits_expGolomb_code(BEAVER_Writer_t* _writer, uint32_t _v
 }
 
 
-static inline int writeBits_expGolomb_ue(BEAVER_Writer_t* _writer, uint32_t _value, int _emulationPrevention)
+static inline int writeBits_expGolomb_ue(ARSTREAM2_H264Writer_t* _writer, uint32_t _value, int _emulationPrevention)
 {
     if (_value == 0)
     {
@@ -239,7 +235,7 @@ static inline int writeBits_expGolomb_ue(BEAVER_Writer_t* _writer, uint32_t _val
 }
 
 
-static inline int writeBits_expGolomb_se(BEAVER_Writer_t* _writer, int32_t _value, int _emulationPrevention)
+static inline int writeBits_expGolomb_se(ARSTREAM2_H264Writer_t* _writer, int32_t _value, int _emulationPrevention)
 {
     if (_value == 0)
     {
@@ -256,7 +252,7 @@ static inline int writeBits_expGolomb_se(BEAVER_Writer_t* _writer, int32_t _valu
 }
 
 
-static int BEAVER_Writer_WriteSeiPayload_recoveryPoint(BEAVER_Writer_t* writer, BEAVER_Writer_RecoveryPointSei_t *recoveryPoint)
+static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint)
 {
     int ret = 0;
     int _bitsWritten = 0;
@@ -285,7 +281,7 @@ static int BEAVER_Writer_WriteSeiPayload_recoveryPoint(BEAVER_Writer_t* writer, 
         recoveryFrameCntSize = _halfLength * 2 + 1;
     }
 
-    payloadType = BEAVER_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT;
+    payloadType = ARSTREAM2_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT;
     payloadSizeBits = recoveryFrameCntSize + 1 + 1 + 2;
     payloadSize = (payloadSizeBits + 7) / 8;
 
@@ -370,7 +366,7 @@ static int BEAVER_Writer_WriteSeiPayload_recoveryPoint(BEAVER_Writer_t* writer, 
 }
 
 
-static int BEAVER_Writer_WriteSeiPayload_userDataUnregistered(BEAVER_Writer_t* writer, const uint8_t *pbPayload, unsigned int payloadSize)
+static int ARSTREAM2_H264Writer_WriteSeiPayload_userDataUnregistered(ARSTREAM2_H264Writer_t* writer, const uint8_t *pbPayload, unsigned int payloadSize)
 {
     int ret = 0;
     unsigned int i;
@@ -378,7 +374,7 @@ static int BEAVER_Writer_WriteSeiPayload_userDataUnregistered(BEAVER_Writer_t* w
     unsigned int payloadType;
     unsigned int payloadSize2 = payloadSize;
 
-    payloadType = BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
+    payloadType = ARSTREAM2_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
 
     while (payloadType > 255)
     {
@@ -424,7 +420,6 @@ static int BEAVER_Writer_WriteSeiPayload_userDataUnregistered(BEAVER_Writer_t* w
         ret = writeBits(writer, 8, (uint32_t)(*pbPayload++), 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to write bits\n");
             return ret;
         }
         _bitsWritten += ret;
@@ -441,9 +436,9 @@ static int BEAVER_Writer_WriteSeiPayload_userDataUnregistered(BEAVER_Writer_t* w
 }
 
 
-int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
-    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
     unsigned int i;
 
@@ -464,7 +459,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_
     // NALU start code
     if (writer->config.naluPrefix)
     {
-        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
             return -1;
@@ -475,7 +470,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_
     // forbidden_zero_bit = 0
     // nal_ref_idc = 0
     // nal_unit_type = 6
-    ret = writeBits(writer, 8, BEAVER_H264_NALU_TYPE_SEI, 0);
+    ret = writeBits(writer, 8, ARSTREAM2_H264_NALU_TYPE_SEI, 0);
     if (ret < 0)
     {
         return -1;
@@ -485,7 +480,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_
     if (recoveryPoint)
     {
         // recovery_point
-        ret = BEAVER_Writer_WriteSeiPayload_recoveryPoint(writer, recoveryPoint);
+        ret = ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(writer, recoveryPoint);
         if (ret < 0)
         {
             return -1;
@@ -498,7 +493,7 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_
         if ((pbUserDataUnregistered[i]) && (userDataUnregisteredSize[i] >= 16))
         {
             // user_data_unregistered
-            ret = BEAVER_Writer_WriteSeiPayload_userDataUnregistered(writer, pbUserDataUnregistered[i], userDataUnregisteredSize[i]);
+            ret = ARSTREAM2_H264Writer_WriteSeiPayload_userDataUnregistered(writer, pbUserDataUnregistered[i], userDataUnregisteredSize[i]);
             if (ret < 0)
             {
                 return -1;
@@ -528,12 +523,12 @@ int BEAVER_Writer_WriteSeiNalu(BEAVER_Writer_Handle writerHandle, BEAVER_Writer_
 }
 
 
-static int BEAVER_Writer_WriteRefPicListModification(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+static int ARSTREAM2_H264Writer_WriteRefPicListModification(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264_SliceContext_t *slice, ARSTREAM2_H264_SpsContext_t *sps, ARSTREAM2_H264_PpsContext_t *pps)
 {
     int ret = 0;
     int bitsWritten = 0;
 
-    if ((slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    if ((slice->sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_SI))
     {
         // ref_pic_list_modification_flag_l0
         ret = writeBits(writer, 1, slice->ref_pic_list_modification_flag_l0, 1);
@@ -550,7 +545,7 @@ static int BEAVER_Writer_WriteRefPicListModification(BEAVER_Writer_t* writer, BE
         }
     }
 
-    if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    if (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
     {
         // ref_pic_list_modification_flag_l1
         ret = writeBits(writer, 1, slice->ref_pic_list_modification_flag_l1, 1);
@@ -571,7 +566,7 @@ static int BEAVER_Writer_WriteRefPicListModification(BEAVER_Writer_t* writer, BE
 }
 
 
-static int BEAVER_Writer_WriteDecRefPicMarking(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+static int ARSTREAM2_H264Writer_WriteDecRefPicMarking(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264_SliceContext_t *slice, ARSTREAM2_H264_SpsContext_t *sps, ARSTREAM2_H264_PpsContext_t *pps)
 {
     int ret = 0;
     int bitsWritten = 0;
@@ -615,7 +610,7 @@ static int BEAVER_Writer_WriteDecRefPicMarking(BEAVER_Writer_t* writer, BEAVER_H
 }
 
 
-static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+static int ARSTREAM2_H264Writer_WriteSliceHeader(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264_SliceContext_t *slice, ARSTREAM2_H264_SpsContext_t *sps, ARSTREAM2_H264_PpsContext_t *pps)
 {
     int ret = 0;
     int bitsWritten = 0;
@@ -751,7 +746,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
         bitsWritten += ret;
     }
 
-    if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    if (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
     {
         // direct_spatial_mv_pred_flag
         ret = writeBits(writer, 1, slice->direct_spatial_mv_pred_flag, 1);
@@ -762,7 +757,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
         bitsWritten += ret;
     }
 
-    if ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B))
+    if ((slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B))
     {
         // num_ref_idx_active_override_flag
         ret = writeBits(writer, 1, slice->num_ref_idx_active_override_flag, 1);
@@ -782,7 +777,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
             }
             bitsWritten += ret;
 
-            if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+            if (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
             {
                 // num_ref_idx_l1_active_minus1
                 ret = writeBits_expGolomb_ue(writer, slice->num_ref_idx_l1_active_minus1, 1);
@@ -804,7 +799,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
     else
     {
         // ref_pic_list_modification()
-        ret = BEAVER_Writer_WriteRefPicListModification(writer, slice, sps, pps);
+        ret = ARSTREAM2_H264Writer_WriteRefPicListModification(writer, slice, sps, pps);
         if (ret < 0)
         {
             return -1;
@@ -812,8 +807,8 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
         bitsWritten += ret;
     }
 
-    if ((pps->weighted_pred_flag && ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP))) 
-            || ((pps->weighted_bipred_idc == 1) && (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)))
+    if ((pps->weighted_pred_flag && ((slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_P) || (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP))) 
+            || ((pps->weighted_bipred_idc == 1) && (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)))
     {
         // pred_weight_table()
         // UNSUPPORTED
@@ -823,7 +818,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
     if (slice->nal_ref_idc != 0)
     {
         // dec_ref_pic_marking()
-        ret = BEAVER_Writer_WriteDecRefPicMarking(writer, slice, sps, pps);
+        ret = ARSTREAM2_H264Writer_WriteDecRefPicMarking(writer, slice, sps, pps);
         if (ret < 0)
         {
             return -1;
@@ -831,7 +826,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
         bitsWritten += ret;
     }
 
-    if ((pps->entropy_coding_mode_flag) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    if ((pps->entropy_coding_mode_flag) && (slice->sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_I) && (slice->sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_SI))
     {
         // cabac_init_idc
         ret = writeBits_expGolomb_ue(writer, slice->cabac_init_idc, 1);
@@ -850,9 +845,9 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
     }
     bitsWritten += ret;
 
-    if ((slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SI))
+    if ((slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SI))
     {
-        if (slice->sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP)
+        if (slice->sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP)
         {
             // sp_for_switch_flag
             ret = writeBits(writer, 1, slice->sp_for_switch_flag, 1);
@@ -922,7 +917,7 @@ static int BEAVER_Writer_WriteSliceHeader(BEAVER_Writer_t* writer, BEAVER_H264_S
 }
 
 
-static int BEAVER_Writer_WriteSkippedPSliceData(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+static int ARSTREAM2_H264Writer_WriteSkippedPSliceData(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264_SliceContext_t *slice, ARSTREAM2_H264_SpsContext_t *sps, ARSTREAM2_H264_PpsContext_t *pps)
 {
     int ret = 0;
     int bitsWritten = 0;
@@ -946,7 +941,7 @@ static int BEAVER_Writer_WriteSkippedPSliceData(BEAVER_Writer_t* writer, BEAVER_
 }
 
 
-static int BEAVER_Writer_WriteGrayISliceData(BEAVER_Writer_t* writer, BEAVER_H264_SliceContext_t *slice, BEAVER_H264_SpsContext_t *sps, BEAVER_H264_PpsContext_t *pps)
+static int ARSTREAM2_H264Writer_WriteGrayISliceData(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264_SliceContext_t *slice, ARSTREAM2_H264_SpsContext_t *sps, ARSTREAM2_H264_PpsContext_t *pps)
 {
     int ret = 0;
     int bitsWritten = 0;
@@ -1000,9 +995,9 @@ static int BEAVER_Writer_WriteGrayISliceData(BEAVER_Writer_t* writer, BEAVER_H26
 }
 
 
-int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
-    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
 
     if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
@@ -1018,10 +1013,10 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
     // Slice context
     if (sliceContext)
     {
-        memcpy(&writer->sliceContext, sliceContext, sizeof(BEAVER_H264_SliceContext_t));
+        memcpy(&writer->sliceContext, sliceContext, sizeof(ARSTREAM2_H264_SliceContext_t));
         writer->sliceContext.first_mb_in_slice = firstMbInSlice;
         writer->sliceContext.sliceMbCount = sliceMbCount;
-        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? BEAVER_H264_SLICE_TYPE_P_ALL : BEAVER_H264_SLICE_TYPE_P;
+        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? ARSTREAM2_H264_SLICE_TYPE_P_ALL : ARSTREAM2_H264_SLICE_TYPE_P;
         writer->sliceContext.sliceTypeMod5 = writer->sliceContext.slice_type % 5;
         writer->sliceContext.redundant_pic_cnt = 0;
         writer->sliceContext.direct_spatial_mv_pred_flag = 0;
@@ -1048,7 +1043,7 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
     // NALU start code
     if (writer->config.naluPrefix)
     {
-        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
             return -1;
@@ -1067,7 +1062,7 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
     bitsWritten += ret;
 
     // slice_header
-    ret = BEAVER_Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    ret = ARSTREAM2_H264Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
         return -1;
@@ -1075,7 +1070,7 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
     bitsWritten += ret;
 
     // slice_data
-    ret = BEAVER_Writer_WriteSkippedPSliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    ret = ARSTREAM2_H264Writer_WriteSkippedPSliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
         return -1;
@@ -1107,9 +1102,9 @@ int BEAVER_Writer_WriteSkippedPSliceNalu(BEAVER_Writer_Handle writerHandle, unsi
 }
 
 
-int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
-    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
 
     if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
@@ -1125,10 +1120,10 @@ int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigne
     // Slice context
     if (sliceContext)
     {
-        memcpy(&writer->sliceContext, sliceContext, sizeof(BEAVER_H264_SliceContext_t));
+        memcpy(&writer->sliceContext, sliceContext, sizeof(ARSTREAM2_H264_SliceContext_t));
         writer->sliceContext.first_mb_in_slice = firstMbInSlice;
         writer->sliceContext.sliceMbCount = sliceMbCount;
-        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? BEAVER_H264_SLICE_TYPE_I_ALL : BEAVER_H264_SLICE_TYPE_I;
+        writer->sliceContext.slice_type = (writer->sliceContext.slice_type >= 5) ? ARSTREAM2_H264_SLICE_TYPE_I_ALL : ARSTREAM2_H264_SLICE_TYPE_I;
         writer->sliceContext.sliceTypeMod5 = writer->sliceContext.slice_type % 5;
         writer->sliceContext.redundant_pic_cnt = 0;
         writer->sliceContext.direct_spatial_mv_pred_flag = 0;
@@ -1155,7 +1150,7 @@ int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigne
     // NALU start code
     if (writer->config.naluPrefix)
     {
-        ret = writeBits(writer, 32, BEAVER_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
             return -1;
@@ -1174,7 +1169,7 @@ int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigne
     bitsWritten += ret;
 
     // slice_header
-    ret = BEAVER_Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    ret = ARSTREAM2_H264Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
         return -1;
@@ -1182,7 +1177,7 @@ int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigne
     bitsWritten += ret;
 
     // slice_data
-    ret = BEAVER_Writer_WriteGrayISliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    ret = ARSTREAM2_H264Writer_WriteGrayISliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
         return -1;
@@ -1214,37 +1209,35 @@ int BEAVER_Writer_WriteGrayISliceNalu(BEAVER_Writer_Handle writerHandle, unsigne
 }
 
 
-int BEAVER_Writer_SetSpsPpsContext(BEAVER_Writer_Handle writerHandle, const void *spsContext, const void *ppsContext)
+int ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHandle, const void *spsContext, const void *ppsContext)
 {
-    BEAVER_Writer_t *writer = (BEAVER_Writer_t*)writerHandle;
+    ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
 
     if ((!writerHandle) || (!spsContext) || (!ppsContext))
     {
         return -1;
     }
 
-    memcpy(&writer->spsContext, spsContext, sizeof(BEAVER_H264_SpsContext_t));
-    memcpy(&writer->ppsContext, ppsContext, sizeof(BEAVER_H264_PpsContext_t));
+    memcpy(&writer->spsContext, spsContext, sizeof(ARSTREAM2_H264_SpsContext_t));
+    memcpy(&writer->ppsContext, ppsContext, sizeof(ARSTREAM2_H264_PpsContext_t));
     writer->isSpsPpsContextValid = 1;
 
     return 0;
 }
 
 
-int BEAVER_Writer_Init(BEAVER_Writer_Handle* writerHandle, BEAVER_Writer_Config_t* config)
+int ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREAM2_H264Writer_Config_t* config)
 {
-    BEAVER_Writer_t* writer;
+    ARSTREAM2_H264Writer_t* writer;
 
     if (!writerHandle)
     {
-        fprintf(stderr, "Error: invalid pointer for handle\n");
         return -1;
     }
 
-    writer = (BEAVER_Writer_t*)malloc(sizeof(*writer));
+    writer = (ARSTREAM2_H264Writer_t*)malloc(sizeof(*writer));
     if (!writer)
     {
-        fprintf(stderr, "Error: allocation failed (size %ld)\n", sizeof(*writer));
         return -1;
     }
     memset(writer, 0, sizeof(*writer));
@@ -1254,15 +1247,15 @@ int BEAVER_Writer_Init(BEAVER_Writer_Handle* writerHandle, BEAVER_Writer_Config_
         memcpy(&writer->config, config, sizeof(writer->config));
     }
 
-    *writerHandle = (BEAVER_Writer_Handle*)writer;
+    *writerHandle = (ARSTREAM2_H264Writer_Handle*)writer;
 
     return 0;
 }
 
 
-int BEAVER_Writer_Free(BEAVER_Writer_Handle writerHandle)
+int ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle)
 {
-    BEAVER_Writer_t* writer = (BEAVER_Writer_t*)writerHandle;
+    ARSTREAM2_H264Writer_t* writer = (ARSTREAM2_H264Writer_t*)writerHandle;
 
     if (!writerHandle)
     {

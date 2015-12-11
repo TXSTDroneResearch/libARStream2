@@ -1,12 +1,12 @@
 /**
- * @file beaver_readerfilter.h
- * @brief Parrot Streaming Library - RTP Receiver and H.264 Filter
+ * @file arstream2_stream_receiver.h
+ * @brief Parrot Streaming Library - Stream Receiver
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
 
-#ifndef _BEAVER_READERFILTER_H_
-#define _BEAVER_READERFILTER_H_
+#ifndef _ARSTREAM2_STREAM_RECEIVER_H_
+#define _ARSTREAM2_STREAM_RECEIVER_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,46 +21,46 @@ extern "C" {
 /**
  * @brief Default client-side stream port
  */
-#define BEAVER_READERFILTER_DEFAULT_CLIENT_STREAM_PORT      BEAVER_READER_DEFAULT_CLIENT_STREAM_PORT
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT      ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_STREAM_PORT
 
 /**
  * @brief Default client-side control port
  */
-#define BEAVER_READERFILTER_DEFAULT_CLIENT_CONTROL_PORT     BEAVER_READER_DEFAULT_CLIENT_CONTROL_PORT
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT     ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT
 
 /**
  * @brief Default server-side resender stream port
  */
-#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_STREAM_PORT      BEAVER_SENDER_DEFAULT_SERVER_STREAM_PORT
+#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_STREAM_PORT      ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_STREAM_PORT
 
 /**
  * @brief Default server-side resender control port
  */
-#define BEAVER_READERFILTER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     BEAVER_SENDER_DEFAULT_SERVER_CONTROL_PORT
+#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT
 
 
 /**
- * @brief Beaver ReaderFilter instance handle.
+ * @brief ARSTREAM2 StreamReceiver instance handle.
  */
-typedef void* BEAVER_ReaderFilter_Handle;
+typedef void* ARSTREAM2_StreamReceiver_Handle;
 
 
 /**
- * @brief Beaver ReaderFilter resender handle.
+ * @brief ARSTREAM2 StreamReceiver resender handle.
  */
-typedef void* BEAVER_ReaderFilter_ResenderHandle;
+typedef void* ARSTREAM2_StreamReceiver_ResenderHandle;
 
 
 /**
- * @brief Beaver ReaderFilter configuration for initialization.
+ * @brief ARSTREAM2 StreamReceiver configuration for initialization.
  */
 typedef struct
 {
     const char *serverAddr;                                         /**< Server address */
     const char *mcastAddr;                                          /**< Multicast receive address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                                     /**< Multicast input interface address (required if mcastAddr is not NULL) */
-    int serverStreamPort;                                           /**< Server stream port, @see BEAVER_READERFILTER_DEFAULT_CLIENT_STREAM_PORT */
-    int serverControlPort;                                          /**< Server control port, @see BEAVER_READERFILTER_DEFAULT_CLIENT_CONTROL_PORT */
+    int serverStreamPort;                                           /**< Server stream port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT */
+    int serverControlPort;                                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
     int clientStreamPort;                                           /**< Client stream port */
     int clientControlPort;                                          /**< Client control port */
     int maxPacketSize;                                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
@@ -75,19 +75,19 @@ typedef struct
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
-} BEAVER_ReaderFilter_Config_t;
+} ARSTREAM2_StreamReceiver_Config_t;
 
 
 /**
- * @brief Beaver ReaderFilter resender configuration parameters.
+ * @brief ARSTREAM2 StreamReceiver resender configuration parameters.
  */
-typedef struct BEAVER_ReaderFilter_ResenderConfig_t
+typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
 {
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
-    int serverStreamPort;                           /**< Server stream port, @see BEAVER_SENDER_DEFAULT_SERVER_STREAM_PORT */
-    int serverControlPort;                          /**< Server control port, @see BEAVER_SENDER_DEFAULT_SERVER_CONTROL_PORT */
+    int serverStreamPort;                           /**< Server stream port, @see ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_STREAM_PORT */
+    int serverControlPort;                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
@@ -95,82 +95,82 @@ typedef struct BEAVER_ReaderFilter_ResenderConfig_t
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
 
-} BEAVER_ReaderFilter_ResenderConfig_t;
+} ARSTREAM2_StreamReceiver_ResenderConfig_t;
 
 
 /**
- * @brief Initialize a Beaver ReaderFilter instance.
+ * @brief Initialize a StreamReceiver instance.
  *
- * The library allocates the required resources. The user must call BEAVER_ReaderFilter_Free() to free the resources.
+ * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_Free() to free the resources.
  *
- * @param readerFilterHandle Pointer to the handle used in future calls to the library.
+ * @param streamReceiverHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEAVER_ReaderFilter_Config_t *config);
+int ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config);
 
 
 /**
- * @brief Free a Beaver ReaderFilter instance.
+ * @brief Free a StreamReceiver instance.
  *
- * The library frees the allocated resources. On success the readerFilterHandle is set to NULL.
+ * The library frees the allocated resources. On success the streamReceiverHandle is set to NULL.
  *
- * @param readerFilterHandle Pointer to the instance handle.
+ * @param streamReceiverHandle Pointer to the instance handle.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle);
+int ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle);
 
 
 /**
- * @brief Run a Beaver ReaderFilter filter thread.
+ * @brief Run a StreamReceiver filter thread.
  *
- * The instance must be correctly allocated using BEAVER_ReaderFilter_Init().
- * @warning This function never returns until BEAVER_ReaderFilter_Stop() is called. The tread can then be joined.
+ * The instance must be correctly allocated using ARSTREAM2_StreamReceiver_Init().
+ * @warning This function never returns until ARSTREAM2_StreamReceiver_Stop() is called. The tread can then be joined.
  *
- * @param readerFilterHandle Instance handle casted as (void*).
+ * @param streamReceiverHandle Instance handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_ReaderFilter_RunFilterThread(void *readerFilterHandle);
+void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle);
 
 
 /**
- * @brief Run a Beaver ReaderFilter stream thread.
+ * @brief Run a StreamReceiver stream thread.
  *
- * The instance must be correctly allocated using BEAVER_ReaderFilter_Init().
- * @warning This function never returns until BEAVER_ReaderFilter_Stop() is called. The tread can then be joined.
+ * The instance must be correctly allocated using ARSTREAM2_StreamReceiver_Init().
+ * @warning This function never returns until ARSTREAM2_StreamReceiver_Stop() is called. The tread can then be joined.
  *
- * @param readerFilterHandle Instance handle casted as (void*).
+ * @param streamReceiverHandle Instance handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_ReaderFilter_RunStreamThread(void *readerFilterHandle);
+void* ARSTREAM2_StreamReceiver_RunStreamThread(void *streamReceiverHandle);
 
 
 /**
- * @brief Run a Beaver ReaderFilter control thread.
+ * @brief Run a StreamReceiver control thread.
  *
- * The instance must be correctly allocated using BEAVER_ReaderFilter_Init().
- * @warning This function never returns until BEAVER_ReaderFilter_Stop() is called. The tread can then be joined.
+ * The instance must be correctly allocated using ARSTREAM2_StreamReceiver_Init().
+ * @warning This function never returns until ARSTREAM2_StreamReceiver_Stop() is called. The tread can then be joined.
  *
- * @param readerFilterHandle Instance handle casted as (void*).
+ * @param streamReceiverHandle Instance handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle);
+void* ARSTREAM2_StreamReceiver_RunControlThread(void *streamReceiverHandle);
 
 
 /**
  * @brief Start the filter.
  *
- * The function starts processing the BEAVER_Reader input.
- * The processing can be stopped using BEAVER_ReaderFilter_PauseFilter().
+ * The function starts processing the RTP input.
+ * The processing can be stopped using ARSTREAM2_StreamReceiver_PauseFilter().
  *
- * @param readerFilterHandle Instance handle.
+ * @param streamReceiverHandle Instance handle.
  * @param spsPpsCallback SPS/PPS callback function.
  * @param spsPpsCallbackUserPtr SPS/PPS callback user pointer.
  * @param getAuBufferCallback Get access unit buffer callback function.
@@ -181,37 +181,37 @@ void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                                    BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                                    BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
+int ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
 
 
 /**
  * @brief Pause the filter.
  *
- * The function stops processing the BEAVER_Reader input.
- * The callback functions provided to BEAVER_ReaderFilter_StartFilter() will not be called any more.
- * The filter can be started again by a new call to BEAVER_ReaderFilter_StartFilter().
+ * The function stops processing the RTP input.
+ * The callback functions provided to ARSTREAM2_StreamReceiver_StartFilter() will not be called any more.
+ * The filter can be started again by a new call to ARSTREAM2_StreamReceiver_StartFilter().
  *
- * @param readerFilterHandle Instance handle.
+ * @param streamReceiverHandle Instance handle.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandle);
+int ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
 
 
 /**
- * @brief Stop a Beaver ReaderFilter instance.
+ * @brief Stop a StreamReceiver instance.
  *
  * The function ends the threads before they can be joined.
  *
- * @param readerFilterHandle Instance handle.
+ * @param streamReceiverHandle Instance handle.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle);
+int ARSTREAM2_StreamReceiver_Stop(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
 
 
 /**
@@ -221,7 +221,7 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle);
  * by a first call to the function with both buffer pointers null.
  * When the buffer pointers are not null the size pointers must point to the values of the user-allocated buffer sizes.
  *
- * @param readerFilterHandle Instance handle.
+ * @param streamReceiverHandle Instance handle.
  * @param spsBuffer SPS buffer pointer.
  * @param spsSize pointer to the SPS size.
  * @param ppsBuffer PPS buffer pointer.
@@ -231,25 +231,25 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle);
  * @return -1 if an error occurred.
  * @return -2 if SPS/PPS are not available (no sync).
  */
-int BEAVER_ReaderFilter_GetSpsPps(BEAVER_ReaderFilter_Handle readerFilterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+int ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
 
 
 /**
  * @brief Initialize a new resender.
  *
- * The library allocates the required resources. The user must call BEAVER_ReaderFilter_Free() or BEAVER_ReaderFilter_FreeResender() to free the resources.
+ * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_Free() or ARSTREAM2_StreamReceiver_FreeResender() to free the resources.
  *
- * @param readerFilterHandle ReaderFilter instance handle.
+ * @param streamReceiverHandle StreamReceiver instance handle.
  * @param resenderHandle Pointer to the resender handle used in future calls to the library.
  * @param config The resender configuration.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  *
- * @see BEAVER_ReaderFilter_StopResender()
- * @see BEAVER_ReaderFilter_FreeResender()
+ * @see ARSTREAM2_StreamReceiver_StopResender()
+ * @see ARSTREAM2_StreamReceiver_FreeResender()
  */
-int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_ReaderFilter_ResenderHandle *resenderHandle, BEAVER_ReaderFilter_ResenderConfig_t *config);
+int ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
 
 
 /**
@@ -262,40 +262,40 @@ int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHand
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resenderHandle);
+int ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle);
 
 
 /**
  * @brief Run a resender stream thread.
  *
- * The resender must be correctly allocated using BEAVER_ReaderFilter_InitResender().
- * @warning This function never returns until BEAVER_ReaderFilter_StopResender() is called. The tread can then be joined.
+ * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
+ * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
  *
  * @param resenderHandle Resender handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_ReaderFilter_RunResenderStreamThread(void *resenderHandle);
+void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle);
 
 
 /**
  * @brief Run a resender control thread.
  *
- * The resender must be correctly allocated using BEAVER_ReaderFilter_InitResender().
- * @warning This function never returns until BEAVER_ReaderFilter_StopResender() is called. The tread can then be joined.
+ * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
+ * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
  *
  * @param resenderHandle Resender handle casted as (void*).
  *
  * @return NULL in all cases.
  */
-void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle);
+void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
 
 
 /**
- * @brief Stops a running Reader Resender
- * @warning Once stopped, a Reader Resender cannot be restarted
+ * @brief Stops a running resender
+ * @warning Once stopped, a resender cannot be restarted
  *
- * @param[in] resender The Reader Resender instance
+ * @param[in] resender The resender instance
  *
  * @note Calling this function multiple times has no effect
  */
@@ -310,12 +310,11 @@ void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int BEAVER_ReaderFilter_StopResender(BEAVER_ReaderFilter_ResenderHandle resenderHandle);
+int ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
 
 
 #ifdef __cplusplus
 }
 #endif /* #ifdef __cplusplus */
 
-#endif /* #ifndef _BEAVER_READERFILTER_H_ */
-
+#endif /* #ifndef _ARSTREAM2_STREAM_RECEIVER_H_ */

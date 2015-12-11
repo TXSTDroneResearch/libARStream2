@@ -1,6 +1,6 @@
 /**
- * @file beaver_readerfilter.c
- * @brief Parrot Streaming Library - RTP Receiver and H.264 Filter
+ * @file arstream2_stream_receiver.c
+ * @brief Parrot Streaming Library - Strea Receiver
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
@@ -13,47 +13,47 @@
 #include <libBeaver/beaver_readerfilter.h>
 
 
-#define BEAVER_READERFILTER_TAG "BEAVER_ReaderFilter"
+#define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
 
 
-typedef struct BEAVER_ReaderFilter_s
+typedef struct ARSTREAM2_StreamReceiver_s
 {
-    BEAVER_Filter_Handle filter;
+    ARSTREAM2_H264Filter_Handle filter;
     ARSTREAM2_RtpReceiver_t *receiver;
 
-} BEAVER_ReaderFilter_t;
+} ARSTREAM2_StreamReceiver_t;
 
 
 
-int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEAVER_ReaderFilter_Config_t *config)
+int ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config)
 {
     int ret = 0;
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
-    BEAVER_ReaderFilter_t *readerFilter = NULL;
+    ARSTREAM2_StreamReceiver_t *streamReceiver = NULL;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for handle");
         return -1;
     }
     if (!config)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for config");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for config");
         return -1;
     }
 
-    readerFilter = (BEAVER_ReaderFilter_t*)malloc(sizeof(*readerFilter));
-    if (!readerFilter)
+    streamReceiver = (ARSTREAM2_StreamReceiver_t*)malloc(sizeof(*streamReceiver));
+    if (!streamReceiver)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Allocation failed (size %ld)", sizeof(*readerFilter));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", sizeof(*streamReceiver));
         ret = -1;
     }
 
     if (ret == 0)
     {
-        memset(readerFilter, 0, sizeof(*readerFilter));
+        memset(streamReceiver, 0, sizeof(*streamReceiver));
 
-        BEAVER_Filter_Config_t filterConfig;
+        ARSTREAM2_H264Filter_Config_t filterConfig;
         memset(&filterConfig, 0, sizeof(filterConfig));
         filterConfig.waitForSync = config->waitForSync;
         filterConfig.outputIncompleteAu = config->outputIncompleteAu;
@@ -63,10 +63,10 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
         filterConfig.generateSkippedPSlices = config->generateSkippedPSlices;
         filterConfig.generateFirstGrayIFrame = config->generateFirstGrayIFrame;
 
-        ret = BEAVER_Filter_Init(&readerFilter->filter, &filterConfig);
+        ret = ARSTREAM2_H264Filter_Init(&streamReceiver->filter, &filterConfig);
         if (ret != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating beaver_filter: %d", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating H264Filter: %d", ret);
             ret = -1;
         }
     }
@@ -83,68 +83,68 @@ int BEAVER_ReaderFilter_Init(BEAVER_ReaderFilter_Handle *readerFilterHandle, BEA
         receiverConfig.serverControlPort = config->serverControlPort;
         receiverConfig.clientStreamPort = config->clientStreamPort;
         receiverConfig.clientControlPort = config->clientControlPort;
-        receiverConfig.naluCallback = BEAVER_Filter_RtpReceiverNaluCallback;
-        receiverConfig.naluCallbackUserPtr = (void*)readerFilter->filter;
+        receiverConfig.naluCallback = ARSTREAM2_H264Filter_RtpReceiverNaluCallback;
+        receiverConfig.naluCallbackUserPtr = (void*)streamReceiver->filter;
         receiverConfig.maxPacketSize = config->maxPacketSize;
         receiverConfig.maxBitrate = config->maxBitrate;
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
         receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
         receiverConfig.insertStartCodes = 1;
 
-        readerFilter->receiver = ARSTREAM2_RtpReceiver_New(&receiverConfig, &err);
+        streamReceiver->receiver = ARSTREAM2_RtpReceiver_New(&receiverConfig, &err);
         if (err != ARSTREAM2_OK)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating receiver : %s", ARSTREAM2_Error_ToString(err));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating receiver : %s", ARSTREAM2_Error_ToString(err));
             ret = -1;
         }
     }
 
     if (ret == 0)
     {
-        *readerFilterHandle = (BEAVER_ReaderFilter_Handle*)readerFilter;
+        *streamReceiverHandle = (ARSTREAM2_StreamReceiver_Handle*)streamReceiver;
     }
     else
     {
-        if (readerFilter)
+        if (streamReceiver)
         {
-            if (readerFilter->receiver) ARSTREAM2_RtpReceiver_Delete(&(readerFilter->receiver));
-            if (readerFilter->filter) BEAVER_Filter_Free(&(readerFilter->filter));
-            free(readerFilter);
+            if (streamReceiver->receiver) ARSTREAM2_RtpReceiver_Delete(&(streamReceiver->receiver));
+            if (streamReceiver->filter) ARSTREAM2_H264Filter_Free(&(streamReceiver->filter));
+            free(streamReceiver);
         }
-        *readerFilterHandle = NULL;
+        *streamReceiverHandle = NULL;
     }
 
     return ret;
 }
 
 
-int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle)
+int ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter;
+    ARSTREAM2_StreamReceiver_t* streamReceiver;
     int ret = 0;
     eARSTREAM2_ERROR err;
 
-    if ((!readerFilterHandle) || (!*readerFilterHandle))
+    if ((!streamReceiverHandle) || (!*streamReceiverHandle))
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for handle");
         return -1;
     }
 
-    readerFilter = (BEAVER_ReaderFilter_t*)*readerFilterHandle;
+    streamReceiver = (ARSTREAM2_StreamReceiver_t*)*streamReceiverHandle;
 
-    err = ARSTREAM2_RtpReceiver_Delete(&readerFilter->receiver);
+    err = ARSTREAM2_RtpReceiver_Delete(&streamReceiver->receiver);
     if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to delete receiver: %s", ARSTREAM2_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete receiver: %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
 
     if (ret == 0)
     {
-        ret = BEAVER_Filter_Free(&readerFilter->filter);
+        ret = ARSTREAM2_H264Filter_Free(&streamReceiver->filter);
         if (ret != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to delete beaver_filter: %d", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete H264Filter: %d", ret);
             ret = -1;
         }
     }
@@ -153,67 +153,67 @@ int BEAVER_ReaderFilter_Free(BEAVER_ReaderFilter_Handle *readerFilterHandle)
 }
 
 
-void* BEAVER_ReaderFilter_RunFilterThread(void *readerFilterHandle)
+void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return NULL;
     }
 
-    return BEAVER_Filter_RunFilterThread((void*)readerFilter->filter);
+    return ARSTREAM2_H264Filter_RunFilterThread((void*)streamReceiver->filter);
 }
 
 
-void* BEAVER_ReaderFilter_RunStreamThread(void *readerFilterHandle)
+void* ARSTREAM2_StreamReceiver_RunStreamThread(void *streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return NULL;
     }
 
-    return ARSTREAM2_RtpReceiver_RunStreamThread((void*)readerFilter->receiver);
+    return ARSTREAM2_RtpReceiver_RunStreamThread((void*)streamReceiver->receiver);
 }
 
 
-void* BEAVER_ReaderFilter_RunControlThread(void *readerFilterHandle)
+void* ARSTREAM2_StreamReceiver_RunControlThread(void *streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return NULL;
     }
 
-    return ARSTREAM2_RtpReceiver_RunControlThread((void*)readerFilter->receiver);
+    return ARSTREAM2_RtpReceiver_RunControlThread((void*)streamReceiver->receiver);
 }
 
 
-int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                                    BEAVER_Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                                    BEAVER_Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
+int ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     int ret = 0;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return -1;
     }
 
-    ret = BEAVER_Filter_Start(readerFilter->filter, spsPpsCallback, spsPpsCallbackUserPtr,
+    ret = ARSTREAM2_H264Filter_Start(streamReceiver->filter, spsPpsCallback, spsPpsCallbackUserPtr,
                               getAuBufferCallback, getAuBufferCallbackUserPtr,
                               auReadyCallback, auReadyCallbackUserPtr);
     if (ret != 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to pause beaver_filter: %d", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to pause H264Filter: %d", ret);
         return ret;
     }
 
@@ -221,47 +221,47 @@ int BEAVER_ReaderFilter_StartFilter(BEAVER_ReaderFilter_Handle readerFilterHandl
 }
 
 
-int BEAVER_ReaderFilter_PauseFilter(BEAVER_ReaderFilter_Handle readerFilterHandle)
+int ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     int ret = 0;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return -1;
     }
 
-    ret = BEAVER_Filter_Pause(readerFilter->filter);
+    ret = ARSTREAM2_H264Filter_Pause(streamReceiver->filter);
     if (ret != 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to pause beaver_filter: %d", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to pause H264Filter: %d", ret);
         return ret;
     }
 
-    ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(readerFilter->receiver);
+    ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(streamReceiver->receiver);
 
     return ret;
 }
 
 
-int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle)
+int ARSTREAM2_StreamReceiver_Stop(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     int ret = 0;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return -1;
     }
 
-    ARSTREAM2_RtpReceiver_Stop(readerFilter->receiver);
+    ARSTREAM2_RtpReceiver_Stop(streamReceiver->receiver);
 
-    ret = BEAVER_Filter_Stop(readerFilter->filter);
+    ret = ARSTREAM2_H264Filter_Stop(streamReceiver->filter);
     if (ret != 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Unable to stop beaver_filter: %d", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to stop H264Filter: %d", ret);
         return ret;
     }
 
@@ -269,40 +269,40 @@ int BEAVER_ReaderFilter_Stop(BEAVER_ReaderFilter_Handle readerFilterHandle)
 }
 
 
-int BEAVER_ReaderFilter_GetSpsPps(BEAVER_ReaderFilter_Handle readerFilterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
+int ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return -1;
     }
 
-    return BEAVER_Filter_GetSpsPps(readerFilter->filter, spsBuffer, spsSize, ppsBuffer, ppsSize);
+    return ARSTREAM2_H264Filter_GetSpsPps(streamReceiver->filter, spsBuffer, spsSize, ppsBuffer, ppsSize);
 }
 
 
-int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHandle, BEAVER_ReaderFilter_ResenderHandle *resenderHandle, BEAVER_ReaderFilter_ResenderConfig_t *config)
+int ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
 {
-    BEAVER_ReaderFilter_t* readerFilter = (BEAVER_ReaderFilter_t*)readerFilterHandle;
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
     ARSTREAM2_RtpReceiver_RtpResender_t* retResender = NULL;
     int ret = 0;
 
-    if (!readerFilterHandle)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid handle");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return -1;
     }
     if (!resenderHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for resender");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for resender");
         return -1;
     }
     if (!config)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Invalid pointer for config");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for config");
         return -1;
     }
 
@@ -321,22 +321,22 @@ int BEAVER_ReaderFilter_InitResender(BEAVER_ReaderFilter_Handle readerFilterHand
     resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
 
-    retResender = ARSTREAM2_RtpReceiver_RtpResender_New(readerFilter->receiver, &resenderConfig, &err);
+    retResender = ARSTREAM2_RtpReceiver_RtpResender_New(streamReceiver->receiver, &resenderConfig, &err);
     if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while creating resender : %s", ARSTREAM2_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating resender : %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
     else
     {
-        *resenderHandle = (BEAVER_ReaderFilter_ResenderHandle)retResender;
+        *resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)retResender;
     }
 
     return ret;
 }
 
 
-int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resenderHandle)
+int ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle)
 {
     int ret = 0;
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
@@ -344,7 +344,7 @@ int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resende
     err = ARSTREAM2_RtpReceiver_RtpResender_Delete((ARSTREAM2_RtpReceiver_RtpResender_t**)resenderHandle);
     if (err != ARSTREAM2_OK)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, BEAVER_READERFILTER_TAG, "Error while deleting resender : %s", ARSTREAM2_Error_ToString(err));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while deleting resender : %s", ARSTREAM2_Error_ToString(err));
         ret = -1;
     }
 
@@ -352,22 +352,21 @@ int BEAVER_ReaderFilter_FreeResender(BEAVER_ReaderFilter_ResenderHandle *resende
 }
 
 
-void* BEAVER_ReaderFilter_RunResenderStreamThread(void *resenderHandle)
+void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle)
 {
     return ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread(resenderHandle);
 }
 
 
-void* BEAVER_ReaderFilter_RunResenderControlThread(void *resenderHandle)
+void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle)
 {
     return ARSTREAM2_RtpReceiver_RtpResender_RunControlThread(resenderHandle);
 }
 
 
-int BEAVER_ReaderFilter_StopResender(BEAVER_ReaderFilter_ResenderHandle resenderHandle)
+int ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle)
 {
     ARSTREAM2_RtpReceiver_RtpResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
 
     return 0;
 }
-

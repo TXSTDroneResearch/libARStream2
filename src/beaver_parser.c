@@ -1,5 +1,5 @@
 /**
- * @file beaver_parser.c
+ * @file arstream2_h264_parser.c
  * @brief Parrot Streaming Library - H.264 Parser
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
@@ -16,12 +16,12 @@
 #include "beaver_h264.h"
 
 
-#define BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT (16)
+#define ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT (16)
 
 
-typedef struct BEAVER_Parser_s
+typedef struct ARSTREAM2_H264Parser_s
 {
-    BEAVER_Parser_Config_t config;
+    ARSTREAM2_H264Parser_Config_t config;
     
     // NALU buffer
     uint8_t* pNaluBuf;
@@ -37,48 +37,48 @@ typedef struct BEAVER_Parser_s
     int oldZeroCount;
 
     // SPS/PPS context
-    BEAVER_H264_SpsContext_t spsContext;
+    ARSTREAM2_H264_SpsContext_t spsContext;
     int spsSync;
-    BEAVER_H264_PpsContext_t ppsContext;
+    ARSTREAM2_H264_PpsContext_t ppsContext;
     int ppsSync;
 
     // Slice context
-    BEAVER_H264_SliceContext_t sliceContext;
+    ARSTREAM2_H264_SliceContext_t sliceContext;
 
     // User data SEI
-    uint8_t* pUserDataBuf[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
-    int userDataBufSize[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
-    int userDataSize[BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT];
+    uint8_t* pUserDataBuf[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
+    int userDataBufSize[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
+    int userDataSize[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
     unsigned int userDataCount;
 
-} BEAVER_Parser_t;
+} ARSTREAM2_H264Parser_t;
 
 
-typedef int (*BEAVER_Parser_ParseNaluType_func)(BEAVER_Parser_t* parser);
+typedef int (*ARSTREAM2_H264Parser_ParseNaluType_func)(ARSTREAM2_H264Parser_t* parser);
 
-static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser);
-static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser);
-static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser);
-static int BEAVER_Parser_ParseAud(BEAVER_Parser_t* parser);
-static int BEAVER_Parser_ParseFillerData(BEAVER_Parser_t* parser);
-static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParseAud(ARSTREAM2_H264Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParseFillerData(ARSTREAM2_H264Parser_t* parser);
+static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser);
 
 
-static BEAVER_Parser_ParseNaluType_func BEAVER_Parser_ParseNaluType[] = 
+static ARSTREAM2_H264Parser_ParseNaluType_func ARSTREAM2_H264Parser_ParseNaluType[] = 
 {
     NULL,
-    BEAVER_Parser_ParseSlice,
+    ARSTREAM2_H264Parser_ParseSlice,
     NULL,
     NULL,
     NULL,
-    BEAVER_Parser_ParseSlice,
-    BEAVER_Parser_ParseSei,
-    BEAVER_Parser_ParseSps,
-    BEAVER_Parser_ParsePps,
-    BEAVER_Parser_ParseAud,
+    ARSTREAM2_H264Parser_ParseSlice,
+    ARSTREAM2_H264Parser_ParseSei,
+    ARSTREAM2_H264Parser_ParseSps,
+    ARSTREAM2_H264Parser_ParsePps,
+    ARSTREAM2_H264Parser_ParseAud,
     NULL,
     NULL,
-    BEAVER_Parser_ParseFillerData,
+    ARSTREAM2_H264Parser_ParseFillerData,
     NULL,
     NULL,
     NULL,
@@ -101,8 +101,8 @@ static BEAVER_Parser_ParseNaluType_func BEAVER_Parser_ParseNaluType[] =
 };
 
 
-#ifdef BEAVER_VERBOSE
-static char *BEAVER_Parser_naluTypeStr[] =
+#ifdef ARSTREAM2_H264_PARSER_VERBOSE
+static char *ARSTREAM2_H264Parser_naluTypeStr[] =
 {
     "undefined",
     "coded slice",
@@ -143,7 +143,7 @@ static char *BEAVER_Parser_naluTypeStr[] =
 };
 
 
-static char *BEAVER_Parser_sliceTypeStr[] =
+static char *ARSTREAM2_H264Parser_sliceTypeStr[] =
 {
     "P",
     "B",
@@ -163,11 +163,11 @@ static char *BEAVER_Parser_sliceTypeStr[] =
 #endif
 
 
-static int BEAVER_Parser_picStructToNumClockTS[16] =
+static int ARSTREAM2_H264Parser_picStructToNumClockTS[16] =
 { 1, 1, 1, 2, 2, 3, 3, 2, 3, 0, 0, 0, 0, 0, 0, 0};
 
 
-static inline int bitstreamByteAlign(BEAVER_Parser_t* _parser)
+static inline int bitstreamByteAlign(ARSTREAM2_H264Parser_t* _parser)
 {
     int _align = 0;
 
@@ -182,7 +182,7 @@ static inline int bitstreamByteAlign(BEAVER_Parser_t* _parser)
 }
 
 
-static inline int readBits(BEAVER_Parser_t* _parser, unsigned int _numBits, uint32_t *_value, int _emulationPrevention)
+static inline int readBits(ARSTREAM2_H264Parser_t* _parser, unsigned int _numBits, uint32_t *_value, int _emulationPrevention)
 {
     unsigned int _count, _remBits = _numBits;
     uint32_t _val = 0, _bitMask;
@@ -255,7 +255,7 @@ static inline int readBits(BEAVER_Parser_t* _parser, unsigned int _numBits, uint
 }
 
 
-static inline int readBits_expGolomb_ue(BEAVER_Parser_t* _parser, uint32_t *_value, int _emulationPrevention)
+static inline int readBits_expGolomb_ue(ARSTREAM2_H264Parser_t* _parser, uint32_t *_value, int _emulationPrevention)
 {
     int _ret, _leadingZeroBits = -1;
     uint32_t _b, _val;
@@ -279,7 +279,7 @@ static inline int readBits_expGolomb_ue(BEAVER_Parser_t* _parser, uint32_t *_val
 }
 
 
-static inline int readBits_expGolomb_se(BEAVER_Parser_t* _parser, int32_t *_value, int _emulationPrevention)
+static inline int readBits_expGolomb_se(ARSTREAM2_H264Parser_t* _parser, int32_t *_value, int _emulationPrevention)
 {
     int _ret, _leadingZeroBits = -1;
     uint32_t _b, _val;
@@ -303,7 +303,7 @@ static inline int readBits_expGolomb_se(BEAVER_Parser_t* _parser, int32_t *_valu
 }
 
 
-static inline int seekToByte(BEAVER_Parser_t* _parser, int _start, int _whence)
+static inline int seekToByte(ARSTREAM2_H264Parser_t* _parser, int _start, int _whence)
 {
     int _pos;
 
@@ -332,7 +332,7 @@ static inline int seekToByte(BEAVER_Parser_t* _parser, int _start, int _whence)
 }
 
 
-static inline int skipBytes(BEAVER_Parser_t* _parser, int _byteCount)
+static inline int skipBytes(ARSTREAM2_H264Parser_t* _parser, int _byteCount)
 {
     int _ret, _i, _readBits = 0;
     uint32_t _val;
@@ -352,7 +352,7 @@ static inline int skipBytes(BEAVER_Parser_t* _parser, int _byteCount)
 }
 
 
-static inline int moreRbspData(BEAVER_Parser_t* _parser)
+static inline int moreRbspData(ARSTREAM2_H264Parser_t* _parser)
 {
     int _ret, _retval = 0;
     uint32_t _val;
@@ -389,7 +389,7 @@ static inline int moreRbspData(BEAVER_Parser_t* _parser)
 }
 
 
-static int BEAVER_Parser_ParseScalingList(BEAVER_Parser_t* parser, int sizeOfScalingList)
+static int ARSTREAM2_H264Parser_ParseScalingList(ARSTREAM2_H264Parser_t* parser, int sizeOfScalingList)
 {
     int ret, j;
     int _readBits = 0;
@@ -422,7 +422,7 @@ static int BEAVER_Parser_ParseScalingList(BEAVER_Parser_t* parser, int sizeOfSca
 }
 
 
-static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseHrdParams(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -544,7 +544,7 @@ static int BEAVER_Parser_ParseHrdParams(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -789,10 +789,10 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
     if (parser->spsContext.nal_hrd_parameters_present_flag)
     {
         // hrd_parameters
-        ret = BEAVER_Parser_ParseHrdParams(parser);
+        ret = ARSTREAM2_H264Parser_ParseHrdParams(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParseHrdParams() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
@@ -812,10 +812,10 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
     if (parser->spsContext.vcl_hrd_parameters_present_flag)
     {
         // hrd_parameters
-        ret = BEAVER_Parser_ParseHrdParams(parser);
+        ret = ARSTREAM2_H264Parser_ParseHrdParams(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParseHrdParams() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
@@ -932,7 +932,7 @@ static int BEAVER_Parser_ParseVui(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -1076,10 +1076,10 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
 
                 if (val)
                 {
-                    ret = BEAVER_Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
+                    ret = ARSTREAM2_H264Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: BEAVER_Parser_ParseScalingList() failed (%d)\n", ret);
+                        fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseScalingList() failed (%d)\n", ret);
                         return ret;
                     }
                     _readBits += ret;
@@ -1326,10 +1326,10 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
     if (val)
     {
         // vui_parameters
-        ret = BEAVER_Parser_ParseVui(parser);
+        ret = ARSTREAM2_H264Parser_ParseVui(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParseVui() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseVui() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
@@ -1358,7 +1358,7 @@ static int BEAVER_Parser_ParseSps(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -1673,10 +1673,10 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
 
                 if (val)
                 {
-                    ret = BEAVER_Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
+                    ret = ARSTREAM2_H264Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: BEAVER_Parser_ParseScalingList() failed (%d)\n", ret);
+                        fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseScalingList() failed (%d)\n", ret);
                         return ret;
                     }
                     _readBits += ret;
@@ -1719,7 +1719,7 @@ static int BEAVER_Parser_ParsePps(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* parser, int payloadSize)
+static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H264Parser_t* parser, int payloadSize)
 {
     int ret = 0, i;
     uint32_t val = 0;
@@ -1769,7 +1769,7 @@ static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* p
     uuid4 = val;
     if (parser->config.printLogs) printf("------ uuid_iso_iec_11578 = %08x-%04x-%04x-%08x-%08x\n", uuid1, uuid2 >> 16, uuid2 & 0xFFFF, uuid3, uuid4);
 
-    if ((parser->config.extractUserDataSei) && (parser->userDataCount < BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT))
+    if ((parser->config.extractUserDataSei) && (parser->userDataCount < ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT))
     {
         if ((!parser->pUserDataBuf[parser->userDataCount]) || (parser->userDataBufSize[parser->userDataCount] < payloadSize))
         {
@@ -1818,7 +1818,7 @@ static int BEAVER_Parser_ParseSeiPayload_userDataUnregistered(BEAVER_Parser_t* p
 }
 
 
-static int BEAVER_Parser_ParseSeiPayload_recoveryPoint(BEAVER_Parser_t* parser, int payloadSize)
+static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Parser_t* parser, int payloadSize)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -1870,7 +1870,7 @@ static int BEAVER_Parser_ParseSeiPayload_recoveryPoint(BEAVER_Parser_t* parser, 
 }
 
 
-static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser, int payloadSize)
+static int ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(ARSTREAM2_H264Parser_t* parser, int payloadSize)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -1945,7 +1945,7 @@ static int BEAVER_Parser_ParseSeiPayload_bufferingPeriod(BEAVER_Parser_t* parser
 }
 
 
-static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int payloadSize)
+static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t* parser, int payloadSize)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -1990,7 +1990,7 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
         pic_struct = val;
         if (parser->config.printLogs) printf("------ pic_struct = %d\n", val);
         
-        for (i = 0; i < BEAVER_Parser_picStructToNumClockTS[pic_struct]; i++)
+        for (i = 0; i < ARSTREAM2_H264Parser_picStructToNumClockTS[pic_struct]; i++)
         {
             // clock_timestamp_flag[i]
             ret = readBits(parser, 1, &val, 1);
@@ -2199,7 +2199,7 @@ static int BEAVER_Parser_ParseSeiPayload_picTiming(BEAVER_Parser_t* parser, int 
 }
 
 
-static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -2253,38 +2253,38 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
         // sei_payload
         switch(payloadType)
         {
-            /*case BEAVER_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
-                ret = BEAVER_Parser_ParseSeiPayload_bufferingPeriod(parser, payloadSize);
+            /*case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
+                ret = ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: BEAVER_Parser_ParseSeiPayload_bufferingPeriod() failed (%d)\n", ret);
+                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod() failed (%d)\n", ret);
                     return ret;
                 }
                 _readBits2 += ret;
                 break;*/ //TODO
-            /*case BEAVER_H264_SEI_PAYLOAD_TYPE_PIC_TIMING:
-                ret = BEAVER_Parser_ParseSeiPayload_picTiming(parser, payloadSize);
+            /*case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_PIC_TIMING:
+                ret = ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: BEAVER_Parser_ParseSeiPayload_picTiming() failed (%d)\n", ret);
+                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_picTiming() failed (%d)\n", ret);
                     return ret;
                 }
                 _readBits2 += ret;
                 break;*/ //TODO
-            case BEAVER_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT:
-                ret = BEAVER_Parser_ParseSeiPayload_recoveryPoint(parser, payloadSize);
+            case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT:
+                ret = ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: BEAVER_Parser_ParseSeiPayload_recoveryPoint() failed (%d)\n", ret);
+                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint() failed (%d)\n", ret);
                     return ret;
                 }
                 _readBits2 += ret;
                 break;
-            case BEAVER_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED:
-                ret = BEAVER_Parser_ParseSeiPayload_userDataUnregistered(parser, payloadSize);
+            case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED:
+                ret = ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: BEAVER_Parser_ParseSeiPayload_userDataUnregistered() failed (%d)\n", ret);
+                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered() failed (%d)\n", ret);
                     return ret;
                 }
                 _readBits2 += ret;
@@ -2352,7 +2352,7 @@ static int BEAVER_Parser_ParseSei(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseAud(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseAud(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -2393,7 +2393,7 @@ static int BEAVER_Parser_ParseAud(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseFillerData(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseFillerData(ARSTREAM2_H264Parser_t* parser)
 {
     int readBytes = 0;
 
@@ -2406,7 +2406,7 @@ static int BEAVER_Parser_ParseFillerData(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     unsigned int i;
@@ -2417,7 +2417,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser)
     // ref_pic_list_modification
     if (parser->config.printLogs) printf("------ ref_pic_list_modification()\n");
 
-    if ((parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    if ((parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_SI))
     {
         // ref_pic_list_modification_flag_l0
         ret = readBits(parser, 1, &val, 1);
@@ -2476,7 +2476,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser)
         }
     }
 
-    if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
     {
         // ref_pic_list_modification_flag_l1
         ret = readBits(parser, 1, &val, 1);
@@ -2538,7 +2538,7 @@ static int BEAVER_Parser_ParseRefPicListModification(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParsePredWeightTable(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParsePredWeightTable(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -2564,7 +2564,7 @@ static int BEAVER_Parser_ParsePredWeightTable(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -2687,7 +2687,7 @@ static int BEAVER_Parser_ParseDecRefPicMarking(BEAVER_Parser_t* parser)
 }
 
 
-static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
+static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
 {
     int ret = 0;
     uint32_t val = 0;
@@ -2726,7 +2726,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     _readBits += ret;
     parser->sliceContext.slice_type = val;
     parser->sliceContext.sliceTypeMod5 = val % 5;
-    if (parser->config.printLogs) printf("------ slice_type = %d (%s)\n", val, (val <= 9) ? BEAVER_Parser_sliceTypeStr[val] : "(invalid)");
+    if (parser->config.printLogs) printf("------ slice_type = %d (%s)\n", val, (val <= 9) ? ARSTREAM2_H264Parser_sliceTypeStr[val] : "(invalid)");
 
     // pic_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2876,7 +2876,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         if (parser->config.printLogs) printf("------ redundant_pic_cnt = %d\n", val);
     }
     
-    if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+    if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
     {
         // direct_spatial_mv_pred_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2890,7 +2890,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
         if (parser->config.printLogs) printf("------ direct_spatial_mv_pred_flag = %d\n", val);
     }
     
-    if ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B))
+    if ((parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B))
     {
         // num_ref_idx_active_override_flag
         ret = readBits(parser, 1, &val, 1);
@@ -2916,7 +2916,7 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
             parser->sliceContext.num_ref_idx_l0_active_minus1 = val;
             if (parser->config.printLogs) printf("------ num_ref_idx_l0_active_minus1 = %d\n", val);
 
-            if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)
+            if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
             {
                 // num_ref_idx_l1_active_minus1
                 ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -2941,24 +2941,24 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     else
     {
         // ref_pic_list_modification()
-        ret = BEAVER_Parser_ParseRefPicListModification(parser);
+        ret = ARSTREAM2_H264Parser_ParseRefPicListModification(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParseRefPicListModification() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseRefPicListModification() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
     }
     
     
-    if ((parser->ppsContext.weighted_pred_flag && ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP))) 
-            || ((parser->ppsContext.weighted_bipred_idc == 1) && (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_B)))
+    if ((parser->ppsContext.weighted_pred_flag && ((parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP))) 
+            || ((parser->ppsContext.weighted_bipred_idc == 1) && (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)))
     {
         // pred_weight_table()
-        ret = BEAVER_Parser_ParsePredWeightTable(parser);
+        ret = ARSTREAM2_H264Parser_ParsePredWeightTable(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParsePredWeightTable() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParsePredWeightTable() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
@@ -2967,16 +2967,16 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     if (parser->sliceContext.nal_ref_idc != 0)
     {
         // dec_ref_pic_marking()
-        ret = BEAVER_Parser_ParseDecRefPicMarking(parser);
+        ret = ARSTREAM2_H264Parser_ParseDecRefPicMarking(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: BEAVER_Parser_ParseDecRefPicMarking() failed (%d)\n", ret);
+            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseDecRefPicMarking() failed (%d)\n", ret);
             return ret;
         }
         _readBits += ret;
     }
     
-    if ((parser->ppsContext.entropy_coding_mode_flag) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != BEAVER_H264_SLICE_TYPE_SI))
+    if ((parser->ppsContext.entropy_coding_mode_flag) && (parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_SI))
     {
         // cabac_init_idc
         ret = readBits_expGolomb_ue(parser, &val, 1);
@@ -3001,9 +3001,9 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
     parser->sliceContext.slice_qp_delta = val_se;
     if (parser->config.printLogs) printf("------ slice_qp_delta = %d\n", val_se);
 
-    if ((parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SI))
+    if ((parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SI))
     {
-        if (parser->sliceContext.sliceTypeMod5 == BEAVER_H264_SLICE_TYPE_SP)
+        if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP)
         {
             // sp_for_switch_flag
             ret = readBits(parser, 1, &val, 1);
@@ -3114,9 +3114,9 @@ static int BEAVER_Parser_ParseSlice(BEAVER_Parser_t* parser)
 }
 
 
-int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
+int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     uint32_t val;
     int ret;
     int readBytes = 0;
@@ -3128,7 +3128,7 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
         return -1;
     }
 
-    memset(&parser->sliceContext, 0, sizeof(BEAVER_H264_SliceContext_t));
+    memset(&parser->sliceContext, 0, sizeof(ARSTREAM2_H264_SliceContext_t));
 
     ret = readBits(parser, 8, &val, 0);
     if (ret != 8)
@@ -3142,16 +3142,16 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
     parser->sliceContext.nal_ref_idc = (val >> 5) & 0x3;
     parser->sliceContext.nal_unit_type = val & 0x1F;
 
-    if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->sliceContext.nal_ref_idc, parser->sliceContext.nal_unit_type, BEAVER_Parser_naluTypeStr[parser->sliceContext.nal_unit_type]);
+    if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->sliceContext.nal_ref_idc, parser->sliceContext.nal_unit_type, ARSTREAM2_H264Parser_naluTypeStr[parser->sliceContext.nal_unit_type]);
 
     parser->sliceContext.idrPicFlag = (parser->sliceContext.nal_unit_type == 5) ? 1 : 0;
     
-    if (BEAVER_Parser_ParseNaluType[parser->sliceContext.nal_unit_type])
+    if (ARSTREAM2_H264Parser_ParseNaluType[parser->sliceContext.nal_unit_type])
     {
-        ret = BEAVER_Parser_ParseNaluType[parser->sliceContext.nal_unit_type](parser);
+        ret = ARSTREAM2_H264Parser_ParseNaluType[parser->sliceContext.nal_unit_type](parser);
         if (ret < 0)
         {
-            fprintf(stderr, "Error: BEAVER_Parser_ParseNaluType[%d]() failed (%d)\n", parser->sliceContext.nal_unit_type, ret);
+            fprintf(stderr, "Error: ARSTREAM2_H264Parser_ParseNaluType[%d]() failed (%d)\n", parser->sliceContext.nal_unit_type, ret);
             return -1;
         }
         readBytes += ret;
@@ -3166,7 +3166,7 @@ int BEAVER_Parser_ParseNalu(BEAVER_Parser_Handle parserHandle)
 }
 
 
-static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, unsigned long long fileSize, unsigned long long *startcodePosition)
+static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* parser, FILE* fp, unsigned long long fileSize, unsigned long long *startcodePosition)
 {
     int ret;
     unsigned long long initPos, pos, end, i = 0;
@@ -3181,7 +3181,7 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
     if (ret != 1) return -1;
     shiftVal = val = ntohl(val);
 
-    while ((shiftVal != BEAVER_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end))
+    while ((shiftVal != ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end))
     {
         if ((!i) && (pos < end - 4))
         {
@@ -3203,7 +3203,7 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
         i--;
     }
 
-    if (shiftVal == BEAVER_H264_BYTE_STREAM_NALU_START_CODE)
+    if (shiftVal == ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE)
     {
         pos += 4;
         ret = fseek(fp, pos, SEEK_SET);
@@ -3223,9 +3223,9 @@ static int BEAVER_Parser_StartcodeMatch_file(BEAVER_Parser_t* parser, FILE* fp, 
 
 
 
-int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize)
+int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
     unsigned long long naluStart, naluEnd, startcodePosition = 0;
     unsigned int _naluSize = 0;
@@ -3237,7 +3237,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
     }
     
     // Search for next NALU start code
-    ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
+    ret = ARSTREAM2_H264Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
     if (ret >= 0)
     {
         // Start code found
@@ -3245,7 +3245,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
         if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(startcodePosition));
 
         // Search for NALU end (next NALU start code or end of file)
-        ret = BEAVER_Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
+        ret = ARSTREAM2_H264Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
         if (ret >= 0)
         {
             // Start code found
@@ -3258,7 +3258,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
         }
         else //if (ret < 0)
         {
-            fprintf(stderr, "Error: BEAVER_Parser_StartcodeMatch_file() failed (%d)\n", ret);
+            fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
             return ret;
         }
         
@@ -3313,7 +3313,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
     }
     else //if (ret < 0)
     {
-        fprintf(stderr, "Error: BEAVER_Parser_StartcodeMatch_file() failed (%d)\n", ret);
+        fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
         return ret;
     }
 
@@ -3322,7 +3322,7 @@ int BEAVER_Parser_ReadNextNalu_file(BEAVER_Parser_Handle parserHandle, FILE* fp,
 }
 
 
-static int BEAVER_Parser_StartcodeMatch_buffer(BEAVER_Parser_t* parser, uint8_t* pBuf, unsigned int bufSize)
+static int ARSTREAM2_H264Parser_StartcodeMatch_buffer(ARSTREAM2_H264Parser_t* parser, uint8_t* pBuf, unsigned int bufSize)
 {
     int ret, pos, end;
     uint32_t shiftVal = 0;
@@ -3339,9 +3339,9 @@ static int BEAVER_Parser_StartcodeMatch_buffer(BEAVER_Parser_t* parser, uint8_t*
         shiftVal |= (*ptr++) & 0xFF;
         pos++;
     }
-    while (((shiftVal != BEAVER_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end)) || (pos < 4));
+    while (((shiftVal != ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE) && (pos < end)) || (pos < 4));
 
-    if (shiftVal == BEAVER_H264_BYTE_STREAM_NALU_START_CODE)
+    if (shiftVal == ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE)
     {
         ret = pos;
     }
@@ -3354,9 +3354,9 @@ static int BEAVER_Parser_StartcodeMatch_buffer(BEAVER_Parser_t* parser, uint8_t*
 }
 
 
-int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos)
+int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
     unsigned int naluStart, naluEnd, naluSize;
 
@@ -3375,7 +3375,7 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
     if (nextStartCodePos) *nextStartCodePos = 0;
 
     // Search for next NALU start code
-    ret = BEAVER_Parser_StartcodeMatch_buffer(parser, (uint8_t*)pBuf, bufSize);
+    ret = ARSTREAM2_H264Parser_StartcodeMatch_buffer(parser, (uint8_t*)pBuf, bufSize);
     if (ret >= 0)
     {
         // Start code found
@@ -3383,7 +3383,7 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
         if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(naluStart - 4));
 
         // Search for NALU end (next NALU start code or end of file)
-        ret = BEAVER_Parser_StartcodeMatch_buffer(parser, (uint8_t*)pBuf + naluStart, bufSize - naluStart);
+        ret = ARSTREAM2_H264Parser_StartcodeMatch_buffer(parser, (uint8_t*)pBuf + naluStart, bufSize - naluStart);
         if (ret >= 0)
         {
             // Start code found
@@ -3397,7 +3397,7 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
         }
         else //if (ret < 0)
         {
-            fprintf(stderr, "Error: BEAVER_Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
+            fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
             return ret;
         }
 
@@ -3437,7 +3437,7 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
     }
     else //if (ret < 0)
     {
-        fprintf(stderr, "Error: BEAVER_Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
+        fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
         return ret;
     }
 
@@ -3445,9 +3445,9 @@ int BEAVER_Parser_ReadNextNalu_buffer(BEAVER_Parser_Handle parserHandle, void* p
 }
 
 
-int BEAVER_Parser_SetupNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize)
+int ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
 
     if (!parserHandle)
@@ -3474,9 +3474,9 @@ int BEAVER_Parser_SetupNalu_buffer(BEAVER_Parser_Handle parserHandle, void* pNal
 }
 
 
-int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle)
+int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
 
     if (!parserHandle)
     {
@@ -3488,9 +3488,9 @@ int BEAVER_Parser_GetLastNaluType(BEAVER_Parser_Handle parserHandle)
 }
 
 
-int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_SliceInfo_t* sliceInfo)
+int ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_SliceInfo_t* sliceInfo)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
 
     if (!parserHandle)
@@ -3505,7 +3505,7 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
         return -1;
     }
 
-    if ((parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE_IDR))
+    if ((parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR))
     {
         return -1;
     }
@@ -3525,9 +3525,9 @@ int BEAVER_Parser_GetSliceInfo(BEAVER_Parser_Handle parserHandle, BEAVER_Parser_
 }
 
 
-int BEAVER_Parser_GetUserDataSeiCount(BEAVER_Parser_Handle parserHandle)
+int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserHandle)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
 
     if (!parserHandle)
     {
@@ -3546,9 +3546,9 @@ int BEAVER_Parser_GetUserDataSeiCount(BEAVER_Parser_Handle parserHandle)
 }
 
 
-int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize)
+int ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
 
     if (!parserHandle)
@@ -3578,9 +3578,9 @@ int BEAVER_Parser_GetUserDataSei(BEAVER_Parser_Handle parserHandle, unsigned int
 }
 
 
-int BEAVER_Parser_GetSpsPpsContext(BEAVER_Parser_Handle parserHandle, void **spsContext, void **ppsContext)
+int ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHandle, void **spsContext, void **ppsContext)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
 
     if (!parserHandle)
@@ -3606,9 +3606,9 @@ int BEAVER_Parser_GetSpsPpsContext(BEAVER_Parser_Handle parserHandle, void **sps
 }
 
 
-int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **sliceContext)
+int ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandle, void **sliceContext)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
 
     if (!parserHandle)
@@ -3622,7 +3622,7 @@ int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **slic
         return -1;
     }
 
-    if ((parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != BEAVER_H264_NALU_TYPE_SLICE_IDR))
+    if ((parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR))
     {
         return -1;
     }
@@ -3633,9 +3633,9 @@ int BEAVER_Parser_GetSliceContext(BEAVER_Parser_Handle parserHandle, void **slic
 }
 
 
-int BEAVER_Parser_Init(BEAVER_Parser_Handle* parserHandle, BEAVER_Parser_Config_t* config)
+int ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREAM2_H264Parser_Config_t* config)
 {
-    BEAVER_Parser_t* parser;
+    ARSTREAM2_H264Parser_t* parser;
 
     if (!parserHandle)
     {
@@ -3643,7 +3643,7 @@ int BEAVER_Parser_Init(BEAVER_Parser_Handle* parserHandle, BEAVER_Parser_Config_
         return -1;
     }
 
-    parser = (BEAVER_Parser_t*)malloc(sizeof(*parser));
+    parser = (ARSTREAM2_H264Parser_t*)malloc(sizeof(*parser));
     if (!parser)
     {
         fprintf(stderr, "Error: allocation failed (size %ld)\n", sizeof(*parser));
@@ -3662,15 +3662,15 @@ int BEAVER_Parser_Init(BEAVER_Parser_Handle* parserHandle, BEAVER_Parser_Config_
     parser->naluBufSize = 0;
     parser->pNaluBuf = NULL;
 
-    *parserHandle = (BEAVER_Parser_Handle*)parser;
+    *parserHandle = (ARSTREAM2_H264Parser_Handle*)parser;
 
     return 0;
 }
 
 
-int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle)
+int ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle)
 {
-    BEAVER_Parser_t* parser = (BEAVER_Parser_t*)parserHandle;
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int i;
 
     if (!parserHandle)
@@ -3683,7 +3683,7 @@ int BEAVER_Parser_Free(BEAVER_Parser_Handle parserHandle)
         free(parser->pNaluBuf);
     }
 
-    for (i = 0; i < BEAVER_PARSER_MAX_USER_DATA_SEI_COUNT; i++)
+    for (i = 0; i < ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT; i++)
     {
         if (parser->pUserDataBuf[i])
         {
