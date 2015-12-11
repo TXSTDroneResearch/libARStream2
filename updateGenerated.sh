@@ -1,3 +1,3 @@
 #!/bin/sh
 
-python ../ARSDKBuildUtils/Utils/Python/ARSDK_PrebuildActions.py --lib libBeaver --root . || exit 1
+python ../ARSDKBuildUtils/Utils/Python/ARSDK_PrebuildActions.py --lib libARStream2 --root . || exit 1

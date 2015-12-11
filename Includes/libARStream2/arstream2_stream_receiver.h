@@ -13,9 +13,9 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
-#include <libBeaver/beaver_reader.h>
-#include <libBeaver/beaver_sender.h>
-#include <libBeaver/beaver_filter.h>
+#include <libARStream2/arstream2_rtp_receiver.h>
+#include <libARStream2/arstream2_rtp_sender.h>
+#include <libARStream2/arstream2_h264_filter.h>
 
 
 /**

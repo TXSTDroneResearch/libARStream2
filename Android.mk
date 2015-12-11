@@ -7,8 +7,8 @@ LOCAL_CFLAGS := -g
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
     LOCAL_CFLAGS += -mfloat-abi=softfp -mfpu=neon
 endif
-LOCAL_MODULE := libbeaver_android
-LOCAL_SRC_FILES := JNI/c/beaverjni.c
+LOCAL_MODULE := libarstream2_android
+LOCAL_SRC_FILES := JNI/c/arstream2jni.c
 LOCAL_LDLIBS := -llog -lz
-LOCAL_SHARED_LIBRARIES := libBeaver-prebuilt libARSAL-prebuilt
+LOCAL_SHARED_LIBRARIES := libARStream2-prebuilt libARSAL-prebuilt
 include $(BUILD_SHARED_LIBRARY)

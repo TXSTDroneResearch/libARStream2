@@ -24,8 +24,8 @@
  * Private Headers
  */
 
-#include <libBeaver/beaver_sender.h>
-#include "beaver_rtp.h"
+#include <libARStream2/arstream2_rtp_sender.h>
+#include "arstream2_rtp.h"
 
 /*
  * ARSDK Headers

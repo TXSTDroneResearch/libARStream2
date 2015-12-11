@@ -26,10 +26,10 @@
  * Private Headers
  */
 
-#include <libBeaver/beaver_reader.h>
-#include <libBeaver/beaver_sender.h>
-#include "beaver_rtp.h"
-#include "beaver_h264.h"
+#include <libARStream2/arstream2_rtp_receiver.h>
+#include <libARStream2/arstream2_rtp_sender.h>
+#include "arstream2_rtp.h"
+#include "arstream2_h264.h"
 
 /*
  * ARSDK Headers

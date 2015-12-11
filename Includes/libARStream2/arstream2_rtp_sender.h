@@ -12,7 +12,7 @@
  * Headers
  */
 #include <inttypes.h>
-#include <libBeaver/beaver_error.h>
+#include <libARStream2/arstream2_error.h>
 
 
 /*

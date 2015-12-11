@@ -13,7 +13,7 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
-#include <libBeaver/beaver_reader.h>
+#include <libARStream2/arstream2_rtp_receiver.h>
 
 
 /**

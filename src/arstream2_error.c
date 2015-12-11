@@ -5,7 +5,7 @@
  * @author aurelien.barre@parrot.com
  */
 
-#include <libBeaver/beaver_error.h>
+#include <libARStream2/arstream2_error.h>
 
 char* ARSTREAM2_Error_ToString(eARSTREAM2_ERROR error)
 {

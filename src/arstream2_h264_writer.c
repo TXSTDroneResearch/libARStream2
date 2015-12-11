@@ -12,8 +12,8 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-#include <libBeaver/beaver_writer.h>
-#include "beaver_h264.h"
+#include <libARStream2/arstream2_h264_writer.h>
+#include "arstream2_h264.h"
 
 
 #define log2(x) (log(x) / log(2)) //TODO

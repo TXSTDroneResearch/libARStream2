@@ -12,8 +12,8 @@
 #include <math.h>
 #include <arpa/inet.h>
 
-#include <libBeaver/beaver_parser.h>
-#include "beaver_h264.h"
+#include <libARStream2/arstream2_h264_parser.h>
+#include "arstream2_h264.h"
 
 
 #define ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT (16)

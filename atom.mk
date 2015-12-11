@@ -3,7 +3,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_CATEGORY_PATH := dragon/libs
-LOCAL_MODULE := libBeaver
+LOCAL_MODULE := libARStream2
 LOCAL_DESCRIPTION := Parrot Streaming Library
 
 LOCAL_LIBRARIES := libARSAL
@@ -49,7 +49,7 @@ define LOCAL_AUTOTOOLS_CMD_POST_UNPACK
 endef
 
 LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/Includes
-LOCAL_EXPORT_LDLIBS := -lbeaver
+LOCAL_EXPORT_LDLIBS := -larstream2
 
 include $(BUILD_AUTOTOOLS)
 
@@ -61,7 +61,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := beavertool
 LOCAL_DESCRIPTION := Parrot Streaming Library Tools
 LOCAL_CATEGORY_PATH := dragon
-LOCAL_LIBRARIES := libBeaver
+LOCAL_LIBRARIES := libARStream2
 LOCAL_SRC_FILES := tools/beavertool.c
 
 include $(BUILD_EXECUTABLE)

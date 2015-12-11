@@ -12,13 +12,13 @@
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
 
-#include <libBeaver/beaver_reader.h>
-#include <libBeaver/beaver_filter.h>
-#include <libBeaver/beaver_parser.h>
-#include <libBeaver/beaver_writer.h>
+#include <libARStream2/arstream2_rtp_receiver.h>
+#include <libARStream2/arstream2_h264_filter.h>
+#include <libARStream2/arstream2_h264_parser.h>
+#include <libARStream2/arstream2_h264_writer.h>
 #include <libBeaver/beaver_parrot.h>
 
-#include "beaver_h264.h"
+#include "arstream2_h264.h"
 
 /* DEBUG */
 //#include <locale.h>

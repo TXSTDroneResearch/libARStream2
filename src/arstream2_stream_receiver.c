@@ -10,7 +10,7 @@
 
 #include <libARSAL/ARSAL_Print.h>
 
-#include <libBeaver/beaver_readerfilter.h>
+#include <libARStream2/arstream2_stream_receiver.h>
 
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
