@@ -7,10 +7,6 @@
 
 #include <config.h>
 
-/*
- * System Headers
- */
-
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -20,44 +16,43 @@
 #include <poll.h>
 #include <math.h>
 
-/*
- * Private Headers
- */
-
 #include <libARStream2/arstream2_rtp_sender.h>
 #include "arstream2_rtp.h"
-
-/*
- * ARSDK Headers
- */
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
 #include <libARSAL/ARSAL_Socket.h>
 
-/*
- * Macros
- */
 
 /**
  * Tag for ARSAL_PRINT
  */
 #define ARSTREAM2_RTP_SENDER_TAG "ARSTREAM2_RtpSender"
 
+
 /**
  * Minimum socket poll timeout value (milliseconds)
  */
 #define ARSTREAM2_RTP_SENDER_MIN_POLL_TIMEOUT_MS (10)
+
 
 /**
  * Socket timeout value for clock sync packets (milliseconds)
  */
 #define ARSTREAM2_RTP_SENDER_CLOCKSYNC_DATAREAD_TIMEOUT_MS (500)
 
+
 /**
  * FIFO cond timeout value (milliseconds)
  */
 #define ARSTREAM2_RTP_SENDER_FIFO_COND_TIMEOUT_MS (1000)
+
+
+/**
+ * Maximum number of elements for the monitoring
+ */
+#define ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS (2048)
+
 
 /**
  * Sets *PTR to VAL if PTR is not null
@@ -70,6 +65,7 @@
             *PTR = VAL;                         \
         }                                       \
     } while (0)
+
 
 #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
@@ -106,8 +102,6 @@ typedef struct ARSTREAM2_RtpSender_Nalu_s {
     int used;
 } ARSTREAM2_RtpSender_Nalu_t;
 
-
-#define ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS (2048)
 
 typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
     uint64_t auTimestamp;
@@ -742,7 +736,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
 }
 
 
-void ARSTREAM2_RtpSender_StopSender(ARSTREAM2_RtpSender_t *sender)
+void ARSTREAM2_RtpSender_Stop(ARSTREAM2_RtpSender_t *sender)
 {
     if (sender != NULL)
     {
@@ -811,7 +805,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
         }
         else
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Call ARSTREAM2_RtpSender_StopSender before calling this function");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Call ARSTREAM2_RtpSender_Stop before calling this function");
             retVal = ARSTREAM2_ERROR_BUSY;
         }
     }
@@ -1852,13 +1846,6 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
                 }
-
-                //TODO: bidirectional clock sync
-                //clockDelta = (int64_t)(receiveTimestamp + transmitTimestamp) / 2 - (int64_t)(originateTimestamp + receiveTimestamp2) / 2;
-                //rtDelay = (receiveTimestamp2 - originateTimestamp) - (transmitTimestamp - receiveTimestamp);
-
-                /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Clock - originateTS: %llu | receiveTS: %llu | transmitTS: %llu",
-                            (long long unsigned int)originateTimestamp, (long long unsigned int)receiveTimestamp, (long long unsigned int)transmitTimestamp);*/ //TODO: debug
             }
             else
             {
@@ -1918,8 +1905,8 @@ void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
 
 
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *meanAcqToNetworkTime,
-                                               uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
-                                               uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped)
+                                                   uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
+                                                   uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     uint64_t endTime, curTime, previousTime, acqToNetworkSum = 0, networkSum = 0, acqToNetworkVarSum = 0, networkVarSum = 0, packetSizeVarSum = 0;
@@ -2062,4 +2049,3 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
 
     return ret;
 }
-

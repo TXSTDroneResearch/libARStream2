@@ -8,31 +8,25 @@
 #ifndef _ARSTREAM2_RTP_RECEIVER_H_
 #define _ARSTREAM2_RTP_RECEIVER_H_
 
-/*
- * Headers
- */
+#ifdef __cplusplus
+extern "C" {
+#endif /* #ifdef __cplusplus */
+
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
 
-
-/*
- * Macros
- */
 
 /**
  * @brief Default client-side stream port
  */
 #define ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_STREAM_PORT     (55004)
 
+
 /**
  * @brief Default client-side control port
  */
 #define ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT    (55005)
 
-
-/*
- * Types
- */
 
 /**
  * @brief Causes for NAL unit callback function
@@ -46,6 +40,7 @@ typedef enum
     ARSTREAM2_RTP_RECEIVER_CAUSE_MAX,
 
 } eARSTREAM2_RTP_RECEIVER_CAUSE;
+
 
 /**
  * @brief Callback function for NAL units
@@ -72,9 +67,10 @@ typedef enum
  *
  * @warning If the cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, returning a buffer smaller than the initial value of newNaluBufferSize or a NULL pointer will skip the current NAL unit.
  */
-typedef uint8_t* (*ARSTREAM2_RtpReceiver_NaluCallback_t) (eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                     uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
-                                                     int missingPacketsBefore, int *newNaluBufferSize, void *userPtr);
+typedef uint8_t* (*ARSTREAM2_RtpReceiver_NaluCallback_t)(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+                                                         uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                         int missingPacketsBefore, int *newNaluBufferSize, void *userPtr);
+
 
 /**
  * @brief RtpReceiver configuration parameters
@@ -98,6 +94,7 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
 
 } ARSTREAM2_RtpReceiver_Config_t;
 
+
 /**
  * @brief RtpReceiver RtpResender configuration parameters
  */
@@ -117,20 +114,18 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
 
 } ARSTREAM2_RtpReceiver_RtpResender_Config_t;
 
+
 /**
  * @brief An RtpReceiver instance to allow receiving H.264 video over a network
  */
 typedef struct ARSTREAM2_RtpReceiver_t ARSTREAM2_RtpReceiver_t;
+
 
 /**
  * @brief An RtpReceiver RtpResender instance to allow re-streaming H.264 video over a network
  */
 typedef struct ARSTREAM2_RtpReceiver_RtpResender_t ARSTREAM2_RtpReceiver_RtpResender_t;
 
-
-/*
- * Functions declarations
- */
 
 /**
  * @brief Creates a new RtpReceiver
@@ -144,7 +139,8 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_t ARSTREAM2_RtpReceiver_RtpRese
  * @see ARSTREAM2_RtpReceiver_Stop()
  * @see ARSTREAM2_RtpReceiver_Delete()
  */
-ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New (ARSTREAM2_RtpReceiver_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_t *config, eARSTREAM2_ERROR *error);
+
 
 /**
  * @brief Invalidate the current NAL unit buffer
@@ -156,7 +152,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New (ARSTREAM2_RtpReceiver_Config
  *
  * @note Calling this function multiple times has no effect
  */
-void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer (ARSTREAM2_RtpReceiver_t *receiver);
+void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(ARSTREAM2_RtpReceiver_t *receiver);
+
 
 /**
  * @brief Stops a running RtpReceiver
@@ -166,7 +163,8 @@ void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer (ARSTREAM2_RtpReceiver_t *receiv
  *
  * @note Calling this function multiple times has no effect
  */
-void ARSTREAM2_RtpReceiver_Stop (ARSTREAM2_RtpReceiver_t *receiver);
+void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver);
+
 
 /**
  * @brief Deletes an RtpReceiver
@@ -180,7 +178,8 @@ void ARSTREAM2_RtpReceiver_Stop (ARSTREAM2_RtpReceiver_t *receiver);
  *
  * @note The function uses a double pointer, so it can set *receiver to NULL after freeing it
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete (ARSTREAM2_RtpReceiver_t **receiver);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver);
+
 
 /**
  * @brief Runs the stream loop of the RtpReceiver
@@ -189,7 +188,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete (ARSTREAM2_RtpReceiver_t **receive
  *
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RunStreamThread (void *ARSTREAM2_RtpReceiver_t_Param);
+void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param);
+
 
 /**
  * @brief Runs the control loop of the RtpReceiver
@@ -198,7 +198,8 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread (void *ARSTREAM2_RtpReceiver_t_Param
  *
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RunControlThread (void *ARSTREAM2_RtpReceiver_t_Param);
+void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param);
+
 
 /**
  * @brief Get the user pointer associated with the receiver NAL unit callback function
@@ -206,7 +207,8 @@ void* ARSTREAM2_RtpReceiver_RunControlThread (void *ARSTREAM2_RtpReceiver_t_Para
  * @param[in] receiver The receiver instance
  * @return The user pointer associated with the NALU callback, or NULL if receiver does not point to a valid receiver
  */
-void* ARSTREAM2_RtpReceiver_GetNaluCallbackUserPtr (ARSTREAM2_RtpReceiver_t *receiver);
+void* ARSTREAM2_RtpReceiver_GetNaluCallbackUserPtr(ARSTREAM2_RtpReceiver_t *receiver);
+
 
 /**
  * @brief Get the stream monitoring
@@ -229,8 +231,9 @@ void* ARSTREAM2_RtpReceiver_GetNaluCallbackUserPtr (ARSTREAM2_RtpReceiver_t *rec
  * @return ARSTREAM2_OK if no error occured.
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the receiver is invalid or if timeIntervalUs is 0.
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring (ARSTREAM2_RtpReceiver_t *receiver, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *receptionTimeJitter,
-                                                uint32_t *bytesReceived, uint32_t *meanPacketSize, uint32_t *packetSizeStdDev, uint32_t *packetsReceived, uint32_t *packetsMissed);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *receptionTimeJitter,
+                                                     uint32_t *bytesReceived, uint32_t *meanPacketSize, uint32_t *packetSizeStdDev, uint32_t *packetsReceived, uint32_t *packetsMissed);
+
 
 /**
  * @brief Creates a new RtpReceiver RtpResender
@@ -245,7 +248,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring (ARSTREAM2_RtpReceiver_t *r
  * @see ARSTREAM2_RtpReceiver_RtpResender_Stop()
  * @see ARSTREAM2_RtpReceiver_RtpResender_Delete()
  */
-ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New (ARSTREAM2_RtpReceiver_t *receiver, ARSTREAM2_RtpReceiver_RtpResender_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTREAM2_RtpReceiver_t *receiver, ARSTREAM2_RtpReceiver_RtpResender_Config_t *config, eARSTREAM2_ERROR *error);
+
 
 /**
  * @brief Stops a running RtpReceiver RtpResender
@@ -255,7 +259,8 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New (ARST
  *
  * @note Calling this function multiple times has no effect
  */
-void ARSTREAM2_RtpReceiver_RtpResender_Stop (ARSTREAM2_RtpReceiver_RtpResender_t *resender);
+void ARSTREAM2_RtpReceiver_RtpResender_Stop(ARSTREAM2_RtpReceiver_RtpResender_t *resender);
+
 
 /**
  * @brief Deletes an RtpReceiver RtpResender
@@ -269,7 +274,8 @@ void ARSTREAM2_RtpReceiver_RtpResender_Stop (ARSTREAM2_RtpReceiver_RtpResender_t
  *
  * @note The function uses a double pointer, so it can set *resender to NULL after freeing it
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete (ARSTREAM2_RtpReceiver_RtpResender_t **resender);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete(ARSTREAM2_RtpReceiver_RtpResender_t **resender);
+
 
 /**
  * @brief Runs the stream loop of the RtpReceiver RtpResender
@@ -278,7 +284,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete (ARSTREAM2_RtpReceiver
  *
  * @param[in] ARSTREAM2_RtpReceiver_RtpResender_t_Param A valid (ARSTREAM2_RtpReceiver_RtpResender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread (void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
+void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
+
 
 /**
  * @brief Runs the control loop of the RtpReceiver RtpResender
@@ -287,7 +294,11 @@ void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread (void *ARSTREAM2_RtpRece
  *
  * @param[in] ARSTREAM2_RtpReceiver_RtpResender_t_Param A valid (ARSTREAM2_RtpReceiver_RtpResender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RtpResender_RunControlThread (void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
+void* ARSTREAM2_RtpReceiver_RtpResender_RunControlThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
 
+
+#ifdef __cplusplus
+}
+#endif /* #ifdef __cplusplus */
 
 #endif /* _ARSTREAM2_RTP_RECEIVER_H_ */

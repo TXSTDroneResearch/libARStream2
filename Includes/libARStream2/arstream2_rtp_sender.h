@@ -8,36 +8,31 @@
 #ifndef _ARSTREAM2_RTP_SENDER_H_
 #define _ARSTREAM2_RTP_SENDER_H_
 
-/*
- * Headers
- */
+#ifdef __cplusplus
+extern "C" {
+#endif /* #ifdef __cplusplus */
+
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
 
-
-/*
- * Macros
- */
 
 /**
  * @brief Default server-side stream port
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_STREAM_PORT     (5004)
 
+
 /**
  * @brief Default server-side control port
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT    (5005)
+
 
 /**
  * @brief Default H.264 NAL unit FIFO size
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE         (1024)
 
-
-/*
- * Types
- */
 
 /**
  * @brief Callback status values
@@ -47,6 +42,7 @@ typedef enum {
     ARSTREAM2_RTP_SENDER_STATUS_CANCELLED,  /**< Access unit or NAL unit was cancelled (not sent or partly sent) */
     ARSTREAM2_RTP_SENDER_STATUS_MAX,
 } eARSTREAM2_RTP_SENDER_STATUS;
+
 
 /**
  * @brief Callback function for access units
@@ -60,6 +56,7 @@ typedef enum {
  */
 typedef void (*ARSTREAM2_RtpSender_AuCallback_t) (eARSTREAM2_RTP_SENDER_STATUS status, void *auUserPtr, void *userPtr);
 
+
 /**
  * @brief Callback function for NAL units
  * This callback function is called when a buffer associated with a NAL unit is no longer used by the sender.
@@ -71,6 +68,7 @@ typedef void (*ARSTREAM2_RtpSender_AuCallback_t) (eARSTREAM2_RTP_SENDER_STATUS s
  * @see eARSTREAM2_RTP_SENDER_STATUS
  */
 typedef void (*ARSTREAM2_RtpSender_NaluCallback_t) (eARSTREAM2_RTP_SENDER_STATUS status, void *naluUserPtr, void *userPtr);
+
 
 /**
  * @brief RtpSender configuration parameters
@@ -97,6 +95,7 @@ typedef struct ARSTREAM2_RtpSender_Config_t
 
 } ARSTREAM2_RtpSender_Config_t;
 
+
 /**
  * @brief RtpSender NAL unit descriptor
  */
@@ -112,15 +111,12 @@ typedef struct ARSTREAM2_RtpSender_H264NaluDesc_t
 
 } ARSTREAM2_RtpSender_H264NaluDesc_t;
 
+
 /**
  * @brief An RtpSender instance to allow streaming H.264 video over a network
  */
 typedef struct ARSTREAM2_RtpSender_t ARSTREAM2_RtpSender_t;
 
-
-/*
- * Functions declarations
- */
 
 /**
  * @brief Creates a new RtpSender
@@ -131,10 +127,11 @@ typedef struct ARSTREAM2_RtpSender_t ARSTREAM2_RtpSender_t;
  *
  * @return A pointer to the new ARSTREAM2_RtpSender_t, or NULL if an error occured
  *
- * @see ARSTREAM2_RtpSender_StopSender()
+ * @see ARSTREAM2_RtpSender_Stop()
  * @see ARSTREAM2_RtpSender_Delete()
  */
-ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New (ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error);
+
 
 /**
  * @brief Stops a running RtpSender
@@ -144,7 +141,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New (ARSTREAM2_RtpSender_Config_t *co
  *
  * @note Calling this function multiple times has no effect
  */
-void ARSTREAM2_RtpSender_StopSender (ARSTREAM2_RtpSender_t *sender);
+void ARSTREAM2_RtpSender_Stop(ARSTREAM2_RtpSender_t *sender);
+
 
 /**
  * @brief Deletes an RtpSender
@@ -153,12 +151,13 @@ void ARSTREAM2_RtpSender_StopSender (ARSTREAM2_RtpSender_t *sender);
  * @param sender Pointer to the ARSTREAM2_RtpSender_t* to delete
  *
  * @return ARSTREAM2_OK if the sender was deleted
- * @return ARSTREAM2_ERROR_BUSY if the sender is still busy and can not be stopped now (probably because ARSTREAM2_RtpSender_StopSender() has not been called yet)
+ * @return ARSTREAM2_ERROR_BUSY if the sender is still busy and can not be stopped now (probably because ARSTREAM2_RtpSender_Stop() has not been called yet)
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if sender does not point to a valid ARSTREAM2_RtpSender_t
  *
  * @note The function uses a double pointer, so it can set *sender to NULL after freeing it
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete (ARSTREAM2_RtpSender_t **sender);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender);
+
 
 /**
  * @brief Sends a new NAL unit
@@ -171,7 +170,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete (ARSTREAM2_RtpSender_t **sender);
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu (ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu);
+
 
 /**
  * @brief Sends multiple new NAL units
@@ -185,7 +185,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu (ARSTREAM2_RtpSender_t *sender,
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if a naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu (ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount);
+
 
 /**
  * @brief Flush all currently queued NAL units
@@ -195,25 +196,28 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu (ARSTREAM2_RtpSender_t *sender
  * @return ARSTREAM2_OK if no error occured.
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender is invalid.
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue (ARSTREAM2_RtpSender_t *sender);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sender);
+
 
 /**
  * @brief Runs the stream loop of the RtpSender
- * @warning This function never returns until ARSTREAM2_RtpSender_StopSender() is called. Thus, it should be called on its own thread.
- * @post Stop the Sender by calling ARSTREAM2_RtpSender_StopSender() before joining the thread calling this function.
+ * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
+ * @post Stop the Sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param);
+void* ARSTREAM2_RtpSender_RunStreamThread(void *ARSTREAM2_RtpSender_t_Param);
+
 
 /**
  * @brief Runs the control loop of the RtpSender
- * @warning This function never returns until ARSTREAM2_RtpSender_StopSender() is called. Thus, it should be called on its own thread.
- * @post Stop the sender by calling ARSTREAM2_RtpSender_StopSender() before joining the thread calling this function.
+ * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
+ * @post Stop the sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpSender_RunControlThread (void *ARSTREAM2_RtpSender_t_Param);
+void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param);
+
 
 /**
  * @brief Get the user pointer associated with the sender access unit callback function
@@ -222,7 +226,8 @@ void* ARSTREAM2_RtpSender_RunControlThread (void *ARSTREAM2_RtpSender_t_Param);
  *
  * @return The user pointer associated with the AU callback, or NULL if sender does not point to a valid sender
  */
-void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr (ARSTREAM2_RtpSender_t *sender);
+void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr(ARSTREAM2_RtpSender_t *sender);
+
 
 /**
  * @brief Get the user pointer associated with the sender NAL unit callback function
@@ -230,7 +235,8 @@ void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr (ARSTREAM2_RtpSender_t *sender);
  * @param[in] sender The sender instance
  * @return The user pointer associated with the NALU callback, or NULL if sender does not point to a valid sender
  */
-void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr (ARSTREAM2_RtpSender_t *sender);
+void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender);
+
 
 /**
  * @brief Get the stream monitoring
@@ -258,8 +264,12 @@ void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr (ARSTREAM2_RtpSender_t *sender)
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender is invalid or if timeIntervalUs is 0.
  */
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *meanAcqToNetworkTime,
-                                               uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
-                                               uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped);
+                                                   uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
+                                                   uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped);
 
+
+#ifdef __cplusplus
+}
+#endif /* #ifdef __cplusplus */
 
 #endif /* _ARSTREAM2_RTP_SENDER_H_ */

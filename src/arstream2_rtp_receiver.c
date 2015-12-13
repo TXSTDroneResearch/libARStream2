@@ -7,10 +7,6 @@
 
 #include <config.h>
 
-/*
- * System Headers
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,26 +18,15 @@
 #include <poll.h>
 #include <math.h>
 
-/*
- * Private Headers
- */
-
 #include <libARStream2/arstream2_rtp_receiver.h>
 #include <libARStream2/arstream2_rtp_sender.h>
 #include "arstream2_rtp.h"
 #include "arstream2_h264.h"
 
-/*
- * ARSDK Headers
- */
-
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
 #include <libARSAL/ARSAL_Socket.h>
 
-/*
- * Macros
- */
 
 #define ARSTREAM2_RTP_RECEIVER_TAG "ARSTREAM2_RtpReceiver"
 
@@ -73,11 +58,6 @@
     #define ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_FILENAME "receiver_monitor"
 #endif
 
-//#define ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_DEBUG_FILE
-#ifdef ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_DEBUG_FILE
-    #include <locale.h>
-#endif
-
 
 /**
  * Sets *PTR to VAL if PTR is not null
@@ -91,9 +71,6 @@
         }                                       \
     } while (0)
 
-/*
- * Types
- */
 
 typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
     uint64_t recvTimestamp;
@@ -636,7 +613,7 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
         {
             if (receiver->resender[i] != NULL)
             {
-                ARSTREAM2_RtpSender_StopSender(receiver->resender[i]->sender);
+                ARSTREAM2_RtpSender_Stop(receiver->resender[i]->sender);
                 receiver->resender[i]->senderRunning = 0;
             }
         }
@@ -1570,11 +1547,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     struct pollfd p;
     int shouldStop, ret, pollRet, timeElapsed, sleepDuration;
 
-#ifdef ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_DEBUG_FILE
-    FILE *fDebug;
-    fDebug = fopen("clock.dat", "w");
-#endif
-
     /* Parameters check */
     if (receiver == NULL)
     {
@@ -1662,14 +1634,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                             receiver->clockDelta = clockDelta;
                             rtDelay = (receiveTimestamp2 - originateTimestamp) - (transmitTimestamp - receiveTimestamp);
 
-#ifdef ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_DEBUG_FILE
-                            setlocale(LC_ALL, "C");
-                            fprintf(fDebug, "%llu %llu %llu %llu %lld %lld\n",
-                                    (long long unsigned int)originateTimestamp, (long long unsigned int)receiveTimestamp, (long long unsigned int)transmitTimestamp, (long long unsigned int)receiveTimestamp2,
-                                    (long long int)clockDelta, (long long int)rtDelay);
-                            setlocale(LC_ALL, "");
-#endif
-
                             /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Clock - originateTS: %llu | receiveTS: %llu | transmitTS: %llu | receiveTS2: %llu | delta: %lld | rtDelay: %lld",
                                         (long long unsigned int)originateTimestamp, (long long unsigned int)receiveTimestamp, (long long unsigned int)transmitTimestamp, (long long unsigned int)receiveTimestamp2,
                                         (long long int)clockDelta, (long long int)rtDelay);*/ //TODO: debug
@@ -1721,10 +1685,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         free(msgBuffer);
         msgBuffer = NULL;
     }
-
-#ifdef ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_DEBUG_FILE
-    fclose(fDebug);
-#endif
 
     return (void *)0;
 }
@@ -1953,7 +1913,7 @@ void ARSTREAM2_RtpReceiver_RtpResender_Stop(ARSTREAM2_RtpReceiver_RtpResender_t 
         ARSAL_Mutex_Lock(&(resender->receiver->resenderMutex));
         if (resender->sender != NULL)
         {
-            ARSTREAM2_RtpSender_StopSender(resender->sender);
+            ARSTREAM2_RtpSender_Stop(resender->sender);
             resender->senderRunning = 0;
         }
         ARSAL_Mutex_Unlock(&(resender->receiver->resenderMutex));
@@ -2053,4 +2013,3 @@ void* ARSTREAM2_RtpReceiver_RtpResender_RunControlThread (void *ARSTREAM2_RtpRec
 
     return ARSTREAM2_RtpSender_RunControlThread((void *)resender->sender);
 }
-
