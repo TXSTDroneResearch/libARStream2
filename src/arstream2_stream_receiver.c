@@ -1,6 +1,6 @@
 /**
  * @file arstream2_stream_receiver.c
- * @brief Parrot Streaming Library - Strea Receiver
+ * @brief Parrot Streaming Library - Stream Receiver
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */

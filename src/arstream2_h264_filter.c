@@ -162,11 +162,11 @@ static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *na
     {
         filter->callbackInProgress = 1;
         ARSAL_Mutex_Unlock(&(filter->mutex));
-        int cbRet = filter->spsPpsCallback(filter->pSps, filter->spsSize, filter->pPps, filter->ppsSize, filter->spsPpsCallbackUserPtr);
+        eARSTREAM2_ERROR cbRet = filter->spsPpsCallback(filter->pSps, filter->spsSize, filter->pPps, filter->ppsSize, filter->spsPpsCallbackUserPtr);
         ARSAL_Mutex_Lock(&(filter->mutex));
-        if (cbRet != 0)
+        if (cbRet != ARSTREAM2_OK)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed (returned %d)", cbRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
         }
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
         if (filter->fStreamOut)
@@ -480,7 +480,7 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
 
     if (!cancelAuOutput)
     {
-        int cbRet;
+        eARSTREAM2_ERROR cbRet;
         uint64_t curTime;
         struct timespec t1;
         uint8_t *auBuffer = NULL;
@@ -495,9 +495,9 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
 
         ARSAL_Mutex_Lock(&(filter->mutex));
 
-        if ((cbRet != 0) || (!auBuffer) || (!auBufferSize))
+        if ((cbRet != ARSTREAM2_OK) || (!auBuffer) || (!auBufferSize))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "getAuBufferCallback failed (returned %d)", cbRet);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "getAuBufferCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
             filter->callbackInProgress = 0;
             ARSAL_Mutex_Unlock(&(filter->mutex));
             ARSAL_Cond_Signal(&(filter->callbackCond));
@@ -514,19 +514,19 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             /* call the auReadyCallback */
             ARSAL_Mutex_Unlock(&(filter->mutex));
 
-            int cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
-                                                (filter->currentAuUserDataSize > 0) ? &filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
-                                                auBufferUserPtr, filter->auReadyCallbackUserPtr);
+            cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
+                                            (filter->currentAuUserDataSize > 0) ? &filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
+                                            auBufferUserPtr, filter->auReadyCallbackUserPtr);
 
             ARSAL_Mutex_Lock(&(filter->mutex));
             filter->callbackInProgress = 0;
             ARSAL_Mutex_Unlock(&(filter->mutex));
             ARSAL_Cond_Signal(&(filter->callbackCond));
 
-            if (cbRet != 0)
+            if (cbRet != ARSTREAM2_OK)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "auReadyCallback failed (returned %d)", cbRet);
-                if (filter->generateFirstGrayIFrame)
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "auReadyCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
+                if ((cbRet == ARSTREAM2_ERROR_RESYNC_REQUIRED) && (filter->generateFirstGrayIFrame))
                 {
                     filter->firstGrayIFramePending = 1;
                 }
