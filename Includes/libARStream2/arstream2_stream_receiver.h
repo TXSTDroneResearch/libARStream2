@@ -13,6 +13,7 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
+#include <libARStream2/arstream2_error.h>
 #include <libARStream2/arstream2_rtp_receiver.h>
 #include <libARStream2/arstream2_rtp_sender.h>
 #include <libARStream2/arstream2_h264_filter.h>
@@ -109,7 +110,7 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config);
 
 
 /**
@@ -122,7 +123,7 @@ int ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceive
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle);
 
 
 /**
@@ -181,9 +182,9 @@ void* ARSTREAM2_StreamReceiver_RunControlThread(void *streamReceiverHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                                    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                                    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                                      ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                                      ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
 
 
 /**
@@ -198,7 +199,7 @@ int ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamR
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
 
 
 /**
@@ -211,7 +212,7 @@ int ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamR
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_Stop(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Stop(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
 
 
 /**
@@ -231,7 +232,7 @@ int ARSTREAM2_StreamReceiver_Stop(ARSTREAM2_StreamReceiver_Handle streamReceiver
  * @return -1 if an error occurred.
  * @return -2 if SPS/PPS are not available (no sync).
  */
-int ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
 
 
 /**
@@ -249,7 +250,7 @@ int ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamRec
  * @see ARSTREAM2_StreamReceiver_StopResender()
  * @see ARSTREAM2_StreamReceiver_FreeResender()
  */
-int ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
 
 
 /**
@@ -262,7 +263,7 @@ int ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle stream
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle);
 
 
 /**
@@ -292,15 +293,6 @@ void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
 
 
 /**
- * @brief Stops a running resender
- * @warning Once stopped, a resender cannot be restarted
- *
- * @param[in] resender The resender instance
- *
- * @note Calling this function multiple times has no effect
- */
-
-/**
  * @brief Stop a resender.
  *
  * The function ends the resender threads before they can be joined.
@@ -310,7 +302,7 @@ void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-int ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
 
 
 #ifdef __cplusplus

@@ -13,6 +13,7 @@ extern "C" {
 #endif /* #ifdef __cplusplus */
 
 #include <inttypes.h>
+#include <libARStream2/arstream2_error.h>
 #include <libARStream2/arstream2_rtp_receiver.h>
 
 
@@ -22,6 +23,9 @@ extern "C" {
 typedef void* ARSTREAM2_H264Filter_Handle;
 
 
+/**
+ * @brief AU synchronization type.
+ */
 typedef enum
 {
     ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE = 0,    /**< The Access Unit is not a synchronization point */
@@ -31,23 +35,6 @@ typedef enum
     ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX,
 
 } ARSTREAM2_H264Filter_AuSyncType_t;
-
-
-/* ARSTREAM2_H264Filter functions must not be called within the callback function */
-typedef int (*ARSTREAM2_H264Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
-
-
-/* ARSTREAM2_H264Filter functions must not be called within the callback function */
-typedef int (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
-
-
-/* ARSTREAM2_H264Filter functions must not be called within the callback function */
-typedef int (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
-
-
-uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                               uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
-                                               int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
 /**
@@ -67,6 +54,72 @@ typedef struct
 
 
 /**
+ * @brief SPS/PPS NAL units callback function
+ *
+ * The optional SPS/PPS callback function is called when SPS/PPS are found in the stream.
+ *
+ * @param spsBuffer Pointer to the SPS NAL unit buffer
+ * @param spsSize Size in bytes of the SPS NAL unit
+ * @param ppsBuffer Pointer to the PPS NAL unit buffer
+ * @param ppsSize Size in bytes of the PPS NAL unit
+ * @param userPtr SPS/PPS callback user pointer
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ *
+ * @note This callback function is optional.
+ *
+ * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
+ */
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+
+
+/**
+ * @brief Get access unit buffer callback function
+ *
+ * The mandatory get AU buffer callback function is called to retreive a buffer to fill with an access unit.
+ *
+ * @param auBuffer Pointer to the AU buffer pointer
+ * @param auBufferSize Pointer to the AU buffer size in bytes
+ * @param auBufferUserPtr Pointer to the AU buffer user pointer
+ * @param userPtr Get AU buffer callback user pointer
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if no buffers are available.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
+ *
+ * @warning This callback function is mandatory.
+ * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
+ */
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
+
+
+/**
+ * @brief Access unit ready callback function
+ *
+ * The mandatory AU ready callback function is called to output an access unit.
+ *
+ * @param auBuffer Pointer to the AU buffer
+ * @param auSize AU size in bytes
+ * @param auTimestamp AU timestamp in microseconds
+ * @param auTimestampShifted AU timestamp shifted to the sender's clock in microseconds
+ * @param auSyncType AU synchronization type
+ * @param auUserData AU user data SEI buffer
+ * @param auUserDataSize AU user data SEI size in bytes
+ * @param auBufferUserPtr AU buffer user pointer
+ * @param userPtr AU readey callback user pointer
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_RESYNC_REQUIRED if a decoding error occurred and re-sync is needed.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
+ *
+ * @warning This callback function is mandatory.
+ * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
+ */
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
+
+
+/**
  * @brief Initialize an H264Filter instance.
  *
  * The library allocates the required resources. The user must call ARSTREAM2_H264Filter_Free() to free the resources.
@@ -74,10 +127,10 @@ typedef struct
  * @param filterHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREAM2_H264Filter_Config_t *config);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREAM2_H264Filter_Config_t *config);
 
 
 /**
@@ -87,10 +140,10 @@ int ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHandle, ARSTREA
  *
  * @param filterHandle Pointer to the instance handle.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle);
 
 
 /**
@@ -113,19 +166,19 @@ void* ARSTREAM2_H264Filter_RunFilterThread(void *filterHandle);
  * The processing can be stopped using ARSTREAM2_H264Filter_Pause().
  *
  * @param filterHandle Instance handle.
- * @param spsPpsCallback SPS/PPS callback function.
- * @param spsPpsCallbackUserPtr SPS/PPS callback user pointer.
- * @param getAuBufferCallback Get access unit buffer callback function.
- * @param getAuBufferCallbackUserPtr Get access unit buffer callback user pointer.
- * @param auReadyCallback Access unit ready callback function.
- * @param auReadyCallbackUserPtr Access unit ready callback user pointer.
+ * @param spsPpsCallback Optional SPS/PPS callback function.
+ * @param spsPpsCallbackUserPtr Optional SPS/PPS callback user pointer.
+ * @param getAuBufferCallback Mandatory get access unit buffer callback function.
+ * @param getAuBufferCallbackUserPtr Optional get access unit buffer callback user pointer.
+ * @param auReadyCallback Mandatory access unit ready callback function.
+ * @param auReadyCallbackUserPtr Optional access unit ready callback user pointer.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                        ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                        ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                            ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                            ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
 
 
 /**
@@ -137,10 +190,10 @@ int ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREA
  *
  * @param filterHandle Instance handle.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 /**
@@ -151,10 +204,10 @@ int ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle);
  *
  * @param filterHandle Instance handle.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 /**
@@ -170,11 +223,22 @@ int ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle);
  * @param ppsBuffer PPS buffer pointer.
  * @param ppsSize pointer to the PPS size.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
- * @return -2 if SPS/PPS are not available (no sync).
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS are not available (no sync).
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
-int ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+
+
+/**
+ * @brief RTP receiver NAL unit callback function
+ *
+ * @see ARSTREAM2_RtpReceiver_NaluCallback_t.
+ *
+ */
+uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
+                                                      uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                      int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
 #ifdef __cplusplus

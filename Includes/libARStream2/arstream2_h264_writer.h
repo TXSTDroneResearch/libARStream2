@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <libARStream2/arstream2_error.h>
 
 
 /**
@@ -53,10 +54,10 @@ typedef struct
  * @param writerHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREAM2_H264Writer_Config_t* config);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREAM2_H264Writer_Config_t* config);
 
 
 /**
@@ -66,10 +67,10 @@ int ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREA
  *
  * @param writerHandle Instance handle.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle);
 
 
 /**
@@ -81,10 +82,10 @@ int ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle);
  * @param[in] spsContext SPS context to use (from an H.264 parser)
  * @param[in] ppsContext PPS context to use (from an H.264 parser)
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHandle, const void *spsContext, const void *ppsContext);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHandle, const void *spsContext, const void *ppsContext);
 
 
 /**
@@ -103,10 +104,10 @@ int ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHand
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**
@@ -122,10 +123,10 @@ int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, 
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**
@@ -141,10 +142,10 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 #ifdef __cplusplus

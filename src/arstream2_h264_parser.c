@@ -3114,18 +3114,18 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
 }
 
 
-int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int* readBytes)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     uint32_t val;
     int ret;
-    int readBytes = 0;
+    int _readBytes = 0;
     int forbidden_zero_bit;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     memset(&parser->sliceContext, 0, sizeof(ARSTREAM2_H264_SliceContext_t));
@@ -3134,9 +3134,9 @@ int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle)
     if (ret != 8)
     {
         fprintf(stderr, "Error: failed to read 1 byte from file\n");
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
-    readBytes++;
+    _readBytes++;
 
     forbidden_zero_bit = (val >> 7) & 0x1;
     parser->sliceContext.nal_ref_idc = (val >> 5) & 0x3;
@@ -3152,17 +3152,19 @@ int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle)
         if (ret < 0)
         {
             fprintf(stderr, "Error: ARSTREAM2_H264Parser_ParseNaluType[%d]() failed (%d)\n", parser->sliceContext.nal_unit_type, ret);
-            return -1;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
-        readBytes += ret;
+        _readBytes += ret;
     }
     
     if (forbidden_zero_bit != 0)
     {
         if (parser->config.printLogs) printf("   Warning: forbidden_zero_bit is not 0!\n");
     }
-    
-    return readBytes;
+
+    if (readBytes) *readBytes = (unsigned int)_readBytes;
+
+    return ARSTREAM2_OK;
 }
 
 
@@ -3223,7 +3225,7 @@ static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* pars
 
 
 
-int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
@@ -3233,7 +3235,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     
     // Search for next NALU start code
@@ -3259,7 +3261,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
         else //if (ret < 0)
         {
             fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
-            return ret;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
         
         _naluSize = (unsigned int)(naluEnd - naluStart);
@@ -3269,7 +3271,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
             if (ret != 0)
             {
                 fprintf(stderr, "Error: failed to seek in file\n");
-                return ret;
+                return ARSTREAM2_ERROR_INVALID_STATE;
             }
             
             parser->naluBufManaged = 1;
@@ -3280,7 +3282,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
                 if (!parser->pNaluBuf)
                 {
                     fprintf(stderr, "Error: reallocation failed (size %d)\n", parser->naluBufSize);
-                    return ret;
+                    return ARSTREAM2_ERROR_ALLOC;
                 }
             }
             
@@ -3288,7 +3290,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
             if (ret != 1)
             {
                 fprintf(stderr, "Error: failed to read %d bytes in file\n", _naluSize);
-                return ret;
+                return ARSTREAM2_ERROR_INVALID_STATE;
             }
             parser->naluSize = _naluSize;
             parser->remNaluSize = _naluSize;
@@ -3302,23 +3304,23 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
         else
         {
             fprintf(stderr, "Error: invalid NALU size\n");
-            return -1;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
     }
     else if (ret == -2)
     {
         // No start code found
         if (parser->config.printLogs) printf("No start code found\n");
-        return ret;
+        return ARSTREAM2_ERROR_NOT_FOUND;
     }
     else //if (ret < 0)
     {
         fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
-        return ret;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
     if (naluSize) *naluSize = _naluSize;
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
@@ -3354,7 +3356,7 @@ static int ARSTREAM2_H264Parser_StartcodeMatch_buffer(ARSTREAM2_H264Parser_t* pa
 }
 
 
-int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* naluStartPos, unsigned int* nextStartCodePos)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
@@ -3363,15 +3365,16 @@ int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserH
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     
     if (parser->naluBufManaged)
     {
         fprintf(stderr, "Error: invalid state\n");
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
+    if (naluStartPos) *naluStartPos = 0;
     if (nextStartCodePos) *nextStartCodePos = 0;
 
     // Search for next NALU start code
@@ -3398,7 +3401,7 @@ int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserH
         else //if (ret < 0)
         {
             fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
-            return ret;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
 
         naluSize = naluEnd - naluStart;
@@ -3415,10 +3418,11 @@ int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserH
         else
         {
             fprintf(stderr, "Error: invalid NALU size\n");
-            return -1;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
 
-        ret = naluStart;
+        if (naluStartPos) *naluStartPos = naluStart;
+        return ARSTREAM2_OK;
     }
     else if (ret == -2)
     {
@@ -3433,33 +3437,33 @@ int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserH
         parser->cacheLength = 0;
         parser->oldZeroCount = 0; // NB: this value is wrong when emulation prevention is in use (inside NAL Units)
 
-        //ret = 0;
+        return ARSTREAM2_ERROR_NOT_FOUND;
     }
     else //if (ret < 0)
     {
         fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
-        return ret;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
-    return ret;
+    return ARSTREAM2_ERROR_NOT_FOUND;
 }
 
 
-int ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
-    int ret = 0;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (parser->naluBufManaged)
     {
         fprintf(stderr, "Error: invalid state\n");
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
     parser->naluSize = parser->remNaluSize = parser->naluBufSize = naluSize;
@@ -3488,26 +3492,26 @@ int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandl
 }
 
 
-int ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_SliceInfo_t* sliceInfo)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_SliceInfo_t* sliceInfo)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
-    int ret = 0;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (!sliceInfo)
     {
         fprintf(stderr, "Error: invalid pointer\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR))
     {
-        return -1;
+        return ARSTREAM2_ERROR_NOT_FOUND;
     }
 
     sliceInfo->idrPicFlag = parser->sliceContext.idrPicFlag;
@@ -3546,21 +3550,21 @@ int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserH
 }
 
 
-int ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
-    int ret = 0;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((!parser->userDataCount) || (index >= parser->userDataCount))
     {
         fprintf(stderr, "Error: invalid index\n");
-        return -1;
+        return ARSTREAM2_ERROR_NOT_FOUND;
     }
     
     if ((parser->config.extractUserDataSei) && (parser->pUserDataBuf[index]) && (parser->userDataSize[index]))
@@ -3578,25 +3582,25 @@ int ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle
 }
 
 
-int ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHandle, void **spsContext, void **ppsContext)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHandle, void **spsContext, void **ppsContext)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
-    int ret = 0;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     if ((!spsContext) || (!ppsContext))
     {
         fprintf(stderr, "Error: invalid pointer\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((!parser->spsSync) || (!parser->ppsSync))
     {
-        return -1;
+        return ARSTREAM2_ERROR_WAITING_FOR_SYNC;
     }
 
     *spsContext = &parser->spsContext;
@@ -3606,25 +3610,25 @@ int ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHand
 }
 
 
-int ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandle, void **sliceContext)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandle, void **sliceContext)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
-    int ret = 0;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     if (!sliceContext)
     {
         fprintf(stderr, "Error: invalid pointer\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE) && (parser->sliceContext.nal_unit_type != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR))
     {
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     *sliceContext = &parser->sliceContext;
@@ -3633,21 +3637,21 @@ int ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandl
 }
 
 
-int ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREAM2_H264Parser_Config_t* config)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREAM2_H264Parser_Config_t* config)
 {
     ARSTREAM2_H264Parser_t* parser;
 
     if (!parserHandle)
     {
         fprintf(stderr, "Error: invalid pointer for handle\n");
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     parser = (ARSTREAM2_H264Parser_t*)malloc(sizeof(*parser));
     if (!parser)
     {
         fprintf(stderr, "Error: allocation failed (size %ld)\n", sizeof(*parser));
-        return -1;
+        return ARSTREAM2_ERROR_ALLOC;
     }
     memset(parser, 0, sizeof(*parser));
 
@@ -3664,18 +3668,18 @@ int ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREA
 
     *parserHandle = (ARSTREAM2_H264Parser_Handle*)parser;
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
-int ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle)
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int i;
 
     if (!parserHandle)
     {
-        return 0;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((parser->pNaluBuf) && (parser->naluBufManaged))
@@ -3693,6 +3697,6 @@ int ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle)
 
     free(parser);
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 

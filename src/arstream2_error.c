@@ -12,23 +12,41 @@ char* ARSTREAM2_Error_ToString(eARSTREAM2_ERROR error)
     switch (error)
     {
     case ARSTREAM2_OK:
-        return "No error";
+        return "no error";
         break;
     case ARSTREAM2_ERROR_BAD_PARAMETERS:
-        return "Bad parameters";
+        return "bad parameters";
         break;
     case ARSTREAM2_ERROR_ALLOC:
-        return "Unable to allocate data";
+        return "unable to allocate resource";
         break;
     case ARSTREAM2_ERROR_BUSY:
-        return "Object is busy and can not be deleted yet";
+        return "object is busy and can not be deleted yet";
         break;
     case ARSTREAM2_ERROR_QUEUE_FULL:
-        return "Queue is full";
+        return "queue is full";
+        break;
+    case ARSTREAM2_ERROR_WAITING_FOR_SYNC:
+        return "waiting for synchronization";
+        break;
+    case ARSTREAM2_ERROR_RESYNC_REQUIRED:
+        return "re-synchronization required";
+        break;
+    case ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE:
+        return "resource unavailable";
+        break;
+    case ARSTREAM2_ERROR_NOT_FOUND:
+        return "not found";
+        break;
+    case ARSTREAM2_ERROR_INVALID_STATE:
+        return "invalid state";
+        break;
+    case ARSTREAM2_ERROR_UNSUPPORTED:
+        return "unsupported";
         break;
     default:
-        return "Unknown value";
+        return "unknown error";
         break;
     }
-    return "Unknown value";
+    return "unknown error";
 }

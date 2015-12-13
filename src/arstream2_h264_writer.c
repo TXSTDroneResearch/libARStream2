@@ -995,19 +995,19 @@ static int ARSTREAM2_H264Writer_WriteGrayISliceData(ARSTREAM2_H264Writer_t* writ
 }
 
 
-int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
     ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
 
     if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
     {
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (!writer->isSpsPpsContextValid)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
     // Slice context
@@ -1028,7 +1028,7 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
     else
     {
         // UNSUPPORTED
-        return -1;
+        return ARSTREAM2_ERROR_UNSUPPORTED;
     }
 
     writer->pNaluBuf = pbOutputBuf;
@@ -1046,7 +1046,7 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
         ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
-            return -1;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
         bitsWritten += ret;
     }
@@ -1057,7 +1057,7 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
     ret = writeBits(writer, 8, ((writer->sliceContext.nal_ref_idc & 3) << 5) | writer->sliceContext.nal_unit_type, 0);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1065,7 +1065,7 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
     ret = ARSTREAM2_H264Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1073,7 +1073,7 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
     ret = ARSTREAM2_H264Writer_WriteSkippedPSliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1083,14 +1083,14 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
     ret = writeBits(writer, 1, 1, 1);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
     ret = bitstreamByteAlign(writer, 1);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1098,23 +1098,23 @@ int ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writ
 
     *outputSize = writer->naluSize;
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
-int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
     ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
 
     if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
     {
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (!writer->isSpsPpsContextValid)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
     // Slice context
@@ -1135,7 +1135,7 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
     else
     {
         // UNSUPPORTED
-        return -1;
+        return ARSTREAM2_ERROR_UNSUPPORTED;
     }
 
     writer->pNaluBuf = pbOutputBuf;
@@ -1153,7 +1153,7 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
         ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
         if (ret < 0)
         {
-            return -1;
+            return ARSTREAM2_ERROR_INVALID_STATE;
         }
         bitsWritten += ret;
     }
@@ -1164,7 +1164,7 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
     ret = writeBits(writer, 8, ((writer->sliceContext.nal_ref_idc & 3) << 5) | writer->sliceContext.nal_unit_type, 0);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1172,7 +1172,7 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
     ret = ARSTREAM2_H264Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1180,7 +1180,7 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
     ret = ARSTREAM2_H264Writer_WriteGrayISliceData(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1190,14 +1190,14 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
     ret = writeBits(writer, 1, 1, 1);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
     ret = bitstreamByteAlign(writer, 1);
     if (ret < 0)
     {
-        return -1;
+        return ARSTREAM2_ERROR_INVALID_STATE;
     }
     bitsWritten += ret;
 
@@ -1205,40 +1205,40 @@ int ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_Handle writerH
 
     *outputSize = writer->naluSize;
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
-int ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHandle, const void *spsContext, const void *ppsContext)
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Handle writerHandle, const void *spsContext, const void *ppsContext)
 {
     ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
 
     if ((!writerHandle) || (!spsContext) || (!ppsContext))
     {
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     memcpy(&writer->spsContext, spsContext, sizeof(ARSTREAM2_H264_SpsContext_t));
     memcpy(&writer->ppsContext, ppsContext, sizeof(ARSTREAM2_H264_PpsContext_t));
     writer->isSpsPpsContextValid = 1;
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
-int ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREAM2_H264Writer_Config_t* config)
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREAM2_H264Writer_Config_t* config)
 {
     ARSTREAM2_H264Writer_t* writer;
 
     if (!writerHandle)
     {
-        return -1;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     writer = (ARSTREAM2_H264Writer_t*)malloc(sizeof(*writer));
     if (!writer)
     {
-        return -1;
+        return ARSTREAM2_ERROR_ALLOC;
     }
     memset(writer, 0, sizeof(*writer));
 
@@ -1249,21 +1249,21 @@ int ARSTREAM2_H264Writer_Init(ARSTREAM2_H264Writer_Handle* writerHandle, ARSTREA
 
     *writerHandle = (ARSTREAM2_H264Writer_Handle*)writer;
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 
 
-int ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle)
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_Free(ARSTREAM2_H264Writer_Handle writerHandle)
 {
     ARSTREAM2_H264Writer_t* writer = (ARSTREAM2_H264Writer_t*)writerHandle;
 
     if (!writerHandle)
     {
-        return 0;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     free(writer);
 
-    return 0;
+    return ARSTREAM2_OK;
 }
 

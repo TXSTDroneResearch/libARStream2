@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <libARStream2/arstream2_error.h>
 
 
 /**
@@ -60,10 +61,10 @@ typedef struct
  * @param parserHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREAM2_H264Parser_Config_t* config);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREAM2_H264Parser_Config_t* config);
 
 
 /**
@@ -73,10 +74,10 @@ int ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHandle, ARSTREA
  *
  * @param parserHandle Instance handle.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle);
 
 
 /**
@@ -89,11 +90,11 @@ int ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHandle);
  * @param fileSize Total file size.
  * @param naluSize Optional pointer to the NAL unit size.
  *
- * @return 0 if no error occurred.
- * @return -2 if no start code has been found.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_NOT_FOUND if no start code has been found.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
-int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHandle, FILE* fp, unsigned long long fileSize, unsigned int *naluSize);
 
 
 /**
@@ -104,14 +105,15 @@ int ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Handle parserHan
  * @param parserHandle Instance handle.
  * @param pBuf Buffer to parse.
  * @param bufSize Buffer size.
+ * @param naluStartPos Optional pointer to the NALU start position.
  * @param nextStartCodePos Optional pointer to the following NALU start code filled if one has been found (i.e. if more NALUs are present 
  * in the buffer).
  *
- * @return 0 if no error occurred.
- * @return -2 if no start code has been found.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_NOT_FOUND if no start code has been found.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
-int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* nextStartCodePos);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pBuf, unsigned int bufSize, unsigned int* naluStartPos, unsigned int* nextStartCodePos);
 
 
 /**
@@ -124,10 +126,10 @@ int ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_Handle parserH
  * @param pNaluBuf NAL unit buffer to parse.
  * @param naluSize NAL unit size.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHandle, void* pNaluBuf, unsigned int naluSize);
 
 
 /**
@@ -137,11 +139,12 @@ int ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Handle parserHand
  * prior to calling this function.
  *
  * @param parserHandle Instance handle.
+ * @param readBytes Optional pointer to the number of bytes read.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int* readBytes);
 
 
 /**
@@ -151,7 +154,7 @@ int ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle parserHandle);
  *
  * @param parserHandle Instance handle.
  *
- * @return 0 if no error occurred.
+ * @return the last NAL unit type.
  * @return -1 if an error occurred.
  */
 int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle);
@@ -166,10 +169,10 @@ int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandl
  * @param parserHandle Instance handle.
  * @param sliceInfo Pointer to the slice info structure to fill.
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_SliceInfo_t* sliceInfo);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_SliceInfo_t* sliceInfo);
 
 
 /**
@@ -203,10 +206,10 @@ int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserH
  * @param pBuf Pointer to the user data SEI buffer pointer (filled with NULL if no user data SEI is available).
  * @param bufSize Pointer to the user data SEI buffer size (filled with 0 if no user data SEI is available).
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle, unsigned int index, void** pBuf, unsigned int* bufSize);
 
 
 /**
@@ -218,10 +221,10 @@ int ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle parserHandle
  * @param[out] spsContext Pointer to the SPS context
  * @param[out] ppsContext Pointer to the PPS context
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHandle, void **spsContext, void **ppsContext);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHandle, void **spsContext, void **ppsContext);
 
 
 /**
@@ -233,10 +236,10 @@ int ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Handle parserHand
  * @param[in] parserHandle Instance handle.
  * @param[out] sliceContext Pointer to the slice context
  *
- * @return 0 if no error occurred.
- * @return -1 if an error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-int ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandle, void **sliceContext);
+eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handle parserHandle, void **sliceContext);
 
 
 #ifdef __cplusplus
