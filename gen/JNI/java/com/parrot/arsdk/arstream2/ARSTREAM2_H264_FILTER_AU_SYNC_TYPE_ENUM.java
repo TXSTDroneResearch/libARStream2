@@ -33,36 +33,36 @@
  *  Do not modify this file, it will be erased during the next configure run 
  */
 
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 import java.util.HashMap;
 
 /**
- * Java copy of the BEAVER_Filter_AuSyncType_t enum
+ * Java copy of the eARSTREAM2_H264_FILTER_AU_SYNC_TYPE enum
  */
-public enum BEAVER_Filter_AuSyncType_t_ENUM {
+public enum ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM {
    /** Dummy value for all unknown cases */
-    BEAVER_Filter_AuSyncType_t_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
+    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
    /** The Access Unit is not a synchronization point */
-    BEAVER_FILTER_AU_SYNC_TYPE_NONE (0, "The Access Unit is not a synchronization point"),
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE (0, "The Access Unit is not a synchronization point"),
    /** The Access Unit is an IDR picture */
-    BEAVER_FILTER_AU_SYNC_TYPE_IDR (1, "The Access Unit is an IDR picture"),
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR (1, "The Access Unit is an IDR picture"),
    /** The Access Unit is an I-frame */
-    BEAVER_FILTER_AU_SYNC_TYPE_IFRAME (2, "The Access Unit is an I-frame"),
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME (2, "The Access Unit is an I-frame"),
    /** The Access Unit is a Periodic Intra Refresh start */
-    BEAVER_FILTER_AU_SYNC_TYPE_PIR_START (3, "The Access Unit is a Periodic Intra Refresh start"),
-   BEAVER_FILTER_AU_SYNC_TYPE_MAX (4);
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START (3, "The Access Unit is a Periodic Intra Refresh start"),
+   ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX (4);
 
     private final int value;
     private final String comment;
-    static HashMap<Integer, BEAVER_Filter_AuSyncType_t_ENUM> valuesList;
+    static HashMap<Integer, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM> valuesList;
 
-    BEAVER_Filter_AuSyncType_t_ENUM (int value) {
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM (int value) {
         this.value = value;
         this.comment = null;
     }
 
-    BEAVER_Filter_AuSyncType_t_ENUM (int value, String comment) {
+    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM (int value, String comment) {
         this.value = value;
         this.comment = comment;
     }
@@ -76,21 +76,21 @@ public enum BEAVER_Filter_AuSyncType_t_ENUM {
     }
 
     /**
-     * Gets the BEAVER_Filter_AuSyncType_t_ENUM instance from a C enum value
+     * Gets the ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM instance from a C enum value
      * @param value C value of the enum
-     * @return The BEAVER_Filter_AuSyncType_t_ENUM instance, or null if the C enum value was not valid
+     * @return The ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM instance, or null if the C enum value was not valid
      */
-    public static BEAVER_Filter_AuSyncType_t_ENUM getFromValue (int value) {
+    public static ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM getFromValue (int value) {
         if (null == valuesList) {
-            BEAVER_Filter_AuSyncType_t_ENUM [] valuesArray = BEAVER_Filter_AuSyncType_t_ENUM.values ();
-            valuesList = new HashMap<Integer, BEAVER_Filter_AuSyncType_t_ENUM> (valuesArray.length);
-            for (BEAVER_Filter_AuSyncType_t_ENUM entry : valuesArray) {
+            ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM [] valuesArray = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM.values ();
+            valuesList = new HashMap<Integer, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM> (valuesArray.length);
+            for (ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM entry : valuesArray) {
                 valuesList.put (entry.getValue (), entry);
             }
         }
-        BEAVER_Filter_AuSyncType_t_ENUM retVal = valuesList.get (value);
+        ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM retVal = valuesList.get (value);
         if (retVal == null) {
-            retVal = BEAVER_Filter_AuSyncType_t_UNKNOWN_ENUM_VALUE;
+            retVal = eARSTREAM2_H264_FILTER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE;
         }
         return retVal;    }
 

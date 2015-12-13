@@ -1,4 +1,4 @@
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 import android.util.Log;
 
@@ -6,32 +6,32 @@ import com.parrot.arsdk.arsal.ARSALPrint;
 
 import java.nio.ByteBuffer;
 
-public class BeaverReceiver
+public class ARStream2Receiver
 {
-    private static final String TAG = BeaverReceiver.class.getSimpleName();
+    private static final String TAG = ARStream2Receiver.class.getSimpleName();
 
-    private final long beaverManagerNativeRef;
+    private final long arstream2ManagerNativeRef;
     private final long nativeRef;
-    private final BeaverReceiverListener listener;
+    private final ARStream2ReceiverListener listener;
     private ByteBuffer[] buffers;
 
-    public BeaverReceiver(BeaverManager manager, BeaverReceiverListener listener)
+    public ARStream2Receiver(ARStream2Manager manager, ARStream2ReceiverListener listener)
     {
         this.listener = listener;
-        this.beaverManagerNativeRef = manager.getNativeRef();
+        this.arstream2ManagerNativeRef = manager.getNativeRef();
         this.nativeRef = nativeInit();
     }
 
     public boolean isValid()
     {
-        return beaverManagerNativeRef != 0;
+        return arstream2ManagerNativeRef != 0;
     }
 
     public void start()
     {
         if (isValid())
         {
-            nativeStart(beaverManagerNativeRef, nativeRef);
+            nativeStart(arstream2ManagerNativeRef, nativeRef);
         }
         else
         {
@@ -44,7 +44,7 @@ public class BeaverReceiver
     {
         if (isValid())
         {
-            nativeStop(beaverManagerNativeRef);
+            nativeStop(arstream2ManagerNativeRef);
         }
     }
 
@@ -106,7 +106,7 @@ public class BeaverReceiver
 
     private int onBufferReady(int bufferIdx, int auSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
     {
-        BEAVER_Filter_AuSyncType_t_ENUM auSyncType = BEAVER_Filter_AuSyncType_t_ENUM.getFromValue(iAuSyncType);
+        ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM.getFromValue(iAuSyncType);
         if (auSyncType == null)
         {
             ARSALPrint.e(TAG, "Bad au sync type : " + iAuSyncType);
@@ -129,8 +129,8 @@ public class BeaverReceiver
 
     private native long nativeInit();
     private native void nativeFree(long nativeRef);
-    private native boolean nativeStart(long beaverManagerNativeRef, long nativeRef);
-    private native boolean nativeStop(long beaverManagerNativeRef);
+    private native boolean nativeStart(long arstream2ManagerNativeRef, long nativeRef);
+    private native boolean nativeStop(long arstream2ManagerNativeRef);
     private native static void nativeInitClass();
     static
     {

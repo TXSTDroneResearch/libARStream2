@@ -1,13 +1,13 @@
 
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 
 import java.nio.ByteBuffer;
 
 /**
- * This interface describes a listener for BeaverReceiver events
+ * This interface describes a listener for ARStream2Receiver events
  */
-public interface BeaverReceiverListener
+public interface ARStream2ReceiverListener
 {
     /**
      * Called when sps/pps are received
@@ -28,6 +28,6 @@ public interface BeaverReceiverListener
      * Called when a buffer is ready to be sent to the decoder
      * 
      */
-    void onBufferReady(int bufferIdx, long auTimestamp, long auTimestampShifted, BEAVER_Filter_AuSyncType_t_ENUM auSyncType);
+    void onBufferReady(int bufferIdx, long auTimestamp, long auTimestampShifted, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM auSyncType);
 }
 

@@ -1,16 +1,16 @@
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 import android.os.Process;
 import android.util.Log;
 
-public class BeaverResender
+public class ARStream2Resender
 {
-    private static final String TAG = BeaverResender.class.getSimpleName();
+    private static final String TAG = ARStream2Resender.class.getSimpleName();
     private final long nativeRef;
     private final Thread streamThread;
     private final Thread controlThread;
 
-    public BeaverResender(BeaverManager manager, String clientAddress,
+    public ARStream2Resender(ARStream2Manager manager, String clientAddress,
                           int serverStreamPort, int serverControlPort,
                           int clientStreamPort, int clientControlPort,
                           int maxPacketSize, int targetPacketSize, int maxLatency, int maxNetworkLatency)
@@ -27,7 +27,7 @@ public class BeaverResender
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunStreamThread(nativeRef);
             }
-        }, "BeaverResenderStream");
+        }, "ARStream2ResenderStream");
         this.controlThread = new Thread(new Runnable()
         {
             @Override
@@ -36,7 +36,7 @@ public class BeaverResender
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunControlThread(nativeRef);
             }
-        }, "BeaverResenderControl");
+        }, "ARStream2ResenderControl");
     }
 
     private boolean isValid()
@@ -80,7 +80,7 @@ public class BeaverResender
         }
     }
 
-    private native long nativeInit(long beaverReaderNativeRef, String clientAddress,
+    private native long nativeInit(long arstream2ManagerNativeRef, String clientAddress,
                                    int serverStreamPort, int serverControlPort,
                                    int clientStreamPort, int clientControlPort,
                                    int maxPacketSize, int targetPacketSize, int maxLatency, int maxNetworkLatency);

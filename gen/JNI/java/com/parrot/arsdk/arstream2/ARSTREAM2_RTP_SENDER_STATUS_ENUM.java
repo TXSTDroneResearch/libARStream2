@@ -33,43 +33,32 @@
  *  Do not modify this file, it will be erased during the next configure run 
  */
 
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 import java.util.HashMap;
 
 /**
- * Java copy of the BEAVER_Parrot_UserDataSeiTypes_t enum
+ * Java copy of the eARSTREAM2_RTP_SENDER_STATUS enum
  */
-public enum BEAVER_Parrot_UserDataSeiTypes_t_ENUM {
+public enum ARSTREAM2_RTP_SENDER_STATUS_ENUM {
    /** Dummy value for all unknown cases */
-    BEAVER_Parrot_UserDataSeiTypes_t_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
-   /** Unknown user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_UNKNOWN (0, "Unknown user data SEI"),
-   /** 'Dragon Basic' v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V1 (1, "'Dragon Basic' v1 user data SEI"),
-   /** 'Dragon Extended' v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V1 (2, "'Dragon Extended' v1 user data SEI"),
-   /** 'Dragon Basic' v2 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_BASIC_V2 (3, "'Dragon Basic' v2 user data SEI"),
-   /** 'Dragon Extended' v2 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_EXTENDED_V2 (4, "'Dragon Extended' v2 user data SEI"),
-   /** 'Dragon FrameInfo' v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_FRAMEINFO_V1 (5, "'Dragon FrameInfo' v1 user data SEI"),
-   /** 'Dragon Streaming' v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_V1 (6, "'Dragon Streaming' v1 user data SEI"),
-   /** 'Dragon Streaming FrameInfo' v1 user data SEI */
-    BEAVER_PARROT_USER_DATA_SEI_DRAGON_STREAMING_FRAMEINFO_V1 (7, "'Dragon Streaming FrameInfo' v1 user data SEI");
+    eARSTREAM2_RTP_SENDER_STATUS_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
+   /** Access unit or NAL unit was sent */
+    ARSTREAM2_RTP_SENDER_STATUS_SENT (0, "Access unit or NAL unit was sent"),
+   /** Access unit or NAL unit was cancelled (not sent or partly sent) */
+    ARSTREAM2_RTP_SENDER_STATUS_CANCELLED (1, "Access unit or NAL unit was cancelled (not sent or partly sent)"),
+   ARSTREAM2_RTP_SENDER_STATUS_MAX (2);
 
     private final int value;
     private final String comment;
-    static HashMap<Integer, BEAVER_Parrot_UserDataSeiTypes_t_ENUM> valuesList;
+    static HashMap<Integer, ARSTREAM2_RTP_SENDER_STATUS_ENUM> valuesList;
 
-    BEAVER_Parrot_UserDataSeiTypes_t_ENUM (int value) {
+    ARSTREAM2_RTP_SENDER_STATUS_ENUM (int value) {
         this.value = value;
         this.comment = null;
     }
 
-    BEAVER_Parrot_UserDataSeiTypes_t_ENUM (int value, String comment) {
+    ARSTREAM2_RTP_SENDER_STATUS_ENUM (int value, String comment) {
         this.value = value;
         this.comment = comment;
     }
@@ -83,21 +72,21 @@ public enum BEAVER_Parrot_UserDataSeiTypes_t_ENUM {
     }
 
     /**
-     * Gets the BEAVER_Parrot_UserDataSeiTypes_t_ENUM instance from a C enum value
+     * Gets the ARSTREAM2_RTP_SENDER_STATUS_ENUM instance from a C enum value
      * @param value C value of the enum
-     * @return The BEAVER_Parrot_UserDataSeiTypes_t_ENUM instance, or null if the C enum value was not valid
+     * @return The ARSTREAM2_RTP_SENDER_STATUS_ENUM instance, or null if the C enum value was not valid
      */
-    public static BEAVER_Parrot_UserDataSeiTypes_t_ENUM getFromValue (int value) {
+    public static ARSTREAM2_RTP_SENDER_STATUS_ENUM getFromValue (int value) {
         if (null == valuesList) {
-            BEAVER_Parrot_UserDataSeiTypes_t_ENUM [] valuesArray = BEAVER_Parrot_UserDataSeiTypes_t_ENUM.values ();
-            valuesList = new HashMap<Integer, BEAVER_Parrot_UserDataSeiTypes_t_ENUM> (valuesArray.length);
-            for (BEAVER_Parrot_UserDataSeiTypes_t_ENUM entry : valuesArray) {
+            ARSTREAM2_RTP_SENDER_STATUS_ENUM [] valuesArray = ARSTREAM2_RTP_SENDER_STATUS_ENUM.values ();
+            valuesList = new HashMap<Integer, ARSTREAM2_RTP_SENDER_STATUS_ENUM> (valuesArray.length);
+            for (ARSTREAM2_RTP_SENDER_STATUS_ENUM entry : valuesArray) {
                 valuesList.put (entry.getValue (), entry);
             }
         }
-        BEAVER_Parrot_UserDataSeiTypes_t_ENUM retVal = valuesList.get (value);
+        ARSTREAM2_RTP_SENDER_STATUS_ENUM retVal = valuesList.get (value);
         if (retVal == null) {
-            retVal = BEAVER_Parrot_UserDataSeiTypes_t_UNKNOWN_ENUM_VALUE;
+            retVal = eARSTREAM2_RTP_SENDER_STATUS_UNKNOWN_ENUM_VALUE;
         }
         return retVal;    }
 

@@ -34,7 +34,7 @@ typedef enum
     ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START,   /**< The Access Unit is a Periodic Intra Refresh start */
     ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX,
 
-} ARSTREAM2_H264Filter_AuSyncType_t;
+} eARSTREAM2_H264_FILTER_AU_SYNC_TYPE;
 
 
 /**
@@ -116,7 +116,7 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  * @warning This callback function is mandatory.
  * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, ARSTREAM2_H264Filter_AuSyncType_t auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
 
 
 /**

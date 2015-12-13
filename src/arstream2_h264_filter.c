@@ -98,7 +98,7 @@ typedef struct ARSTREAM2_H264Filter_s
     uint64_t currentAuTimestampShifted;
     uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
-    ARSTREAM2_H264Filter_AuSyncType_t currentAuSyncType;
+    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE currentAuSyncType;
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
@@ -595,7 +595,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             uint8_t *tmpBuf = NULL;
             int savedAuSize = filter->currentAuSize;
             int savedAuIncomplete = filter->currentAuIncomplete;
-            ARSTREAM2_H264Filter_AuSyncType_t savedAuSyncType = filter->currentAuSyncType;
+            eARSTREAM2_H264_FILTER_AU_SYNC_TYPE savedAuSyncType = filter->currentAuSyncType;
             int savedAuSlicesAllI = filter->currentAuSlicesAllI;
             int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
             int savedAuUserDataSize = filter->currentAuUserDataSize;

@@ -1,18 +1,18 @@
-package com.parrot.arsdk.beaver;
+package com.parrot.arsdk.arstream2;
 
 
 import android.os.Process;
 import android.util.Log;
 
-public class BeaverManager
+public class ARStream2Manager
 {
-    private static final String TAG = BeaverManager.class.getSimpleName();
+    private static final String TAG = ARStream2Manager.class.getSimpleName();
     private final  long nativeRef;
     private final Thread streamThread;
     private final Thread controlThread;
     private final Thread filterThread;
 
-    public BeaverManager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
+    public ARStream2Manager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                          int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
         this.nativeRef = nativeInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
@@ -25,7 +25,7 @@ public class BeaverManager
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunStreamThread(nativeRef);
             }
-        }, "BeaverStream");
+        }, "ARStream2Stream");
         this.controlThread = new Thread(new Runnable()
         {
             @Override
@@ -34,7 +34,7 @@ public class BeaverManager
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunControlThread(nativeRef);
             }
-        }, "BeaverControl");
+        }, "ARStream2Control");
         this.filterThread = new Thread(new Runnable()
         {
             @Override
@@ -43,7 +43,7 @@ public class BeaverManager
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
                 nativeRunFilterThread(nativeRef);
             }
-        }, "BeaverFilter");
+        }, "ARStream2Filter");
     }
 
     public boolean isValid()
@@ -61,7 +61,7 @@ public class BeaverManager
         }
         else
         {
-            Log.e(TAG, "unable to start, beaver manager is not valid! ");
+            Log.e(TAG, "unable to start, arstream2 manager is not valid! ");
         }
     }
 
