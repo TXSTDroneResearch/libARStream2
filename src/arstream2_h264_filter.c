@@ -20,10 +20,6 @@
 
 #include "arstream2_h264.h"
 
-/* DEBUG */
-//#include <locale.h>
-/* /DEBUG */
-
 
 #define ARSTREAM2_H264_FILTER_TAG "ARSTREAM2_H264Filter"
 
@@ -139,16 +135,9 @@ typedef struct ARSTREAM2_H264Filter_s
     int threadShouldStop;
     int threadStarted;
 
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-    FILE* fMonitorOut;
-#endif
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
     FILE* fStreamOut;
 #endif
-
-/* DEBUG */
-    //FILE *fDebug;
-/* /DEBUG */
 
 } ARSTREAM2_H264Filter_t;
 
@@ -167,10 +156,6 @@ static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *na
         filter->firstGrayIFramePending = 1;
     }
     ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK"); //TODO: debug
-/* DEBUG */
-    //fprintf(filter->fDebug, "SPS/PPS sync OK\n");
-    //fflush(filter->fDebug);
-/* /DEBUG */
 
     /* SPS/PPS callback */
     if (filter->spsPpsCallback)
@@ -429,10 +414,6 @@ static void ARSTREAM2_H264Filter_updateCurrentAu(ARSTREAM2_H264Filter_t *filter,
             }
             filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
             //ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
-/* DEBUG */
-            //fprintf(filter->fDebug, "updateCurrentAu: previousSliceIndex: %d - previousSliceFirstMb: %d\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
-            //fflush(filter->fDebug);
-/* /DEBUG */
         }
     }
 }
@@ -480,10 +461,6 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
     {
         cancelAuOutput = 1;
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "AU output cancelled (!outputIncompleteAu)"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "AU output cancelled (!outputIncompleteAu)\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
     }
 
     if (!cancelAuOutput)
@@ -496,10 +473,6 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             if (filter->running)
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "AU output cancelled (waitForSync)"); //TODO: debug
-/* DEBUG */
-                //fprintf(filter->fDebug, "AU output cancelled (waitForSync)\n");
-                //fflush(filter->fDebug);
-/* /DEBUG */
             }
             ARSAL_Mutex_Unlock(&(filter->mutex));
         }
@@ -635,10 +608,6 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             ret = 0;
 
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
-/* DEBUG */
-            //fprintf(filter->fDebug, "Gray I slice NALU output size: %d\n", outputSize);
-            //fflush(filter->fDebug);
-/* /DEBUG */
 
             if (filter->replaceStartCodesWithNaluSize)
             {
@@ -787,10 +756,6 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
     if (isFirstNaluInAu)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably on previous AU => OK"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Missing NALU is probably on previous AU => OK\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         if (filter->currentAuCurrentSliceFirstMb == 0)
         {
             filter->currentAuPreviousSliceFirstMb = 0;
@@ -801,10 +766,6 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
     else if (((naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE_IDR) && (naluType != ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         if (filter->currentAuCurrentSliceFirstMb == 0)
         {
             filter->currentAuPreviousSliceFirstMb = 0;
@@ -815,36 +776,20 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
     else if (!filter->generateSkippedPSlices)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
     ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
-/* DEBUG */
-    //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
-    //fflush(filter->fDebug);
-/* /DEBUG */
 
     if (!filter->sync)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "No sync, abort"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "No sync, abort\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
     if ((!filter->currentAuStreamingInfoAvailable) && (filter->currentAuSlicesReceived))
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Streaming info is not available"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Streaming info is not available\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
@@ -863,19 +808,11 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
             missingMb = filter->currentAuCurrentSliceFirstMb;
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "currentSliceFirstMb: %d - missingMb: %d",
                         filter->currentAuCurrentSliceFirstMb, missingMb); //TODO: debug
-/* DEBUG */
-            //fprintf(filter->fDebug, "currentSliceFirstMb: %d - missingMb: %d\n", filter->currentAuCurrentSliceFirstMb, missingMb);
-            //fflush(filter->fDebug);
-/* /DEBUG */
         }
         else
         {
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!",
                         filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
-/* DEBUG */
-            //fprintf(filter->fDebug, "Error: previousSliceIdx: %d - currentSliceFirstMb: %d - this should not happen!\n", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
-            //fflush(filter->fDebug);
-/* /DEBUG */
             missingMb = 0;
             ret = -1;
         }
@@ -887,21 +824,11 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
         missingMb = filter->currentAuCurrentSliceFirstMb - firstMbInSlice;
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d - firstMbInSlice: %d",
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb, firstMbInSlice); //TODO: debug
-/* DEBUG */
-            /*fprintf(filter->fDebug, "previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - missingMb: %d\n",
-                    filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb);
-            fflush(filter->fDebug);*/
-/* /DEBUG */
     }
     else
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Error: previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - this should not happen!",
                     filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb); //TODO: debug
-/* DEBUG */
-            /*fprintf(filter->fDebug, "Error: previousSliceFirstMb: %d - previousSliceMbCount: %d - currentSliceFirstMb: %d - this should not happen!\n",
-                    filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb);
-            fflush(filter->fDebug);*/
-/* /DEBUG */
         missingMb = 0;
         ret = -1;
     }
@@ -928,10 +855,6 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
-/* DEBUG */
-                //fprintf(filter->fDebug, "Skipped P slice NALU generated size=%d (firstMb=%d, mbCount=%d)\n", outputSize, firstMbInSlice, missingMb);
-                //fflush(filter->fDebug);
-/* /DEBUG */
                 if (filter->currentAuSize + naluSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
                     if (filter->replaceStartCodesWithNaluSize)
@@ -963,36 +886,20 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
     if (!filter->generateSkippedPSlices)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
     ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Missing NALU is probably a slice"); //TODO: debug
-/* DEBUG */
-    //fprintf(filter->fDebug, "Missing NALU is probably a slice\n");
-    //fflush(filter->fDebug);
-/* /DEBUG */
 
     if (!filter->sync)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "No sync, abort"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "No sync, abort\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
     if (!filter->currentAuStreamingInfoAvailable)
     {
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Streaming info is not available"); //TODO: debug
-/* DEBUG */
-        //fprintf(filter->fDebug, "Streaming info is not available\n");
-        //fflush(filter->fDebug);
-/* /DEBUG */
         return -2;
     }
 
@@ -1041,10 +948,6 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Skipped P slice NALU output size: %d", outputSize); //TODO: debug
-/* DEBUG */
-                //fprintf(filter->fDebug, "Skipped P slice NALU generated size=%d (firstMb=%d, mbCount=%d)\n", outputSize, firstMbInSlice, missingMb);
-                //fflush(filter->fDebug);
-/* /DEBUG */
                 if (filter->currentAuSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
                     if (filter->replaceStartCodesWithNaluSize)
@@ -1069,8 +972,8 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 
 
 uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                          uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
-                                          int missingPacketsBefore, int *newNaluBufferSize, void *custom)
+                                                      uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                      int missingPacketsBefore, int *newNaluBufferSize, void *custom)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)custom;
     ARSTREAM2_H264Filter_H264NaluType_t naluType = ARSTREAM2_H264_FILTER_H264_NALU_TYPE_UNKNOWN;
@@ -1179,11 +1082,6 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
 
             /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "Received NALU type=%d sliceType=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)",
                         naluType, sliceType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);*/ //TODO: debug
-/* DEBUG */
-            /*fprintf(filter->fDebug, "Received NALU type=%d size=%d ts=%llu (first=%d, last=%d, missingBefore=%d)\n",
-                    naluType, naluSize, (long long unsigned int)auTimestamp, isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore);
-            fflush(filter->fDebug);*/
-/* /DEBUG */
 
             if ((filter->currentNaluBuffer == NULL) || (filter->currentNaluBufferSize == 0))
             {
@@ -1538,10 +1436,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         filter->replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
         filter->generateSkippedPSlices = (config->generateSkippedPSlices > 0) ? 1 : 0;
         filter->generateFirstGrayIFrame = (config->generateFirstGrayIFrame > 0) ? 1 : 0;
-
-/* DEBUG */
-        //filter->fDebug = fopen("debug.dat", "w");
-/* /DEBUG */
     }
 
     if (ret == ARSTREAM2_OK)
@@ -1721,9 +1615,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
             if (filter->currentAuUserData) free(filter->currentAuUserData);
             if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-            if (filter->fMonitorOut) fclose(filter->fMonitorOut);
-#endif
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
             if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
@@ -1768,16 +1659,9 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
         if (filter->currentAuUserData) free(filter->currentAuUserData);
-#ifdef ARSTREAM2_H264_FILTER_MONITORING_OUTPUT
-        if (filter->fMonitorOut) fclose(filter->fMonitorOut);
-#endif
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
         if (filter->fStreamOut) fclose(filter->fStreamOut);
 #endif
-
-/* DEBUG */
-        //fclose(filter->fDebug);
-/* /DEBUG */
 
         free(filter);
         *filterHandle = NULL;
