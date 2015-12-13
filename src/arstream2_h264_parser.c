@@ -12,11 +12,16 @@
 #include <math.h>
 #include <arpa/inet.h>
 
+#include <libARSAL/ARSAL_Print.h>
+
 #include <libARStream2/arstream2_h264_parser.h>
 #include "arstream2_h264.h"
 
 
+#define ARSTREAM2_H264_PARSER_TAG "ARSTREAM2_H264Parser"
+
 #define ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT (16)
+#define log2(x) (log(x) / log(2)) //TODO
 
 
 typedef struct ARSTREAM2_H264Parser_s
@@ -101,7 +106,6 @@ static ARSTREAM2_H264Parser_ParseNaluType_func ARSTREAM2_H264Parser_ParseNaluTyp
 };
 
 
-#ifdef ARSTREAM2_H264_PARSER_VERBOSE
 static char *ARSTREAM2_H264Parser_naluTypeStr[] =
 {
     "undefined",
@@ -156,11 +160,6 @@ static char *ARSTREAM2_H264Parser_sliceTypeStr[] =
     "SP (all)",
     "SI (all)"
 };
-#else
-    #define printf(...) {} //TODO
-    #define fprintf(...) {} //TODO
-    #define log2(x) (log(x) / log(2)) //TODO
-#endif
 
 
 static int ARSTREAM2_H264Parser_picStructToNumClockTS[16] =
@@ -342,7 +341,7 @@ static inline int skipBytes(ARSTREAM2_H264Parser_t* _parser, int _byteCount)
         _ret = readBits(_parser, 8, &_val, 1);
         if (_ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return _ret;
         }
         _readBits += _ret;
@@ -368,7 +367,7 @@ static inline int moreRbspData(ARSTREAM2_H264Parser_t* _parser)
         _ret = readBits(_parser, 8, &_val, 1);
         if (_ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return 0;
         }
         if (_val != 0x80)
@@ -380,7 +379,7 @@ static inline int moreRbspData(ARSTREAM2_H264Parser_t* _parser)
         _ret = seekToByte(_parser, -1, SEEK_CUR);
         if (_ret < 0)
         {
-            fprintf(stderr, "Error: seekToByte() failed (%d)\n", _ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "seekToByte() failed (%d)", _ret);
             return 0;
         }
     }
@@ -398,7 +397,7 @@ static int ARSTREAM2_H264Parser_ParseScalingList(ARSTREAM2_H264Parser_t* parser,
     int nextScale = 8;
     
     // scaling_list
-    if (parser->config.printLogs) printf("---- scaling_list()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- scaling_list()");
     
     for (j = 0; j < sizeOfScalingList; j++)
     {
@@ -408,11 +407,11 @@ static int ARSTREAM2_H264Parser_ParseScalingList(ARSTREAM2_H264Parser_t* parser,
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ delta_scale = %d\n", val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ delta_scale = %d", val_se);
             nextScale = (lastScale + val_se + 256 ) & 0xFF;
         }
         lastScale = (nextScale == 0) ? lastScale : nextScale;
@@ -430,38 +429,38 @@ static int ARSTREAM2_H264Parser_ParseHrdParams(ARSTREAM2_H264Parser_t* parser)
     unsigned int i;
 
     // hrd_parameters
-    if (parser->config.printLogs) printf("------ hrd_parameters()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hrd_parameters()");
 
     // cpb_cnt_minus1
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.cpb_cnt_minus1 = val;
-    if (parser->config.printLogs) printf("-------- cpb_cnt_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- cpb_cnt_minus1 = %d", val);
 
     // bit_rate_scale
     ret = readBits(parser, 4, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("-------- bit_rate_scale = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- bit_rate_scale = %d", val);
 
     // cpb_size_scale
     ret = readBits(parser, 4, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("-------- cpb_size_scale = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- cpb_size_scale = %d", val);
 
     for (i = 0; i <= parser->spsContext.cpb_cnt_minus1; i++)
     {
@@ -469,76 +468,76 @@ static int ARSTREAM2_H264Parser_ParseHrdParams(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("-------- bit_rate_value_minus1[%d] = %d\n", i, val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- bit_rate_value_minus1[%d] = %d", i, val);
 
         // cpb_size_value_minus1
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("-------- cpb_size_value_minus1[%d] = %d\n", i, val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- cpb_size_value_minus1[%d] = %d", i, val);
 
         // cbr_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("-------- cbr_flag[%d] = %d\n", i, val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- cbr_flag[%d] = %d", i, val);
     }
 
     // initial_cpb_removal_delay_length_minus1
     ret = readBits(parser, 5, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.initial_cpb_removal_delay_length_minus1 = val;
-    if (parser->config.printLogs) printf("-------- initial_cpb_removal_delay_length_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- initial_cpb_removal_delay_length_minus1 = %d", val);
 
     // cpb_removal_delay_length_minus1
     ret = readBits(parser, 5, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.cpb_removal_delay_length_minus1 = val;
-    if (parser->config.printLogs) printf("-------- cpb_removal_delay_length_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- cpb_removal_delay_length_minus1 = %d", val);
 
     // dpb_output_delay_length_minus1
     ret = readBits(parser, 5, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.dpb_output_delay_length_minus1 = val;
-    if (parser->config.printLogs) printf("-------- dpb_output_delay_length_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- dpb_output_delay_length_minus1 = %d", val);
 
     // time_offset_length
     ret = readBits(parser, 5, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.time_offset_length = val;
-    if (parser->config.printLogs) printf("-------- time_offset_length = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- time_offset_length = %d", val);
 
     return _readBits;
 }
@@ -551,17 +550,17 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
     int _readBits = 0;
 
     // vui_parameters
-    if (parser->config.printLogs) printf("---- vui_parameters()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- vui_parameters()");
 
     // aspect_ratio_info_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ aspect_ratio_info_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ aspect_ratio_info_present_flag = %d", val);
 
     if (val)
     {
@@ -569,11 +568,11 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 8, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ aspect_ratio_idc = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ aspect_ratio_idc = %d", val);
 
         if (val == 255)
         {
@@ -581,21 +580,21 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 16, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ sar_width = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ sar_width = %d", val);
 
             // sar_height
             ret = readBits(parser, 16, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ sar_height = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ sar_height = %d", val);
         }
     }
 
@@ -603,11 +602,11 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ overscan_info_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ overscan_info_present_flag = %d", val);
 
     if (val)
     {
@@ -615,22 +614,22 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ overscan_appropriate_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ overscan_appropriate_flag = %d", val);
     }
 
     // video_signal_type_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ video_signal_type_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ video_signal_type_present_flag = %d", val);
 
     if (val)
     {
@@ -638,31 +637,31 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 3, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ video_format = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ video_format = %d", val);
 
         // video_full_range_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ video_full_range_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ video_full_range_flag = %d", val);
 
         // colour_description_present_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ colour_description_present_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ colour_description_present_flag = %d", val);
         
         if (val)
         {
@@ -670,31 +669,31 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ colour_primaries = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ colour_primaries = %d", val);
 
             // transfer_characteristics
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ transfer_characteristics = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ transfer_characteristics = %d", val);
 
             // matrix_coefficients
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ matrix_coefficients = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ matrix_coefficients = %d", val);
 
         }
     }
@@ -703,11 +702,11 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ chroma_loc_info_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ chroma_loc_info_present_flag = %d", val);
     
     if (val)
     {
@@ -715,32 +714,32 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ chroma_sample_loc_type_top_field = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ chroma_sample_loc_type_top_field = %d", val);
 
         // chroma_sample_loc_type_bottom_field
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ chroma_sample_loc_type_bottom_field = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ chroma_sample_loc_type_bottom_field = %d", val);
     }
 
     // timing_info_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ timing_info_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ timing_info_present_flag = %d", val);
     
     if (val)
     {
@@ -748,43 +747,43 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 32, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ num_units_in_tick = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ num_units_in_tick = %d", val);
         
         // time_scale
         ret = readBits(parser, 32, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ time_scale = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ time_scale = %d", val);
         
         // fixed_frame_rate_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ fixed_frame_rate_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ fixed_frame_rate_flag = %d", val);
     }
 
     // nal_hrd_parameters_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.nal_hrd_parameters_present_flag = val;
-    if (parser->config.printLogs) printf("------ nal_hrd_parameters_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ nal_hrd_parameters_present_flag = %d", val);
     
     if (parser->spsContext.nal_hrd_parameters_present_flag)
     {
@@ -792,7 +791,7 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParseHrdParams(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -802,12 +801,12 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.vcl_hrd_parameters_present_flag = val;
-    if (parser->config.printLogs) printf("------ vcl_hrd_parameters_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ vcl_hrd_parameters_present_flag = %d", val);
     
     if (parser->spsContext.vcl_hrd_parameters_present_flag)
     {
@@ -815,7 +814,7 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParseHrdParams(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseHrdParams() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -827,33 +826,33 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ low_delay_hrd_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ low_delay_hrd_flag = %d", val);
     }
 
     // pic_struct_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.pic_struct_present_flag = val;
-    if (parser->config.printLogs) printf("------ pic_struct_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ pic_struct_present_flag = %d", val);
     
     // bitstream_restriction_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ bitstream_restriction_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ bitstream_restriction_flag = %d", val);
     
     if (val)
     {
@@ -861,71 +860,71 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ motion_vectors_over_pic_boundaries_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ motion_vectors_over_pic_boundaries_flag = %d", val);
 
         // max_bytes_per_pic_denom
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ max_bytes_per_pic_denom = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ max_bytes_per_pic_denom = %d", val);
 
         // max_bits_per_mb_denom
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ max_bits_per_mb_denom = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ max_bits_per_mb_denom = %d", val);
 
         // log2_max_mv_length_horizontal
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ log2_max_mv_length_horizontal = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ log2_max_mv_length_horizontal = %d", val);
 
         // log2_max_mv_length_vertical
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ log2_max_mv_length_vertical = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ log2_max_mv_length_vertical = %d", val);
 
         // max_num_reorder_frames
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ max_num_reorder_frames = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ max_num_reorder_frames = %d", val);
 
         // max_dec_frame_buffering
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ max_dec_frame_buffering = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ max_dec_frame_buffering = %d", val);
     }
 
     return _readBits;
@@ -941,55 +940,55 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
     int i, profile_idc, num_ref_frames_in_pic_order_cnt_cycle, width, height;
 
     // seq_parameter_set_rbsp
-    if (parser->config.printLogs) printf("-- seq_parameter_set_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- seq_parameter_set_rbsp()");
     
     // seq_parameter_set_data
 
     ret = readBits(parser, 24, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     readBytes += 3;
     profile_idc = val >> 16;
     
     // profile_idc
-    if (parser->config.printLogs) printf("---- profile_idc = %d\n", profile_idc);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- profile_idc = %d", profile_idc);
     
     // constraint_set0_flag
-    if (parser->config.printLogs) printf("---- constraint_set0_flag = %d\n", (val >> 15) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set0_flag = %d", (val >> 15) & 1);
     
     // constraint_set1_flag
-    if (parser->config.printLogs) printf("---- constraint_set1_flag = %d\n", (val >> 14) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set1_flag = %d", (val >> 14) & 1);
     
     // constraint_set2_flag
-    if (parser->config.printLogs) printf("---- constraint_set2_flag = %d\n", (val >> 13) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set2_flag = %d", (val >> 13) & 1);
     
     // constraint_set3_flag
-    if (parser->config.printLogs) printf("---- constraint_set3_flag = %d\n", (val >> 12) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set3_flag = %d", (val >> 12) & 1);
     
     // constraint_set4_flag
-    if (parser->config.printLogs) printf("---- constraint_set4_flag = %d\n", (val >> 11) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set4_flag = %d", (val >> 11) & 1);
     
     // constraint_set5_flag
-    if (parser->config.printLogs) printf("---- constraint_set5_flag = %d\n", (val >> 10) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constraint_set5_flag = %d", (val >> 10) & 1);
     
     // reserved_zero_2bits
-    if (parser->config.printLogs) printf("---- reserved_zero_2bits = %d%d\n", (val >> 9) & 1, (val >> 8) & 1);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- reserved_zero_2bits = %d%d", (val >> 9) & 1, (val >> 8) & 1);
     
     // level_idc
-    if (parser->config.printLogs) printf("---- level_idc = %d\n", val & 0xFF);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- level_idc = %d", val & 0xFF);
 
     // seq_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- seq_parameter_set_id = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- seq_parameter_set_id = %d", val);
 
     if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 || profile_idc == 244 
             || profile_idc == 44 || profile_idc == 83 || profile_idc == 86 
@@ -999,12 +998,12 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->spsContext.chroma_format_idc = val;
-        if (parser->config.printLogs) printf("---- chroma_format_idc = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- chroma_format_idc = %d", val);
 
         if (val == 3)
         {
@@ -1012,53 +1011,53 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->spsContext.separate_colour_plane_flag = val;
-            if (parser->config.printLogs) printf("---- separate_colour_plane_flag = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- separate_colour_plane_flag = %d", val);
         }
 
         // bit_depth_luma_minus8
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- bit_depth_luma_minus8 = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- bit_depth_luma_minus8 = %d", val);
 
         // bit_depth_chroma_minus8
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- bit_depth_chroma_minus8 = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- bit_depth_chroma_minus8 = %d", val);
 
         // qpprime_y_zero_transform_bypass_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- qpprime_y_zero_transform_bypass_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- qpprime_y_zero_transform_bypass_flag = %d", val);
 
         // seq_scaling_matrix_present_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- seq_scaling_matrix_present_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- seq_scaling_matrix_present_flag = %d", val);
 
         if (val)
         {
@@ -1068,18 +1067,18 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- seq_scaling_list_present_flag[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- seq_scaling_list_present_flag[%d] = %d", i, val);
 
                 if (val)
                 {
                     ret = ARSTREAM2_H264Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseScalingList() failed (%d)\n", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseScalingList() failed (%d)", ret);
                         return ret;
                     }
                     _readBits += ret;
@@ -1092,23 +1091,23 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.log2_max_frame_num_minus4 = val;
-    if (parser->config.printLogs) printf("---- log2_max_frame_num_minus4 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- log2_max_frame_num_minus4 = %d", val);
 
     // pic_order_cnt_type
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.pic_order_cnt_type = val;
-    if (parser->config.printLogs) printf("---- pic_order_cnt_type = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_order_cnt_type = %d", val);
 
     if (parser->spsContext.pic_order_cnt_type == 0)
     {
@@ -1116,12 +1115,12 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->spsContext.log2_max_pic_order_cnt_lsb_minus4 = val;
-        if (parser->config.printLogs) printf("---- log2_max_pic_order_cnt_lsb_minus4 = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- log2_max_pic_order_cnt_lsb_minus4 = %d", val);
     }
     else if (parser->spsContext.pic_order_cnt_type == 1)
     {
@@ -1129,43 +1128,43 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->spsContext.delta_pic_order_always_zero_flag = val;
-        if (parser->config.printLogs) printf("---- delta_pic_order_always_zero_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- delta_pic_order_always_zero_flag = %d", val);
 
         // offset_for_non_ref_pic
         ret = readBits_expGolomb_se(parser, &val_se, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- offset_for_non_ref_pic = %d\n", val_se);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- offset_for_non_ref_pic = %d", val_se);
 
         // offset_for_top_to_bottom_field
         ret = readBits_expGolomb_se(parser, &val_se, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- offset_for_top_to_bottom_field = %d\n", val_se);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- offset_for_top_to_bottom_field = %d", val_se);
 
         // num_ref_frames_in_pic_order_cnt_cycle
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         num_ref_frames_in_pic_order_cnt_cycle = val;
-        if (parser->config.printLogs) printf("---- num_ref_frames_in_pic_order_cnt_cycle = %d\n", num_ref_frames_in_pic_order_cnt_cycle);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- num_ref_frames_in_pic_order_cnt_cycle = %d", num_ref_frames_in_pic_order_cnt_cycle);
 
         for (i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++)
         {
@@ -1173,11 +1172,11 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("---- offset_for_ref_frame[%d] = %d\n", i, val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- offset_for_ref_frame[%d] = %d", i, val_se);
         }
     }
 
@@ -1185,57 +1184,57 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- max_num_ref_frames = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- max_num_ref_frames = %d", val);
 
     // gaps_in_frame_num_value_allowed_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- gaps_in_frame_num_value_allowed_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- gaps_in_frame_num_value_allowed_flag = %d", val);
 
     // pic_width_in_mbs_minus1
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.pic_width_in_mbs_minus1 = val;
     width = (parser->spsContext.pic_width_in_mbs_minus1 + 1) * 16;
-    if (parser->config.printLogs) printf("---- pic_width_in_mbs_minus1 = %d (width = %d pixels)\n", val, width);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_width_in_mbs_minus1 = %d (width = %d pixels)", val, width);
 
     // pic_height_in_map_units_minus1
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.pic_height_in_map_units_minus1 = val;
     height = (parser->spsContext.pic_height_in_map_units_minus1 + 1) * 16;
-    if (parser->config.printLogs) printf("---- pic_height_in_map_units_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_height_in_map_units_minus1 = %d", val);
 
     // frame_mbs_only_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->spsContext.frame_mbs_only_flag = val;
     if (!parser->spsContext.frame_mbs_only_flag) height *= 2;
-    if (parser->config.printLogs) printf("---- frame_mbs_only_flag = %d (height = %d pixels)\n", val, height);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_mbs_only_flag = %d (height = %d pixels)", val, height);
 
     if (!val)
     {
@@ -1243,32 +1242,32 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- mb_adaptive_frame_field_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- mb_adaptive_frame_field_flag = %d", val);
     }
 
     // direct_8x8_inference_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- direct_8x8_inference_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- direct_8x8_inference_flag = %d", val);
 
     // frame_cropping_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- frame_cropping_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_cropping_flag = %d", val);
 
     if (val)
     {
@@ -1276,52 +1275,52 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- frame_crop_left_offset = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_crop_left_offset = %d", val);
 
         // frame_crop_right_offset
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- frame_crop_right_offset = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_crop_right_offset = %d", val);
 
         // frame_crop_top_offset
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- frame_crop_top_offset = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_crop_top_offset = %d", val);
 
         // frame_crop_bottom_offset
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- frame_crop_bottom_offset = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- frame_crop_bottom_offset = %d", val);
     }
 
     // vui_parameters_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- vui_parameters_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- vui_parameters_present_flag = %d", val);
 
     if (val)
     {
@@ -1329,7 +1328,7 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParseVui(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseVui() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseVui() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -1339,7 +1338,7 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -1347,7 +1346,7 @@ static int ARSTREAM2_H264Parser_ParseSps(ARSTREAM2_H264Parser_t* parser)
     ret = bitstreamByteAlign(parser);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
         return ret;
     }
     _readBits += ret;
@@ -1367,60 +1366,60 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
     unsigned int i, len, pic_size_in_map_units_minus1, transform_8x8_mode_flag;
 
     // pic_parameter_set_rbsp
-    if (parser->config.printLogs) printf("-- pic_parameter_set_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- pic_parameter_set_rbsp()");
 
     // pic_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- pic_parameter_set_id = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_parameter_set_id = %d", val);
 
     // seq_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- seq_parameter_set_id = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- seq_parameter_set_id = %d", val);
 
     // entropy_coding_mode_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.entropy_coding_mode_flag = val;
-    if (parser->config.printLogs) printf("---- entropy_coding_mode_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- entropy_coding_mode_flag = %d", val);
 
     // bottom_field_pic_order_in_frame_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.bottom_field_pic_order_in_frame_present_flag = val;
-    if (parser->config.printLogs) printf("---- bottom_field_pic_order_in_frame_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- bottom_field_pic_order_in_frame_present_flag = %d", val);
 
     // num_slice_groups_minus1
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.num_slice_groups_minus1 = val;
-    if (parser->config.printLogs) printf("---- num_slice_groups_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- num_slice_groups_minus1 = %d", val);
 
     if (parser->ppsContext.num_slice_groups_minus1 > 0)
     {
@@ -1428,12 +1427,12 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->ppsContext.slice_group_map_type = val;
-        if (parser->config.printLogs) printf("---- slice_group_map_type = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- slice_group_map_type = %d", val);
         
         if (parser->ppsContext.slice_group_map_type == 0)
         {
@@ -1443,11 +1442,11 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- run_length_minus1[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- run_length_minus1[%d] = %d", i, val);
             }
         }
         else if (parser->ppsContext.slice_group_map_type == 2)
@@ -1458,21 +1457,21 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- top_left[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- top_left[%d] = %d", i, val);
 
                 // bottom_right[i]
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- bottom_right[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- bottom_right[%d] = %d", i, val);
             }
         }
         else if ((parser->ppsContext.slice_group_map_type == 3) || (parser->ppsContext.slice_group_map_type == 4) || (parser->ppsContext.slice_group_map_type == 5))
@@ -1481,22 +1480,22 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("---- slice_group_change_direction_flag = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- slice_group_change_direction_flag = %d", val);
 
             // slice_group_change_rate_minus1
             ret = readBits_expGolomb_ue(parser, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->ppsContext.slice_group_change_rate_minus1 = val;
-            if (parser->config.printLogs) printf("---- slice_group_change_rate_minus1 = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- slice_group_change_rate_minus1 = %d", val);
         }
         else if (parser->ppsContext.slice_group_map_type == 6)
         {
@@ -1504,12 +1503,12 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_ue(parser, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             pic_size_in_map_units_minus1 = val;
-            if (parser->config.printLogs) printf("---- pic_size_in_map_units_minus1 = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_size_in_map_units_minus1 = %d", val);
 
             for (i = 0; i <= pic_size_in_map_units_minus1; i++)
             {
@@ -1518,11 +1517,11 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits(parser, len, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- slice_group_id[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- slice_group_id[%d] = %d", i, val);
             }
         }
     }
@@ -1531,107 +1530,107 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.num_ref_idx_l0_default_active_minus1 = val;
-    if (parser->config.printLogs) printf("---- num_ref_idx_l0_default_active_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- num_ref_idx_l0_default_active_minus1 = %d", val);
 
     // num_ref_idx_l1_default_active_minus1
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.num_ref_idx_l1_default_active_minus1 = val;
-    if (parser->config.printLogs) printf("---- num_ref_idx_l1_default_active_minus1 = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- num_ref_idx_l1_default_active_minus1 = %d", val);
 
     // weighted_pred_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.weighted_pred_flag = val;
-    if (parser->config.printLogs) printf("---- weighted_pred_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- weighted_pred_flag = %d", val);
 
     // weighted_bipred_idc
     ret = readBits(parser, 2, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.weighted_bipred_idc = val;
-    if (parser->config.printLogs) printf("---- weighted_bipred_idc = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- weighted_bipred_idc = %d", val);
 
     // pic_init_qp_minus26
     ret = readBits_expGolomb_se(parser, &val_se, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- pic_init_qp_minus26 = %d\n", val_se);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_init_qp_minus26 = %d", val_se);
 
     // pic_init_qs_minus26
     ret = readBits_expGolomb_se(parser, &val_se, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- pic_init_qs_minus26 = %d\n", val_se);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_init_qs_minus26 = %d", val_se);
 
     // chroma_qp_index_offset
     ret = readBits_expGolomb_se(parser, &val_se, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- chroma_qp_index_offset = %d\n", val_se);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- chroma_qp_index_offset = %d", val_se);
 
     // deblocking_filter_control_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.deblocking_filter_control_present_flag = val;
-    if (parser->config.printLogs) printf("---- deblocking_filter_control_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- deblocking_filter_control_present_flag = %d", val);
 
     // constrained_intra_pred_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- constrained_intra_pred_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- constrained_intra_pred_flag = %d", val);
 
     // redundant_pic_cnt_present_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->ppsContext.redundant_pic_cnt_present_flag = val;
-    if (parser->config.printLogs) printf("---- redundant_pic_cnt_present_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- redundant_pic_cnt_present_flag = %d", val);
 
 
     if (moreRbspData(parser))
@@ -1640,22 +1639,22 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         transform_8x8_mode_flag = val;
-        if (parser->config.printLogs) printf("---- transform_8x8_mode_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- transform_8x8_mode_flag = %d", val);
 
         // pic_scaling_matrix_present_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- pic_scaling_matrix_present_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_scaling_matrix_present_flag = %d", val);
 
         if (val)
         {
@@ -1665,18 +1664,18 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("---- pic_scaling_list_present_flag[%d] = %d\n", i, val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- pic_scaling_list_present_flag[%d] = %d", i, val);
 
                 if (val)
                 {
                     ret = ARSTREAM2_H264Parser_ParseScalingList(parser, (i < 6) ? 16 : 64);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseScalingList() failed (%d)\n", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseScalingList() failed (%d)", ret);
                         return ret;
                     }
                     _readBits += ret;
@@ -1688,11 +1687,11 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_se(parser, &val_se, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("---- second_chroma_qp_index_offset = %d\n", val_se);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- second_chroma_qp_index_offset = %d", val_se);
     }
 
 
@@ -1700,7 +1699,7 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -1708,7 +1707,7 @@ static int ARSTREAM2_H264Parser_ParsePps(ARSTREAM2_H264Parser_t* parser)
     ret = bitstreamByteAlign(parser);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
         return ret;
     }
     _readBits += ret;
@@ -1726,11 +1725,11 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
     int _readBits = 0;
     uint32_t uuid1, uuid2, uuid3, uuid4;
 
-    if (parser->config.printLogs) printf("---- SEI: user_data_unregistered\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- SEI: user_data_unregistered");
 
     if (payloadSize < 16)
     {
-        if (parser->config.printLogs) printf("---- wrong size for user_data_unregistered (%d < 16)\n", payloadSize);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- wrong size for user_data_unregistered (%d < 16)", payloadSize);
         return _readBits;
     }
     
@@ -1738,7 +1737,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
     ret = readBits(parser, 32, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -1746,7 +1745,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
     ret = readBits(parser, 32, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -1754,7 +1753,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
     ret = readBits(parser, 32, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -1762,12 +1761,12 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
     ret = readBits(parser, 32, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     uuid4 = val;
-    if (parser->config.printLogs) printf("------ uuid_iso_iec_11578 = %08x-%04x-%04x-%08x-%08x\n", uuid1, uuid2 >> 16, uuid2 & 0xFFFF, uuid3, uuid4);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ uuid_iso_iec_11578 = %08x-%04x-%04x-%08x-%08x", uuid1, uuid2 >> 16, uuid2 & 0xFFFF, uuid3, uuid4);
 
     if ((parser->config.extractUserDataSei) && (parser->userDataCount < ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT))
     {
@@ -1776,7 +1775,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
             parser->pUserDataBuf[parser->userDataCount] = (uint8_t*)realloc(parser->pUserDataBuf[parser->userDataCount], payloadSize);
             if (!parser->pUserDataBuf[parser->userDataCount])
             {
-                fprintf(stderr, "error: allocation failed (size %d)\n", payloadSize);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %d)", payloadSize);
                 return -1;
             }
             parser->userDataBufSize[parser->userDataCount] = payloadSize;
@@ -1785,7 +1784,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
         ret = seekToByte(parser, -(_readBits / 8), SEEK_CUR);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to seek %d bytes backwards\n", (_readBits / 8));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to seek %d bytes backwards", (_readBits / 8));
             return ret;
         }
         _readBits = 0;
@@ -1795,7 +1794,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
@@ -1809,7 +1808,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
         ret = skipBytes(parser, payloadSize - 16);
         if (ret < 0)
         {
-            fprintf(stderr, "error: skipBytes() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "skipBytes() failed (%d)", ret);
             return ret;
         }
         _readBits += ret * 8;
@@ -1824,47 +1823,47 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
     uint32_t val = 0;
     int _readBits = 0;
 
-    if (parser->config.printLogs) printf("---- SEI: recovery_point\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- SEI: recovery_point");
 
     // recovery_frame_count
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ recovery_frame_count = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ recovery_frame_count = %d", val);
 
     // exact_match_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ exact_match_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ exact_match_flag = %d", val);
 
     // broken_link_flag
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ broken_link_flag = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ broken_link_flag = %d", val);
 
     // changing_slice_group_idc
     ret = readBits(parser, 2, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ changing_slice_group_idc = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ changing_slice_group_idc = %d", val);
 
     return _readBits;
 }
@@ -1877,17 +1876,17 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(ARSTREAM2_H264Pa
     int _readBits = 0;
     unsigned int i;
 
-    if (parser->config.printLogs) printf("---- SEI: buffering_period\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- SEI: buffering_period");
 
     // seq_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("------ seq_parameter_set_id = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seq_parameter_set_id = %d", val);
 
     if (parser->spsContext.nal_hrd_parameters_present_flag)
     {
@@ -1897,21 +1896,21 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(ARSTREAM2_H264Pa
             ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ initial_cpb_removal_delay[%d] = %d\n", i, val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ initial_cpb_removal_delay[%d] = %d", i, val);
 
             // initial_cpb_removal_delay_offset[i]
             ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ initial_cpb_removal_delay_offset[%d] = %d\n", i, val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ initial_cpb_removal_delay_offset[%d] = %d", i, val);
         }
     }
     
@@ -1923,21 +1922,21 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(ARSTREAM2_H264Pa
             ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ initial_cpb_removal_delay[%d] = %d\n", i, val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ initial_cpb_removal_delay[%d] = %d", i, val);
 
             // initial_cpb_removal_delay_offset[i]
             ret = readBits(parser, parser->spsContext.initial_cpb_removal_delay_length_minus1 + 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ initial_cpb_removal_delay_offset[%d] = %d\n", i, val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ initial_cpb_removal_delay_offset[%d] = %d", i, val);
         }
     }
 
@@ -1952,7 +1951,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
     int _readBits = 0;
     int i, full_timestamp_flag, pic_struct;
 
-    if (parser->config.printLogs) printf("---- SEI: pic_timing\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- SEI: pic_timing");
 
     if (parser->spsContext.nal_hrd_parameters_present_flag || parser->spsContext.vcl_hrd_parameters_present_flag)
     {
@@ -1960,21 +1959,21 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
         ret = readBits(parser, parser->spsContext.cpb_removal_delay_length_minus1 + 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ cpb_removal_delay = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ cpb_removal_delay = %d", val);
 
         // dpb_output_delay
         ret = readBits(parser, parser->spsContext.dpb_output_delay_length_minus1 + 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ dpb_output_delay = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ dpb_output_delay = %d", val);
     }
 
     if (parser->spsContext.pic_struct_present_flag)
@@ -1983,12 +1982,12 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
         ret = readBits(parser, 4, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         pic_struct = val;
-        if (parser->config.printLogs) printf("------ pic_struct = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ pic_struct = %d", val);
         
         for (i = 0; i < ARSTREAM2_H264Parser_picStructToNumClockTS[pic_struct]; i++)
         {
@@ -1996,11 +1995,11 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
             ret = readBits(parser, 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
-            if (parser->config.printLogs) printf("------ clock_timestamp_flag[%d] = %d\n", i, val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clock_timestamp_flag[%d] = %d", i, val);
             
             if (val)
             {
@@ -2008,72 +2007,72 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                 ret = readBits(parser, 2, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ ct_type = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ ct_type = %d", val);
 
                 // nuit_field_based_flag
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ nuit_field_based_flag = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ nuit_field_based_flag = %d", val);
 
                 // counting_type
                 ret = readBits(parser, 5, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ counting_type = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ counting_type = %d", val);
 
                 // full_timestamp_flag
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
                 full_timestamp_flag = val;
-                if (parser->config.printLogs) printf("------ full_timestamp_flag = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ full_timestamp_flag = %d", val);
 
                 // discontinuity_flag
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ discontinuity_flag = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ discontinuity_flag = %d", val);
 
                 // cnt_dropped_flag
                 ret = readBits(parser, 1, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ cnt_dropped_flag = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ cnt_dropped_flag = %d", val);
 
                 // n_frames
                 ret = readBits(parser, 8, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
-                if (parser->config.printLogs) printf("------ n_frames = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ n_frames = %d", val);
                 
                 if (full_timestamp_flag)
                 {
@@ -2081,31 +2080,31 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                     ret = readBits(parser, 6, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("------ seconds_value = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seconds_value = %d", val);
 
                     // minutes_value
                     ret = readBits(parser, 6, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("------ minutes_value = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ minutes_value = %d", val);
 
                     // hours_value
                     ret = readBits(parser, 5, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("------ hours_value = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hours_value = %d", val);
                 }
                 else
                 {
@@ -2113,11 +2112,11 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                     ret = readBits(parser, 1, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("------ seconds_flag = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seconds_flag = %d", val);
 
                     if (val)
                     {
@@ -2125,21 +2124,21 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                         ret = readBits(parser, 6, &val, 1);
                         if (ret < 0)
                         {
-                            fprintf(stderr, "error: failed to read from file\n");
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                             return ret;
                         }
                         _readBits += ret;
-                        if (parser->config.printLogs) printf("------ seconds_value = %d\n", val);
+                        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seconds_value = %d", val);
 
                         // minutes_flag
                         ret = readBits(parser, 1, &val, 1);
                         if (ret < 0)
                         {
-                            fprintf(stderr, "error: failed to read from file\n");
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                             return ret;
                         }
                         _readBits += ret;
-                        if (parser->config.printLogs) printf("------ minutes_flag = %d\n", val);
+                        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ minutes_flag = %d", val);
 
                         if (val)
                         {
@@ -2147,21 +2146,21 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                             ret = readBits(parser, 6, &val, 1);
                             if (ret < 0)
                             {
-                                fprintf(stderr, "error: failed to read from file\n");
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                                 return ret;
                             }
                             _readBits += ret;
-                            if (parser->config.printLogs) printf("------ minutes_value = %d\n", val);
+                            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ minutes_value = %d", val);
 
                             // hours_flag
                             ret = readBits(parser, 1, &val, 1);
                             if (ret < 0)
                             {
-                                fprintf(stderr, "error: failed to read from file\n");
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                                 return ret;
                             }
                             _readBits += ret;
-                            if (parser->config.printLogs) printf("------ hours_flag = %d\n", val);
+                            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hours_flag = %d", val);
 
                             if (val)
                             {
@@ -2169,11 +2168,11 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                                 ret = readBits(parser, 5, &val, 1);
                                 if (ret < 0)
                                 {
-                                    fprintf(stderr, "error: failed to read from file\n");
+                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                                     return ret;
                                 }
                                 _readBits += ret;
-                                if (parser->config.printLogs) printf("------ hours_value = %d\n", val);
+                                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hours_value = %d", val);
                             }
                         }
                     }
@@ -2185,11 +2184,11 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                     ret = readBits(parser, parser->spsContext.time_offset_length, &val, 1); //TODO: signed value
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("------ time_offset = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ time_offset = %d", val);
                 }
             }
         }
@@ -2207,7 +2206,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
     int payloadType, payloadSize;
 
     // sei_rbsp
-    if (parser->config.printLogs) printf("-- sei_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- sei_rbsp()");
     
     parser->userDataCount = 0;
     memset(parser->userDataSize, 0, sizeof(parser->userDataSize));
@@ -2226,14 +2225,14 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             payloadType += val;
         }
         while (val == 0xFF);
-        if (parser->config.printLogs) printf("---- last_payload_type_byte = %d (payloadType = %d)\n", val, payloadType);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- last_payload_type_byte = %d (payloadType = %d)", val, payloadType);
 
         // last_payload_size_byte
         do
@@ -2241,14 +2240,14 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             payloadSize += val;
         }
         while (val == 0xFF);
-        if (parser->config.printLogs) printf("---- last_payload_size_byte = %d (payloadSize = %d)\n", val, payloadSize);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- last_payload_size_byte = %d (payloadSize = %d)", val, payloadSize);
         
         // sei_payload
         switch(payloadType)
@@ -2257,7 +2256,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod() failed (%d)\n", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod() failed (%d)", ret);
                     return ret;
                 }
                 _readBits2 += ret;
@@ -2266,7 +2265,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_picTiming() failed (%d)\n", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseSeiPayload_picTiming() failed (%d)", ret);
                     return ret;
                 }
                 _readBits2 += ret;
@@ -2275,7 +2274,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint() failed (%d)\n", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint() failed (%d)", ret);
                     return ret;
                 }
                 _readBits2 += ret;
@@ -2284,17 +2283,17 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered() failed (%d)\n", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered() failed (%d)", ret);
                     return ret;
                 }
                 _readBits2 += ret;
                 break;
             default:
-                if (parser->config.printLogs) printf("---- unsupported payload type (skipping)\n");
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- unsupported payload type (skipping)");
                 ret = skipBytes(parser, payloadSize);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: skipBytes() failed (%d)\n", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "skipBytes() failed (%d)", ret);
                     return ret;
                 }
                 _readBits2 += ret * 8;
@@ -2305,14 +2304,14 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
         ret = bitstreamByteAlign(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
             return ret;
         }
         _readBits2 += ret;
         
         if (_readBits2 != payloadSize * 8)
         {
-            if (parser->config.printLogs) printf("---- warning: read bits != payload size (%d != %d)\n", _readBits2, payloadSize * 8);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- warning: read bits != payload size (%d != %d)", _readBits2, payloadSize * 8);
         }
         if (_readBits2 < payloadSize * 8)
         {
@@ -2320,7 +2319,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
             ret = skipBytes(parser, payloadSize - (_readBits2 / 8));
             if (ret < 0)
             {
-                fprintf(stderr, "error: skipBytes() failed (%d)\n", ret);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "skipBytes() failed (%d)", ret);
                 return ret;
             }
             _readBits2 += ret * 8;
@@ -2334,7 +2333,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -2342,7 +2341,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
     ret = bitstreamByteAlign(parser);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
         return ret;
     }
     _readBits += ret;
@@ -2359,23 +2358,23 @@ static int ARSTREAM2_H264Parser_ParseAud(ARSTREAM2_H264Parser_t* parser)
     int readBytes = 0, _readBits = 0;
 
     // access_unit_delimiter_rbsp
-    if (parser->config.printLogs) printf("-- access_unit_delimiter_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- access_unit_delimiter_rbsp()");
 
     // primary_pic_type
     ret = readBits(parser, 3, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("---- primary_pic_type = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- primary_pic_type = %d", val);
 
     // rbsp_trailing_bits
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -2383,7 +2382,7 @@ static int ARSTREAM2_H264Parser_ParseAud(ARSTREAM2_H264Parser_t* parser)
     ret = bitstreamByteAlign(parser);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
         return ret;
     }
     _readBits += ret;
@@ -2398,7 +2397,7 @@ static int ARSTREAM2_H264Parser_ParseFillerData(ARSTREAM2_H264Parser_t* parser)
     int readBytes = 0;
 
     // filler_data_rbsp
-    if (parser->config.printLogs) printf("-- filler_data_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- filler_data_rbsp()");
 
     //TODO
 
@@ -2415,7 +2414,7 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
     int modification_of_pic_nums_idc;
 
     // ref_pic_list_modification
-    if (parser->config.printLogs) printf("------ ref_pic_list_modification()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ ref_pic_list_modification()");
 
     if ((parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_I) && (parser->sliceContext.sliceTypeMod5 != ARSTREAM2_H264_SLICE_TYPE_SI))
     {
@@ -2423,12 +2422,12 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.ref_pic_list_modification_flag_l0 = val;
-        if (parser->config.printLogs) printf("-------- ref_pic_list_modification_flag_l0 = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- ref_pic_list_modification_flag_l0 = %d", val);
         
         if (val)
         {
@@ -2439,12 +2438,12 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
                 modification_of_pic_nums_idc = val;
-                if (parser->config.printLogs) printf("-------- modification_of_pic_nums_idc = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- modification_of_pic_nums_idc = %d", val);
 
                 if ((modification_of_pic_nums_idc == 0) || (modification_of_pic_nums_idc == 1))
                 {
@@ -2452,11 +2451,11 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- abs_diff_pic_num_minus1 = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- abs_diff_pic_num_minus1 = %d", val);
                 }
                 else if (modification_of_pic_nums_idc == 2)
                 {
@@ -2464,11 +2463,11 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- long_term_pic_num = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_pic_num = %d", val);
                 }
                 i++;
             }
@@ -2482,12 +2481,12 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.ref_pic_list_modification_flag_l1 = val;
-        if (parser->config.printLogs) printf("-------- ref_pic_list_modification_flag_l1 = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- ref_pic_list_modification_flag_l1 = %d", val);
         
         if (val)
         {
@@ -2498,12 +2497,12 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
                 modification_of_pic_nums_idc = val;
-                if (parser->config.printLogs) printf("-------- modification_of_pic_nums_idc = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- modification_of_pic_nums_idc = %d", val);
 
                 if ((modification_of_pic_nums_idc == 0) || (modification_of_pic_nums_idc == 1))
                 {
@@ -2511,11 +2510,11 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- abs_diff_pic_num_minus1 = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- abs_diff_pic_num_minus1 = %d", val);
                 }
                 else if (modification_of_pic_nums_idc == 2)
                 {
@@ -2523,11 +2522,11 @@ static int ARSTREAM2_H264Parser_ParseRefPicListModification(ARSTREAM2_H264Parser
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- long_term_pic_num = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_pic_num = %d", val);
                 }
             }
             while ((modification_of_pic_nums_idc != 3) && (i < parser->sliceContext.num_ref_idx_l1_active_minus1 + 1));
@@ -2545,17 +2544,17 @@ static int ARSTREAM2_H264Parser_ParsePredWeightTable(ARSTREAM2_H264Parser_t* par
     int _readBits = 0;
 
     // pred_weight_table
-    if (parser->config.printLogs) printf("------ pred_weight_table()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ pred_weight_table()");
 
     // luma_log2_weight_denom
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
-    if (parser->config.printLogs) printf("-------- luma_log2_weight_denom = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- luma_log2_weight_denom = %d", val);
 
     //TODO
     return -1;
@@ -2571,7 +2570,7 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
     int _readBits = 0;
 
     // dec_ref_pic_marking
-    if (parser->config.printLogs) printf("------ dec_ref_pic_marking()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ dec_ref_pic_marking()");
 
     if (parser->sliceContext.idrPicFlag)
     {
@@ -2579,23 +2578,23 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.no_output_of_prior_pics_flag = val;
-        if (parser->config.printLogs) printf("-------- no_output_of_prior_pics_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- no_output_of_prior_pics_flag = %d", val);
 
         // long_term_reference_flag
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.long_term_reference_flag = val;
-        if (parser->config.printLogs) printf("-------- long_term_reference_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_reference_flag = %d", val);
     }
     else
     {
@@ -2603,12 +2602,12 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.adaptive_ref_pic_marking_mode_flag = val;
-        if (parser->config.printLogs) printf("-------- adaptive_ref_pic_marking_mode_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- adaptive_ref_pic_marking_mode_flag = %d", val);
         
         if (val)
         {
@@ -2620,12 +2619,12 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
                 memory_management_control_operation = val;
-                if (parser->config.printLogs) printf("-------- memory_management_control_operation = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- memory_management_control_operation = %d", val);
                 
                 if ((memory_management_control_operation == 1) || (memory_management_control_operation == 3))
                 {
@@ -2633,11 +2632,11 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- difference_of_pic_nums_minus1 = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- difference_of_pic_nums_minus1 = %d", val);
                 }
 
                 if (memory_management_control_operation == 2)
@@ -2646,11 +2645,11 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- long_term_pic_num = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_pic_num = %d", val);
                 }
 
                 if ((memory_management_control_operation == 3) || (memory_management_control_operation == 6))
@@ -2659,11 +2658,11 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- long_term_frame_idx = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_frame_idx = %d", val);
 
                 if (memory_management_control_operation == 4)
                 {
@@ -2671,11 +2670,11 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     ret = readBits_expGolomb_ue(parser, &val, 1);
                     if (ret < 0)
                     {
-                        fprintf(stderr, "error: failed to read from file\n");
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                         return ret;
                     }
                     _readBits += ret;
-                    if (parser->config.printLogs) printf("-------- max_long_term_frame_idx_plus1 = %d\n", val);
+                    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- max_long_term_frame_idx_plus1 = %d", val);
                 }
                 }
             }
@@ -2700,44 +2699,44 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
     }
 
     // slice_layer_without_partitioning_rbsp
-    if (parser->config.printLogs) printf("-- slice_layer_without_partitioning_rbsp()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- slice_layer_without_partitioning_rbsp()");
 
     // slice_header
-    if (parser->config.printLogs) printf("---- slice_header()\n");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- slice_header()");
 
     // first_mb_in_slice
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->sliceContext.first_mb_in_slice = val;
-    if (parser->config.printLogs) printf("------ first_mb_in_slice = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ first_mb_in_slice = %d", val);
 
     // slice_type
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->sliceContext.slice_type = val;
     parser->sliceContext.sliceTypeMod5 = val % 5;
-    if (parser->config.printLogs) printf("------ slice_type = %d (%s)\n", val, (val <= 9) ? ARSTREAM2_H264Parser_sliceTypeStr[val] : "(invalid)");
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_type = %d (%s)", val, (val <= 9) ? ARSTREAM2_H264Parser_sliceTypeStr[val] : "(invalid)");
 
     // pic_parameter_set_id
     ret = readBits_expGolomb_ue(parser, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->sliceContext.pic_parameter_set_id = val;
-    if (parser->config.printLogs) printf("------ pic_parameter_set_id = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ pic_parameter_set_id = %d", val);
 
     if (parser->spsContext.separate_colour_plane_flag == 1)
     {
@@ -2745,24 +2744,24 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 2, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.colour_plane_id = val;
-        if (parser->config.printLogs) printf("------ colour_plane_id = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ colour_plane_id = %d", val);
     }
 
     // frame_num
     ret = readBits(parser, parser->spsContext.log2_max_frame_num_minus4 + 4, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->sliceContext.frame_num = val;
-    if (parser->config.printLogs) printf("------ frame_num = %d\n", val);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ frame_num = %d", val);
 
     if (!parser->spsContext.frame_mbs_only_flag)
     {
@@ -2770,12 +2769,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.field_pic_flag = val;
-        if (parser->config.printLogs) printf("------ field_pic_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ field_pic_flag = %d", val);
 
         if (parser->sliceContext.field_pic_flag)
         {
@@ -2783,12 +2782,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.bottom_field_flag = val;
-            if (parser->config.printLogs) printf("------ bottom_field_flag = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ bottom_field_flag = %d", val);
         }
     }
 
@@ -2798,12 +2797,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.idr_pic_id = val;
-        if (parser->config.printLogs) printf("------ idr_pic_id = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ idr_pic_id = %d", val);
     }
 
     if (parser->spsContext.pic_order_cnt_type == 0)
@@ -2812,12 +2811,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, parser->spsContext.log2_max_pic_order_cnt_lsb_minus4 + 4, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.pic_order_cnt_lsb = val;
-        if (parser->config.printLogs) printf("------ pic_order_cnt_lsb = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ pic_order_cnt_lsb = %d", val);
 
         if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!parser->sliceContext.field_pic_flag))
         {
@@ -2825,12 +2824,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.delta_pic_order_cnt_bottom = val_se;
-            if (parser->config.printLogs) printf("------ delta_pic_order_cnt_bottom = %d\n", val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ delta_pic_order_cnt_bottom = %d", val_se);
         }
     }
 
@@ -2840,12 +2839,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_se(parser, &val_se, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.delta_pic_order_cnt_0 = val_se;
-        if (parser->config.printLogs) printf("------ delta_pic_order_cnt[0] = %d\n", val_se);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ delta_pic_order_cnt[0] = %d", val_se);
 
         if ((parser->ppsContext.bottom_field_pic_order_in_frame_present_flag) && (!parser->sliceContext.field_pic_flag))
         {
@@ -2853,12 +2852,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.delta_pic_order_cnt_1 = val_se;
-            if (parser->config.printLogs) printf("------ delta_pic_order_cnt[1] = %d\n", val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ delta_pic_order_cnt[1] = %d", val_se);
         }
     }
 
@@ -2868,12 +2867,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.redundant_pic_cnt = val;
-        if (parser->config.printLogs) printf("------ redundant_pic_cnt = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ redundant_pic_cnt = %d", val);
     }
     
     if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
@@ -2882,12 +2881,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.direct_spatial_mv_pred_flag = val;
-        if (parser->config.printLogs) printf("------ direct_spatial_mv_pred_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ direct_spatial_mv_pred_flag = %d", val);
     }
     
     if ((parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_P) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B))
@@ -2896,12 +2895,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, 1, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         parser->sliceContext.num_ref_idx_active_override_flag = val;
         _readBits += ret;
-        if (parser->config.printLogs) printf("------ num_ref_idx_active_override_flag = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ num_ref_idx_active_override_flag = %d", val);
         
         if (val)
         {
@@ -2909,12 +2908,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_ue(parser, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.num_ref_idx_l0_active_minus1 = val;
-            if (parser->config.printLogs) printf("------ num_ref_idx_l0_active_minus1 = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ num_ref_idx_l0_active_minus1 = %d", val);
 
             if (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_B)
             {
@@ -2922,12 +2921,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
                 ret = readBits_expGolomb_ue(parser, &val, 1);
                 if (ret < 0)
                 {
-                    fprintf(stderr, "error: failed to read from file\n");
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                     return ret;
                 }
                 _readBits += ret;
                 parser->sliceContext.num_ref_idx_l1_active_minus1 = val;
-                if (parser->config.printLogs) printf("------ num_ref_idx_l1_active_minus1 = %d\n", val);
+                if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ num_ref_idx_l1_active_minus1 = %d", val);
             }
         }
     }
@@ -2944,7 +2943,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParseRefPicListModification(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseRefPicListModification() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseRefPicListModification() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -2958,7 +2957,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParsePredWeightTable(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParsePredWeightTable() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParsePredWeightTable() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -2970,7 +2969,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = ARSTREAM2_H264Parser_ParseDecRefPicMarking(parser);
         if (ret < 0)
         {
-            fprintf(stderr, "error: ARSTREAM2_H264Parser_ParseDecRefPicMarking() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseDecRefPicMarking() failed (%d)", ret);
             return ret;
         }
         _readBits += ret;
@@ -2982,24 +2981,24 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.cabac_init_idc = val;
-        if (parser->config.printLogs) printf("------ cabac_init_idc = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ cabac_init_idc = %d", val);
     }
     
     // slice_qp_delta
     ret = readBits_expGolomb_se(parser, &val_se, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
     parser->sliceContext.slice_qp_delta = val_se;
-    if (parser->config.printLogs) printf("------ slice_qp_delta = %d\n", val_se);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_qp_delta = %d", val_se);
 
     if ((parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SP) || (parser->sliceContext.sliceTypeMod5 == ARSTREAM2_H264_SLICE_TYPE_SI))
     {
@@ -3009,24 +3008,24 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits(parser, 1, &val, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.sp_for_switch_flag = val;
-            if (parser->config.printLogs) printf("------ sp_for_switch_flag = %d\n", val);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ sp_for_switch_flag = %d", val);
         }
 
         // slice_qs_delta
         ret = readBits_expGolomb_se(parser, &val_se, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.slice_qs_delta = val_se;
-        if (parser->config.printLogs) printf("------ slice_qs_delta = %d\n", val_se);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_qs_delta = %d", val_se);
     }
     
     if (parser->ppsContext.deblocking_filter_control_present_flag)
@@ -3035,12 +3034,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits_expGolomb_ue(parser, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.disable_deblocking_filter_idc = val;
-        if (parser->config.printLogs) printf("------ disable_deblocking_filter_idc = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ disable_deblocking_filter_idc = %d", val);
         
         if (val != 1)
         {
@@ -3048,23 +3047,23 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.slice_alpha_c0_offset_div2 = val_se;
-            if (parser->config.printLogs) printf("------ slice_alpha_c0_offset_div2 = %d\n", val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_alpha_c0_offset_div2 = %d", val_se);
 
             // slice_beta_offset_div2
             ret = readBits_expGolomb_se(parser, &val_se, 1);
             if (ret < 0)
             {
-                fprintf(stderr, "error: failed to read from file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
                 return ret;
             }
             _readBits += ret;
             parser->sliceContext.slice_beta_offset_div2 = val_se;
-            if (parser->config.printLogs) printf("------ slice_beta_offset_div2 = %d\n", val_se);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_beta_offset_div2 = %d", val_se);
         }
     }
     
@@ -3079,12 +3078,12 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         ret = readBits(parser, n, &val, 1);
         if (ret < 0)
         {
-            fprintf(stderr, "error: failed to read from file\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return ret;
         }
         _readBits += ret;
         parser->sliceContext.slice_group_change_cycle = val;
-        if (parser->config.printLogs) printf("------ slice_group_change_cycle = %d\n", val);
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_group_change_cycle = %d", val);
     }
 
 
@@ -3094,7 +3093,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
     ret = readBits(parser, 1, &val, 1);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to read from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ret;
     }
     _readBits += ret;
@@ -3102,7 +3101,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
     ret = bitstreamByteAlign(parser);
     if (ret < 0)
     {
-        fprintf(stderr, "error: failed to align the bitstream (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to align the bitstream (%d)", ret);
         return ret;
     }
     _readBits += ret;
@@ -3124,7 +3123,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
@@ -3133,7 +3132,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
     ret = readBits(parser, 8, &val, 0);
     if (ret != 8)
     {
-        fprintf(stderr, "Error: failed to read 1 byte from file\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
     _readBytes++;
@@ -3142,7 +3141,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
     parser->sliceContext.nal_ref_idc = (val >> 5) & 0x3;
     parser->sliceContext.nal_unit_type = val & 0x1F;
 
-    if (parser->config.printLogs) printf("-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)\n", parser->sliceContext.nal_ref_idc, parser->sliceContext.nal_unit_type, ARSTREAM2_H264Parser_naluTypeStr[parser->sliceContext.nal_unit_type]);
+    if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- NALU found: nal_ref_idc=%d, nal_unit_type=%d (%s)", parser->sliceContext.nal_ref_idc, parser->sliceContext.nal_unit_type, ARSTREAM2_H264Parser_naluTypeStr[parser->sliceContext.nal_unit_type]);
 
     parser->sliceContext.idrPicFlag = (parser->sliceContext.nal_unit_type == 5) ? 1 : 0;
     
@@ -3151,7 +3150,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
         ret = ARSTREAM2_H264Parser_ParseNaluType[parser->sliceContext.nal_unit_type](parser);
         if (ret < 0)
         {
-            fprintf(stderr, "Error: ARSTREAM2_H264Parser_ParseNaluType[%d]() failed (%d)\n", parser->sliceContext.nal_unit_type, ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_ParseNaluType[%d]() failed (%d)", parser->sliceContext.nal_unit_type, ret);
             return ARSTREAM2_ERROR_INVALID_STATE;
         }
         _readBytes += ret;
@@ -3159,7 +3158,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
     
     if (forbidden_zero_bit != 0)
     {
-        if (parser->config.printLogs) printf("   Warning: forbidden_zero_bit is not 0!\n");
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "   Warning: forbidden_zero_bit is not 0!");
     }
 
     if (readBytes) *readBytes = (unsigned int)_readBytes;
@@ -3234,7 +3233,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     
@@ -3244,7 +3243,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
     {
         // Start code found
         naluStart = startcodePosition + 4;
-        if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(startcodePosition));
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "Start code at 0x%08X", (uint32_t)(startcodePosition));
 
         // Search for NALU end (next NALU start code or end of file)
         ret = ARSTREAM2_H264Parser_StartcodeMatch_file(parser, fp, fileSize, &startcodePosition);
@@ -3260,7 +3259,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
         }
         else //if (ret < 0)
         {
-            fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)", ret);
             return ARSTREAM2_ERROR_INVALID_STATE;
         }
         
@@ -3270,7 +3269,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
             ret = fseek(fp, naluStart, SEEK_SET);
             if (ret != 0)
             {
-                fprintf(stderr, "Error: failed to seek in file\n");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to seek in file");
                 return ARSTREAM2_ERROR_INVALID_STATE;
             }
             
@@ -3281,7 +3280,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
                 parser->pNaluBuf = (uint8_t*)realloc(parser->pNaluBuf, parser->naluBufSize);
                 if (!parser->pNaluBuf)
                 {
-                    fprintf(stderr, "Error: reallocation failed (size %d)\n", parser->naluBufSize);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Reallocation failed (size %d)", parser->naluBufSize);
                     return ARSTREAM2_ERROR_ALLOC;
                 }
             }
@@ -3289,7 +3288,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
             ret = fread(parser->pNaluBuf, _naluSize, 1, fp);
             if (ret != 1)
             {
-                fprintf(stderr, "Error: failed to read %d bytes in file\n", _naluSize);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read %d bytes in file", _naluSize);
                 return ARSTREAM2_ERROR_INVALID_STATE;
             }
             parser->naluSize = _naluSize;
@@ -3303,19 +3302,19 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
         }
         else
         {
-            fprintf(stderr, "Error: invalid NALU size\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid NALU size");
             return ARSTREAM2_ERROR_INVALID_STATE;
         }
     }
     else if (ret == -2)
     {
         // No start code found
-        if (parser->config.printLogs) printf("No start code found\n");
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "No start code found");
         return ARSTREAM2_ERROR_NOT_FOUND;
     }
     else //if (ret < 0)
     {
-        fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_StartcodeMatch_file() failed (%d)", ret);
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
@@ -3364,13 +3363,13 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     
     if (parser->naluBufManaged)
     {
-        fprintf(stderr, "Error: invalid state\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid state");
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
@@ -3383,7 +3382,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
     {
         // Start code found
         naluStart = ret;
-        if (parser->config.printLogs) printf("Start code at 0x%08X\n", (uint32_t)(naluStart - 4));
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "Start code at 0x%08X", (uint32_t)(naluStart - 4));
 
         // Search for NALU end (next NALU start code or end of file)
         ret = ARSTREAM2_H264Parser_StartcodeMatch_buffer(parser, (uint8_t*)pBuf + naluStart, bufSize - naluStart);
@@ -3400,7 +3399,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
         }
         else //if (ret < 0)
         {
-            fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)", ret);
             return ARSTREAM2_ERROR_INVALID_STATE;
         }
 
@@ -3417,7 +3416,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
         }
         else
         {
-            fprintf(stderr, "Error: invalid NALU size\n");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid NALU size");
             return ARSTREAM2_ERROR_INVALID_STATE;
         }
 
@@ -3427,7 +3426,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
     else if (ret == -2)
     {
         // No start code found
-        if (parser->config.printLogs) printf("No start code found\n");
+        if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "No start code found");
 
         parser->naluSize = parser->remNaluSize = parser->naluBufSize = bufSize;
         parser->pNaluBufCur = parser->pNaluBuf = (uint8_t*)pBuf;
@@ -3441,7 +3440,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_buffer(ARSTREAM2_H264Parser_H
     }
     else //if (ret < 0)
     {
-        fprintf(stderr, "Error: ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)\n", ret);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "ARSTREAM2_H264Parser_StartcodeMatch_buffer() failed (%d)", ret);
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
@@ -3456,13 +3455,13 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Hand
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (parser->naluBufManaged)
     {
-        fprintf(stderr, "Error: invalid state\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid state");
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
@@ -3484,7 +3483,7 @@ int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandl
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return -1;
     }
 
@@ -3499,13 +3498,13 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle p
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if (!sliceInfo)
     {
-        fprintf(stderr, "Error: invalid pointer\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
@@ -3535,7 +3534,7 @@ int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserH
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return -1;
     }
 
@@ -3557,13 +3556,13 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetUserDataSei(ARSTREAM2_H264Parser_Handle
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     if ((!parser->userDataCount) || (index >= parser->userDataCount))
     {
-        fprintf(stderr, "Error: invalid index\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid index");
         return ARSTREAM2_ERROR_NOT_FOUND;
     }
     
@@ -3589,12 +3588,12 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSpsPpsContext(ARSTREAM2_H264Parser_Hand
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     if ((!spsContext) || (!ppsContext))
     {
-        fprintf(stderr, "Error: invalid pointer\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
@@ -3617,12 +3616,12 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceContext(ARSTREAM2_H264Parser_Handl
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
     if (!sliceContext)
     {
-        fprintf(stderr, "Error: invalid pointer\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
@@ -3643,14 +3642,14 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHa
 
     if (!parserHandle)
     {
-        fprintf(stderr, "Error: invalid pointer for handle\n");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer for handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     parser = (ARSTREAM2_H264Parser_t*)malloc(sizeof(*parser));
     if (!parser)
     {
-        fprintf(stderr, "Error: allocation failed (size %ld)\n", sizeof(*parser));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %ld)", sizeof(*parser));
         return ARSTREAM2_ERROR_ALLOC;
     }
     memset(parser, 0, sizeof(*parser));
