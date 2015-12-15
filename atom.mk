@@ -52,18 +52,3 @@ LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/Includes
 LOCAL_EXPORT_LDLIBS := -larstream2
 
 include $(BUILD_AUTOTOOLS)
-
-
-ifeq ("$(TARGET_OS_FLAVOUR)","native")
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := beavertool
-LOCAL_DESCRIPTION := Parrot Streaming Library Tools
-LOCAL_CATEGORY_PATH := dragon
-LOCAL_LIBRARIES := libARStream2
-LOCAL_SRC_FILES := tools/beavertool.c
-
-include $(BUILD_EXECUTABLE)
-
-endif
