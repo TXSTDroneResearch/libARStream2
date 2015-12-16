@@ -385,7 +385,7 @@ static void ARSTREAM2_H264Filter_resetCurrentAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuStreamingInfoAvailable = 0;
     memset(&filter->currentAuStreamingInfo, 0, sizeof(ARSTREAM2_H264Sei_ParrotStreamingV1_t));
     filter->currentAuUserDataSize = 0;
-    memset(&filter->currentAuUserData, 0, sizeof(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE));
+    memset(filter->currentAuUserData, 0, sizeof(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE));
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
