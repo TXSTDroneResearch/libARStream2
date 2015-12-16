@@ -187,7 +187,7 @@ static inline int readBits(ARSTREAM2_H264Parser_t* _parser, unsigned int _numBit
     uint32_t _val = 0, _bitMask;
     uint8_t _read8;
 
-    if (_parser->cacheLength < (int)_numBits)
+    while (_parser->cacheLength < (int)_remBits)
     {
         // Not enough bits in the cache
 
