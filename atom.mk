@@ -2,53 +2,36 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_CATEGORY_PATH := dragon/libs
 LOCAL_MODULE := libARStream2
 LOCAL_DESCRIPTION := Parrot Streaming Library
+LOCAL_CATEGORY_PATH := dragon/libs
+
+LOCAL_MODULE_FILENAME := libarstream2.so
 
 LOCAL_LIBRARIES := libARSAL
 
-# Copy in build dir so bootstrap files are generated in build dir
-LOCAL_AUTOTOOLS_COPY_TO_BUILD_DIR := 1
+LOCAL_C_INCLUDES := \
+	$(LOCAL_PATH)/Includes \
+	$(LOCAL_PATH)/src
 
-# Configure script is not at the root
-LOCAL_AUTOTOOLS_CONFIGURE_SCRIPT := Build/configure
+LOCAL_SRC_FILES := \
+	src/arstream2_error.c \
+	src/arstream2_h264_filter.c \
+	src/arstream2_h264_parser.c \
+	src/arstream2_h264_sei.c \
+	src/arstream2_h264_writer.c \
+	src/arstream2_rtp_receiver.c \
+	src/arstream2_rtp_sender.c \
+	src/arstream2_stream_receiver.c
 
-# Autotools variables
-LOCAL_AUTOTOOLS_CONFIGURE_ARGS := \
-	--with-libARSALInstallDir=""
+LOCAL_INSTALL_HEADERS := \
+	Includes/libARStream2/arstream2_error.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_h264_filter.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_h264_parser.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_h264_sei.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_h264_writer.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_rtp_receiver.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_rtp_sender.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/
 
-ifdef ARSDK_BUILD_FOR_APP
-
-ifeq ("$(TARGET_OS_FLAVOUR)","android")
-
-LOCAL_AUTOTOOLS_CONFIGURE_ARGS += \
-	--disable-static \
-	--enable-shared \
-	--disable-so-version \
-	LIBS=" -lm -lz"
-
-else ifneq ($(filter iphoneos iphonesimulator, $(TARGET_OS_FLAVOUR)),)
-
-LOCAL_AUTOTOOLS_CONFIGURE_ARGS += \
-	--disable-shared \
-	--enable-static \
-	LIBS=" -lm -lz" \
-	OBJCFLAGS=" -x objective-c -fobjc-arc -std=gnu99 $(TARGET_GLOBAL_CFLAGS)" \
-	OBJC="$(TARGET_CC)" \
-	CFLAGS=" -std=gnu99 -x c $(TARGET_GLOBAL_CFLAGS)"
-
-endif
-
-endif
-
-# User define command to be launch before configure step.
-# Generates files used by configure
-define LOCAL_AUTOTOOLS_CMD_POST_UNPACK
-	$(Q) cd $(PRIVATE_SRC_DIR)/Build && ./bootstrap
-endef
-
-LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/Includes
-LOCAL_EXPORT_LDLIBS := -larstream2
-
-include $(BUILD_AUTOTOOLS)
+include $(BUILD_LIBRARY)
