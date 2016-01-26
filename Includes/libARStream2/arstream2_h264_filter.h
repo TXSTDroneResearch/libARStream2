@@ -104,6 +104,8 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  * @param auTimestamp AU timestamp in microseconds
  * @param auTimestampShifted AU timestamp shifted to the sender's clock in microseconds
  * @param auSyncType AU synchronization type
+ * @param auMetadata AU metadata buffer
+ * @param auMetadataSize AU metadata size in bytes
  * @param auUserData AU user data SEI buffer
  * @param auUserDataSize AU user data SEI size in bytes
  * @param auBufferUserPtr AU buffer user pointer
@@ -116,7 +118,10 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  * @warning This callback function is mandatory.
  * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted,
+                                                                   eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType,
+                                                                   void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize,
+                                                                   void *auBufferUserPtr, void *userPtr);
 
 
 /**
@@ -237,7 +242,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
  *
  */
 uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                      uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                      uint64_t auTimestampShifted, uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
                                                       int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
