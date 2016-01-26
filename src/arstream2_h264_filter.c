@@ -25,7 +25,8 @@
 
 #define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
 #define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
-#define ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE (1024)
+#define ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE (1024)
+#define ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE (1024)
 
 #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
@@ -102,6 +103,8 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
+    int currentAuMetadataSize;
+    uint8_t *currentAuMetadata;
     int currentAuUserDataSize;
     uint8_t *currentAuUserData;
     ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfo;
@@ -297,7 +300,7 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
                                     filter->currentAuStreamingInfoAvailable = 1;
                                 }
                             }
-                            else if (userDataSeiSize <= ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE)
+                            else if (userDataSeiSize <= ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE)
                             {
                                 memcpy(filter->currentAuUserData, pUserDataSei, userDataSeiSize);
                                 filter->currentAuUserDataSize = userDataSeiSize;
@@ -385,8 +388,10 @@ static void ARSTREAM2_H264Filter_resetCurrentAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuSlicesReceived = 0;
     filter->currentAuStreamingInfoAvailable = 0;
     memset(&filter->currentAuStreamingInfo, 0, sizeof(ARSTREAM2_H264Sei_ParrotStreamingV1_t));
+    filter->currentAuMetadataSize = 0;
+    memset(filter->currentAuMetadata, 0, sizeof(ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE));
     filter->currentAuUserDataSize = 0;
-    memset(filter->currentAuUserData, 0, sizeof(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE));
+    memset(filter->currentAuUserData, 0, sizeof(ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE));
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
@@ -516,6 +521,7 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             ARSAL_Mutex_Unlock(&(filter->mutex));
 
             cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
+                                            (filter->currentAuMetadataSize > 0) ? filter->currentAuMetadata : NULL, filter->currentAuMetadataSize,
                                             (filter->currentAuUserDataSize > 0) ? filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
                                             auBufferUserPtr, filter->auReadyCallbackUserPtr);
 
@@ -599,6 +605,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             eARSTREAM2_H264_FILTER_AU_SYNC_TYPE savedAuSyncType = filter->currentAuSyncType;
             int savedAuSlicesAllI = filter->currentAuSlicesAllI;
             int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
+            int savedAuMetadataSize = filter->currentAuMetadataSize;
             int savedAuUserDataSize = filter->currentAuUserDataSize;
             int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
             int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
@@ -703,6 +710,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         filter->currentAuSyncType = savedAuSyncType;
                         filter->currentAuSlicesAllI = savedAuSlicesAllI;
                         filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                        filter->currentAuMetadataSize = savedAuMetadataSize;
                         filter->currentAuUserDataSize = savedAuUserDataSize;
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
@@ -734,6 +742,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         filter->currentAuSyncType = savedAuSyncType;
                         filter->currentAuSlicesAllI = savedAuSlicesAllI;
                         filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                        filter->currentAuMetadataSize = savedAuMetadataSize;
                         filter->currentAuUserDataSize = savedAuUserDataSize;
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
@@ -973,7 +982,7 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 
 
 uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                      uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                      uint64_t auTimestampShifted, uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
                                                       int missingPacketsBefore, int *newNaluBufferSize, void *custom)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)custom;
@@ -1096,6 +1105,11 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                 filter->currentAuTimestampShifted = auTimestampShifted;
                 if (filter->currentAuFirstNaluInputTime == 0) filter->currentAuFirstNaluInputTime = curTime;
                 filter->previousSliceType = sliceType;
+                if ((naluMetadataSize > 0) && (naluMetadataSize <= ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE))
+                {
+                    memcpy(filter->currentAuMetadata, naluMetadata, naluMetadataSize);
+                    filter->currentAuMetadataSize = naluMetadataSize;
+                }
 
                 if (filter->firstGrayIFramePending)
                 {
@@ -1533,10 +1547,20 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
 
     if (ret == ARSTREAM2_OK)
     {
-        filter->currentAuUserData = malloc(ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE);
+        filter->currentAuMetadata = malloc(ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE);
+        if (!filter->currentAuMetadata)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        filter->currentAuUserData = malloc(ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE);
         if (!filter->currentAuUserData)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Allocation failed (size %d)", ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE);
             ret = ARSTREAM2_ERROR_ALLOC;
         }
     }
@@ -1614,6 +1638,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
             if (filter->parser) ARSTREAM2_H264Parser_Free(filter->parser);
             if (filter->tempAuBuffer) free(filter->tempAuBuffer);
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+            if (filter->currentAuMetadata) free(filter->currentAuMetadata);
             if (filter->currentAuUserData) free(filter->currentAuUserData);
             if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
@@ -1659,6 +1684,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
         if (filter->pPps) free(filter->pPps);
         if (filter->tempAuBuffer) free(filter->tempAuBuffer);
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
+        if (filter->currentAuMetadata) free(filter->currentAuMetadata);
         if (filter->currentAuUserData) free(filter->currentAuUserData);
 #ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
         if (filter->fStreamOut) fclose(filter->fStreamOut);

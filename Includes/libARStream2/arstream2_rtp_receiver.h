@@ -50,6 +50,8 @@ typedef enum
  * @param[in] naluSize NAL unit size in bytes
  * @param[in] auTimestamp Access unit timestamp
  * @param[in] auTimestampShifted Access unit timestamp in the local clock reference (0 if clock sync is not available)
+ * @param[in] naluMetadata Pointer to the NAL unit metadata buffer
+ * @param[in] naluSize NAL unit metadata size in bytes
  * @param[in] isFirstNaluInAu Boolean-like (0-1) flag indicating that the NAL unit is the first in an access unit
  * @param[in] isLastNaluInAu Boolean-like (0-1) flag indicating that the NAL unit is the last in an access unit
  * @param[in] missingPacketsBefore Number of missing network packets before this NAL unit (should be 0 most of the time)
@@ -68,7 +70,7 @@ typedef enum
  * @warning If the cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, returning a buffer smaller than the initial value of newNaluBufferSize or a NULL pointer will skip the current NAL unit.
  */
 typedef uint8_t* (*ARSTREAM2_RtpReceiver_NaluCallback_t)(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                         uint64_t auTimestampShifted, int isFirstNaluInAu, int isLastNaluInAu,
+                                                         uint64_t auTimestampShifted, uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
                                                          int missingPacketsBefore, int *newNaluBufferSize, void *userPtr);
 
 
