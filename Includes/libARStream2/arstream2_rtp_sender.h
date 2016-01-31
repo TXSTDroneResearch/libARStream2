@@ -103,6 +103,8 @@ typedef struct ARSTREAM2_RtpSender_H264NaluDesc_t
 {
     uint8_t *naluBuffer;                            /**< Pointer to the NAL unit buffer */
     uint32_t naluSize;                              /**< Size of the NAL unit in bytes */
+    uint8_t *auMetadata;                            /**< Pointer to the optional access unit metadata buffer */
+    uint32_t auMetadataSize;                        /**< Size of the optional access unit metadata in bytes */
     uint64_t auTimestamp;                           /**< Access unit timastamp in microseconds. All NAL units of an access unit must share the same timestamp */
     int isLastNaluInAu;                             /**< Boolean-like flag (0/1). If active, tells the sender that the NAL unit is the last of the access unit */
     int seqNumForcedDiscontinuity;                  /**< Force an added discontinuity in RTP sequence number before the NAL unit */
