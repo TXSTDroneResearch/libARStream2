@@ -751,6 +751,7 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->spsContext.num_units_in_tick = val;
         if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ num_units_in_tick = %d", val);
         
         // time_scale
@@ -761,6 +762,7 @@ static int ARSTREAM2_H264Parser_ParseVui(ARSTREAM2_H264Parser_t* parser)
             return ret;
         }
         _readBits += ret;
+        parser->spsContext.time_scale = val;
         if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ time_scale = %d", val);
         
         // fixed_frame_rate_flag
@@ -1949,7 +1951,9 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
     int ret = 0;
     uint32_t val = 0;
     int _readBits = 0;
-    int i, full_timestamp_flag, pic_struct;
+    int i, full_timestamp_flag, pic_struct, nuit_field_based_flag = 0;
+    uint64_t clockTimestamp = 0;
+    int hH = 0, mM = 0, sS = 0, nFrames = 0, tOffset = 0;
 
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "---- SEI: pic_timing");
 
@@ -2021,6 +2025,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                     return ret;
                 }
                 _readBits += ret;
+                nuit_field_based_flag = val;
                 if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ nuit_field_based_flag = %d", val);
 
                 // counting_type
@@ -2072,6 +2077,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                     return ret;
                 }
                 _readBits += ret;
+                nFrames = val;
                 if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ n_frames = %d", val);
                 
                 if (full_timestamp_flag)
@@ -2084,6 +2090,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                         return ret;
                     }
                     _readBits += ret;
+                    sS = val;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seconds_value = %d", val);
 
                     // minutes_value
@@ -2094,6 +2101,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                         return ret;
                     }
                     _readBits += ret;
+                    mM = val;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ minutes_value = %d", val);
 
                     // hours_value
@@ -2104,6 +2112,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                         return ret;
                     }
                     _readBits += ret;
+                    hH = val;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hours_value = %d", val);
                 }
                 else
@@ -2128,6 +2137,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                             return ret;
                         }
                         _readBits += ret;
+                        sS = val;
                         if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ seconds_value = %d", val);
 
                         // minutes_flag
@@ -2150,6 +2160,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                                 return ret;
                             }
                             _readBits += ret;
+                            mM = val;
                             if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ minutes_value = %d", val);
 
                             // hours_flag
@@ -2172,6 +2183,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                                     return ret;
                                 }
                                 _readBits += ret;
+                                hH = val;
                                 if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ hours_value = %d", val);
                             }
                         }
@@ -2188,9 +2200,13 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
                         return ret;
                     }
                     _readBits += ret;
+                    tOffset = val;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ time_offset = %d", val);
                 }
             }
+            clockTimestamp = (((uint64_t)hH * 60 + (uint64_t)mM) * 60 + (uint64_t)sS) * parser->spsContext.time_scale
+                             + (uint64_t)nFrames * (parser->spsContext.num_units_in_tick * (1 + nuit_field_based_flag)) + (uint64_t)tOffset;
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clockTimestamp = %llu", clockTimestamp);
         }
     }
 
@@ -2252,7 +2268,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
         // sei_payload
         switch(payloadType)
         {
-            /*case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
+            case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_BUFFERING_PERIOD:
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_bufferingPeriod(parser, payloadSize);
                 if (ret < 0)
                 {
@@ -2260,8 +2276,8 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                     return ret;
                 }
                 _readBits2 += ret;
-                break;*/ //TODO
-            /*case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_PIC_TIMING:
+                break;
+            case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_PIC_TIMING:
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(parser, payloadSize);
                 if (ret < 0)
                 {
@@ -2269,7 +2285,7 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
                     return ret;
                 }
                 _readBits2 += ret;
-                break;*/ //TODO
+                break;
             case ARSTREAM2_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT:
                 ret = ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(parser, payloadSize);
                 if (ret < 0)
@@ -3664,6 +3680,8 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHa
 
     parser->naluBufSize = 0;
     parser->pNaluBuf = NULL;
+
+    parser->spsContext.time_offset_length = 24;
 
     *parserHandle = (ARSTREAM2_H264Parser_Handle*)parser;
 

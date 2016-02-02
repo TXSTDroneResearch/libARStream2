@@ -64,6 +64,8 @@ typedef struct ARSTREAM2_H264_SpsContext_s
     unsigned int nal_hrd_parameters_present_flag;
     unsigned int vcl_hrd_parameters_present_flag;
     unsigned int pic_struct_present_flag;
+    unsigned int num_units_in_tick;
+    unsigned int time_scale;
 
     // HRD params
     unsigned int cpb_cnt_minus1;
