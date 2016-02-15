@@ -14,6 +14,9 @@ LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/Includes \
 	$(LOCAL_PATH)/src
 
+LOCAL_CFLAGS := \
+	-DHAVE_CONFIG_H
+
 LOCAL_SRC_FILES := \
 	src/arstream2_error.c \
 	src/arstream2_h264_filter.c \
