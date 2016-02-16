@@ -91,7 +91,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Sei_SerializeUserDataParrotStreamingV1(const ARST
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     uint8_t* pbBuf = (uint8_t*)pBuf;
     uint32_t* pdwBuf = (uint32_t*)pBuf;
-    unsigned int _size = 0, outSize;
+    unsigned int _size = 0, outSize = 0;
 
     if (!pBuf)
     {
