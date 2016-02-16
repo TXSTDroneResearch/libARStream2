@@ -34,6 +34,32 @@ typedef struct
 
 
 /**
+ * @brief Picture timing SEI syntax elements.
+ */
+typedef struct
+{
+    unsigned int cpbRemovalDelay;           /**< cpb_removal_delay syntax element */
+    unsigned int dpbOutputDelay;            /**< dpb_output_delay syntax element */
+    unsigned int picStruct;                 /**< pic_struct syntax element */
+    unsigned int ctType;                    /**< ct_type syntax element */
+    unsigned int nuitFieldBasedFlag;        /**< nuit_field_based_flag syntax element */
+    unsigned int countingType;              /**< counting_type syntax element */
+    unsigned int fullTimestampFlag;         /**< full_timestamp_flag syntax element */
+    unsigned int discontinuityFlag;         /**< discontinuity_flag syntax element */
+    unsigned int cntDroppedFlag;            /**< cnt_dropped_flag syntax element */
+    unsigned int nFrames;                   /**< n_frames syntax element */
+    unsigned int secondsFlag;               /**< seconds_flag syntax element */
+    unsigned int secondsValue;              /**< seconds_value syntax element */
+    unsigned int minutesFlag;               /**< minutes_flag syntax element */
+    unsigned int minutesValue;              /**< minutes_value syntax element */
+    unsigned int hoursFlag;                 /**< hours_flag syntax element */
+    unsigned int hoursValue;                /**< hours_value syntax element */
+    int timeOffset;                         /**< time_offset syntax element */
+
+} ARSTREAM2_H264Writer_PictureTimingSei_t;
+
+
+/**
  * @brief Recovery point SEI syntax elements.
  */
 typedef struct
@@ -96,7 +122,8 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Hand
  * If userDataUnregisteredCount is not null, one or more user data unregistered messages are generated.
  *
  * @param[in] writerHandle Instance handle.
- * @param[in] recoveryPoint Recovery point syntax elements
+ * @param[in] pictureTiming Optional picture timing syntax elements
+ * @param[in] recoveryPoint Optional recovery point syntax elements
  * @param[in] userDataUnregisteredCount User data count
  * @param[in] pbUserDataUnregistered User data input buffer array
  * @param[in] userDataUnregisteredSize User data input buffer size array
@@ -107,7 +134,10 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Hand
  * @return ARSTREAM2_OK if no error occurred.
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_PictureTimingSei_t *pictureTiming,
+												   ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount,
+												   const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[],
+												   uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**

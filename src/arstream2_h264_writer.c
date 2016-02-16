@@ -252,6 +252,348 @@ static inline int writeBits_expGolomb_se(ARSTREAM2_H264Writer_t* _writer, int32_
 }
 
 
+static int ARSTREAM2_H264Writer_WriteSeiPayload_pictureTiming(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264Writer_PictureTimingSei_t *pictureTiming)
+{
+    int ret = 0;
+    int _bitsWritten = 0;
+    unsigned int payloadType, payloadSize, payloadSizeBits;
+
+    if (!writer->isSpsPpsContextValid)
+    {
+        return 0;
+    }
+
+    if (pictureTiming->picStruct != 0)
+    {
+        // Note: pic_struct != 0 is not supported
+        return 0;
+    }
+
+    payloadType = ARSTREAM2_H264_SEI_PAYLOAD_TYPE_PIC_TIMING;
+
+    // compute the payload size
+    payloadSizeBits = 0;
+    if ((writer->spsContext.nal_hrd_parameters_present_flag) || (writer->spsContext.vcl_hrd_parameters_present_flag))
+    {
+        // cpb_removal_delay
+        payloadSizeBits += writer->spsContext.cpb_removal_delay_length_minus1 + 1;
+        // dpb_output_delay
+        payloadSizeBits += writer->spsContext.dpb_output_delay_length_minus1 + 1;
+    }
+    if (writer->spsContext.pic_struct_present_flag)
+    {
+        // pic_struct
+        payloadSizeBits += 4;
+        // Only NumClockTS == 1 is supported
+        //for (i = 0; i < NumClockTS; i++)
+        {
+            // clock_timestamp_flag[i]
+            payloadSizeBits += 1;
+            //if (clock_timestamp_flag[i])
+            {
+                // ct_type
+                payloadSizeBits += 2;
+                // nuit_field_based_flag
+                payloadSizeBits += 1;
+                // counting_type
+                payloadSizeBits += 5;
+                // full_timestamp_flag
+                payloadSizeBits += 1;
+                // discontinuity_flag
+                payloadSizeBits += 1;
+                // cnt_dropped_flag
+                payloadSizeBits += 1;
+                // n_frames
+                payloadSizeBits += 8;
+                if (pictureTiming->fullTimestampFlag)
+                {
+                    // seconds_value
+                    payloadSizeBits += 6;
+                    // minutes_value
+                    payloadSizeBits += 6;
+                    // hours_value
+                    payloadSizeBits += 5;
+                }
+                else
+                {
+                    // seconds_flag
+                    payloadSizeBits += 1;
+                    if (pictureTiming->secondsFlag)
+                    {
+                        // seconds_value
+                        payloadSizeBits += 6;
+                        // minutes_flag
+                        payloadSizeBits += 1;
+                        if (pictureTiming->minutesFlag)
+                        {
+                            // minutes_value
+                            payloadSizeBits += 6;
+                            // hours_flag
+                            payloadSizeBits += 1;
+                            if (pictureTiming->hoursFlag)
+                            {
+                                // hours_value
+                                payloadSizeBits += 5;
+                            }
+                        }
+                    }
+                }
+                if (writer->spsContext.time_offset_length > 0)
+                {
+                    // time_offset
+                    payloadSizeBits +=  writer->spsContext.time_offset_length;
+                }
+            }
+        }
+    }
+    payloadSize = (payloadSizeBits + 7) / 8;
+
+    while (payloadType > 255)
+    {
+        // ff_byte
+        ret = writeBits(writer, 8, 0xFF, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        _bitsWritten += ret;
+        payloadType -= 255;
+    }
+    // last_payload_type_byte
+    ret = writeBits(writer, 8, payloadType, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    _bitsWritten += ret;
+
+    while (payloadSize > 255)
+    {
+        // ff_byte
+        ret = writeBits(writer, 8, 0xFF, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        _bitsWritten += ret;
+        payloadSize -= 255;
+    }
+    // last_payload_type_byte
+    ret = writeBits(writer, 8, payloadSize, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    _bitsWritten += ret;
+
+    if ((writer->spsContext.nal_hrd_parameters_present_flag) || (writer->spsContext.vcl_hrd_parameters_present_flag))
+    {
+        // cpb_removal_delay
+        ret = writeBits(writer, writer->spsContext.cpb_removal_delay_length_minus1 + 1, pictureTiming->cpbRemovalDelay, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        _bitsWritten += ret;
+
+        // dpb_output_delay
+        ret = writeBits(writer, writer->spsContext.dpb_output_delay_length_minus1 + 1, pictureTiming->dpbOutputDelay, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        _bitsWritten += ret;
+    }
+
+    if (writer->spsContext.pic_struct_present_flag)
+    {
+        // pic_struct
+        ret = writeBits(writer, 4, pictureTiming->picStruct, 1);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        _bitsWritten += ret;
+
+        // Only NumClockTS == 1 is supported
+        //for (i = 0; i < NumClockTS; i++)
+        {
+            // clock_timestamp_flag[i]
+            ret = writeBits(writer, 1, 1, 1);
+            if (ret < 0)
+            {
+                return -1;
+            }
+            _bitsWritten += ret;
+
+            //if (clock_timestamp_flag[i])
+            {
+                // ct_type
+                ret = writeBits(writer, 2, pictureTiming->ctType, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // nuit_field_based_flag
+                ret = writeBits(writer, 1, pictureTiming->nuitFieldBasedFlag, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // counting_type
+                ret = writeBits(writer, 5, pictureTiming->countingType, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // full_timestamp_flag
+                ret = writeBits(writer, 1, pictureTiming->fullTimestampFlag, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // discontinuity_flag
+                ret = writeBits(writer, 1, pictureTiming->discontinuityFlag, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // cnt_dropped_flag
+                ret = writeBits(writer, 1, pictureTiming->cntDroppedFlag, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                // n_frames
+                ret = writeBits(writer, 8, pictureTiming->nFrames, 1);
+                if (ret < 0)
+                {
+                    return -1;
+                }
+                _bitsWritten += ret;
+
+                if (pictureTiming->fullTimestampFlag)
+                {
+                    // seconds_value
+                    ret = writeBits(writer, 6, pictureTiming->secondsValue, 1);
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+                    _bitsWritten += ret;
+
+                    // minutes_value
+                    ret = writeBits(writer, 6, pictureTiming->minutesValue, 1);
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+                    _bitsWritten += ret;
+
+                    // hours_value
+                    ret = writeBits(writer, 5, pictureTiming->hoursValue, 1);
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+                    _bitsWritten += ret;
+                }
+                else
+                {
+                    // seconds_flag
+                    ret = writeBits(writer, 1, pictureTiming->secondsFlag, 1);
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+                    _bitsWritten += ret;
+
+                    if (pictureTiming->secondsFlag)
+                    {
+                        // seconds_value
+                        ret = writeBits(writer, 6, pictureTiming->secondsValue, 1);
+                        if (ret < 0)
+                        {
+                            return -1;
+                        }
+                        _bitsWritten += ret;
+
+                        // minutes_flag
+                        ret = writeBits(writer, 1, pictureTiming->minutesFlag, 1);
+                        if (ret < 0)
+                        {
+                            return -1;
+                        }
+                        _bitsWritten += ret;
+
+                        if (pictureTiming->minutesFlag)
+                        {
+                            // minutes_value
+                            ret = writeBits(writer, 6, pictureTiming->minutesValue, 1);
+                            if (ret < 0)
+                            {
+                                return -1;
+                            }
+                            _bitsWritten += ret;
+
+                            // hours_flag
+                            ret = writeBits(writer, 1, pictureTiming->hoursFlag, 1);
+                            if (ret < 0)
+                            {
+                                return -1;
+                            }
+                            _bitsWritten += ret;
+
+                            if (pictureTiming->hoursFlag)
+                            {
+                                // hours_value
+                                ret = writeBits(writer, 5, pictureTiming->hoursValue, 1);
+                                if (ret < 0)
+                                {
+                                    return -1;
+                                }
+                                _bitsWritten += ret;
+                            }
+                        }
+                    }
+                }
+                if (writer->spsContext.time_offset_length > 0)
+                {
+                    // time_offset
+                    ret = writeBits(writer, writer->spsContext.time_offset_length, (uint32_t)pictureTiming->timeOffset, 1);
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+                    _bitsWritten += ret;
+                }
+            }
+        }
+    }
+
+    ret = bitstreamByteAlign(writer, 1);
+    if (ret < 0)
+    {
+        return -1;
+    }
+    _bitsWritten += ret;
+
+    return _bitsWritten;
+}
+
+
 static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writer_t* writer, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint)
 {
     int ret = 0;
@@ -436,7 +778,10 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_userDataUnregistered(ARSTREAM2_H
 }
 
 
-int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount, const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[], uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_PictureTimingSei_t *pictureTiming,
+                                      ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount,
+                                      const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[],
+                                      uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
 {
     ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
     int ret = 0, bitsWritten = 0;
@@ -476,6 +821,17 @@ int ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, 
         return -1;
     }
     bitsWritten += ret;
+
+    if (pictureTiming)
+    {
+        // picture_timing
+        ret = ARSTREAM2_H264Writer_WriteSeiPayload_pictureTiming(writer, pictureTiming);
+        if (ret < 0)
+        {
+            return -1;
+        }
+        bitsWritten += ret;
+    }
 
     if (recoveryPoint)
     {
