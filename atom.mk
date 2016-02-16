@@ -18,7 +18,7 @@ LOCAL_CFLAGS := \
 	-DHAVE_CONFIG_H
 
 LOCAL_SRC_FILES := \
-	src/arstream2_error.c \
+	gen/Sources/arstream2_error.c \
 	src/arstream2_h264_filter.c \
 	src/arstream2_h264_parser.c \
 	src/arstream2_h264_sei.c \
