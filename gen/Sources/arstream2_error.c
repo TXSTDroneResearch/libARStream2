@@ -40,7 +40,7 @@
 
 #include <libARStream2/arstream2_error.h>
 
-char* ARSTREAM2_Error_ToString(eARSTREAM2_ERROR error)
+const char* ARSTREAM2_Error_ToString(eARSTREAM2_ERROR error)
 {
     switch (error)
     {
