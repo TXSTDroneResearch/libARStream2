@@ -1562,15 +1562,15 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         do
                         {
                             packetSize = (fragmentSize - fragmentOffset > maxPacketSize - 2) ? maxPacketSize - 2 : fragmentSize - fragmentOffset;
-                            if ((offset == 1) && (nalu.auMetadataSize < packetSize)) packetSize -= nalu.auMetadataSize;
+                            if ((offset == 1) && (nalu.auMetadataSize < (uint32_t)packetSize)) packetSize -= nalu.auMetadataSize;
 
                             if (packetSize + 2 <= maxPacketSize)
                             {
                                 headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
                                 hasHeaderExtension = 0;
-                                if ((offset == 1) && (nalu.auMetadata) && (nalu.auMetadataSize) && (nalu.auMetadataSize < packetSize))
+                                if ((offset == 1) && (nalu.auMetadata) && (nalu.auMetadataSize) && (nalu.auMetadataSize < (uint32_t)packetSize))
                                 {
-                                    int headerExtensionSize = (int)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
+                                    uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                                     if (headerExtensionSize == nalu.auMetadataSize)
                                     {
                                         memcpy(sendBuffer + headersOffset, nalu.auMetadata, nalu.auMetadataSize);
@@ -1630,7 +1630,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         hasHeaderExtension = 0;
                         if ((nalu.auMetadata) && (nalu.auMetadataSize))
                         {
-                            int headerExtensionSize = (int)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
+                            uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                             if (headerExtensionSize == nalu.auMetadataSize)
                             {
                                 memcpy(sendBuffer + headersOffset, nalu.auMetadata, nalu.auMetadataSize);
@@ -1657,7 +1657,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                             hasHeaderExtension = 0;
                             if ((nalu.auMetadata) && (nalu.auMetadataSize))
                             {
-                                int headerExtensionSize = (int)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
+                                uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                                 if (headerExtensionSize == nalu.auMetadataSize)
                                 {
                                     memcpy(sendBuffer + headersOffset, nalu.auMetadata, nalu.auMetadataSize);
