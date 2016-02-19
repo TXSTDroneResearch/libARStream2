@@ -78,7 +78,6 @@ const char* ARSTREAM2_Error_ToString(eARSTREAM2_ERROR error)
         return "Unsupported";
         break;
     default:
-        return "Unknown value";
         break;
     }
     return "Unknown value";
