@@ -104,7 +104,7 @@ public class ARStream2Receiver
         return null;
     }
 
-    private int onBufferReady(int bufferIdx, int auSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
+    private int onBufferReady(int bufferIdx, int auSize, int metadata, int metadataSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
     {
         ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM.getFromValue(iAuSyncType);
         if (auSyncType == null)
