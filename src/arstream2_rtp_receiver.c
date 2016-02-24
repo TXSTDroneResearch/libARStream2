@@ -259,6 +259,7 @@ static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, u
     int ret = 0, i;
     ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = NULL;
     ARSTREAM2_RtpSender_H264NaluDesc_t nalu;
+    memset(&nalu, 0, sizeof(ARSTREAM2_RtpSender_H264NaluDesc_t));
 
     /* remove the byte stream format start code */
     if (receiver->insertStartCodes)
