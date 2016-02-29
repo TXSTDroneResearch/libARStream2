@@ -135,9 +135,9 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_SetSpsPpsContext(ARSTREAM2_H264Writer_Hand
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle writerHandle, ARSTREAM2_H264Writer_PictureTimingSei_t *pictureTiming,
-												   ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount,
-												   const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[],
-												   uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+                                                   ARSTREAM2_H264Writer_RecoveryPointSei_t *recoveryPoint, unsigned int userDataUnregisteredCount,
+                                                   const uint8_t *pbUserDataUnregistered[], unsigned int userDataUnregisteredSize[],
+                                                   uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 /**

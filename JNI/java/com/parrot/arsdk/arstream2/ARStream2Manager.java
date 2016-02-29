@@ -1,13 +1,12 @@
 package com.parrot.arsdk.arstream2;
 
-
 import android.os.Process;
 import android.util.Log;
 
 public class ARStream2Manager
 {
     private static final String TAG = ARStream2Manager.class.getSimpleName();
-    private final  long nativeRef;
+    private final long nativeRef;
     private final Thread streamThread;
     private final Thread controlThread;
     private final Thread filterThread;
@@ -15,7 +14,7 @@ public class ARStream2Manager
     public ARStream2Manager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
                          int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
-        this.nativeRef = nativeInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
+        this.nativeRef = nativeNetInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
                 maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
         this.streamThread = new Thread(new Runnable()
         {
@@ -94,10 +93,10 @@ public class ARStream2Manager
         return nativeRef;
     }
 
-    private native long nativeInit(String serverAddress, int serverStreamPort, int serverControlPort,
-                                   int clientStreamPort, int clientControlPort,
-                                   int maxPacketSize, int maxBitrate, int maxLatency,
-                                   int maxNetworkLatency);
+    private native long nativeNetInit(String serverAddress, int serverStreamPort, int serverControlPort,
+                                      int clientStreamPort, int clientControlPort,
+                                      int maxPacketSize, int maxBitrate, int maxLatency,
+                                      int maxNetworkLatency);
 
     private native boolean nativeStop(long nativeRef);
 
