@@ -24,22 +24,24 @@ static JavaVM *g_vm = NULL;
 // ---------------------------------------
 
 JNIEXPORT jlong JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeInit(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
+Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
     jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Manager_nativeInit");
     ARSTREAM2_StreamReceiver_Config_t config;
+    ARSTREAM2_StreamReceiver_NetConfig_t net_config;
     memset(&config, 0, sizeof(ARSTREAM2_StreamReceiver_Config_t));
+    memset(&net_config, 0, sizeof(ARSTREAM2_StreamReceiver_NetConfig_t));
 
     const char *c_serverAddress = (*env)->GetStringUTFChars(env, serverAddress, NULL);
 
-    config.serverAddr = c_serverAddress;
-    config.mcastAddr = NULL;
-    config.mcastIfaceAddr = NULL;
-    config.serverStreamPort = serverStreamPort;
-    config.serverControlPort = serverControlPort;
-    config.clientStreamPort = clientStreamPort;
-    config.clientControlPort = clientControlPort;
+    net_config.serverAddr = c_serverAddress;
+    net_config.mcastAddr = NULL;
+    net_config.mcastIfaceAddr = NULL;
+    net_config.serverStreamPort = serverStreamPort;
+    net_config.serverControlPort = serverControlPort;
+    net_config.clientStreamPort = clientStreamPort;
+    net_config.clientControlPort = clientControlPort;
     config.maxPacketSize = maxPacketSize;
     config.maxBitrate = maxBitrate;
     config.maxLatencyMs = maxLatency;
@@ -53,9 +55,43 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeInit(JNIEnv *env, jobject
     config.generateFirstGrayIFrame = 1;
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
-    eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config);
+    eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, &net_config, NULL);
 
     (*env)->ReleaseStringUTFChars(env, serverAddress, c_serverAddress);
+
+    if (result != ARSTREAM2_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Error in ARSTREAM2_StreamReceiver_Init(): %s", ARSTREAM2_Error_ToString(result));
+        return (jlong)(intptr_t)NULL;
+    }
+
+    return (jlong)(intptr_t)streamReceiverHandle;
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobject thizz, jlong mux, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
+{
+    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Manager_nativeInit");
+    ARSTREAM2_StreamReceiver_Config_t config;
+    ARSTREAM2_StreamReceiver_MuxConfig_t mux_config;
+    memset(&config, 0, sizeof(ARSTREAM2_StreamReceiver_Config_t));
+    memset(&mux_config, 0, sizeof(ARSTREAM2_StreamReceiver_MuxConfig_t));
+
+    mux_config.mux = (struct mux_ctx *)(intptr_t)mux;
+    config.maxPacketSize = maxPacketSize;
+    config.maxBitrate = maxBitrate;
+    config.maxLatencyMs = maxLatency;
+    config.maxNetworkLatencyMs = maxNetworkLatency;
+    config.waitForSync = 1;
+    config.outputIncompleteAu = 1;
+    config.filterOutSpsPps = 1;
+    config.filterOutSei = 1;
+    config.replaceStartCodesWithNaluSize = 0;
+    config.generateSkippedPSlices = 1;
+    config.generateFirstGrayIFrame = 1;
+
+    ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
+    eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, NULL, &mux_config);
 
     if (result != ARSTREAM2_OK)
     {

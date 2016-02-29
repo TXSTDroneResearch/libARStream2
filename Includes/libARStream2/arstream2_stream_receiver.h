@@ -52,8 +52,9 @@ typedef void* ARSTREAM2_StreamReceiver_Handle;
 typedef void* ARSTREAM2_StreamReceiver_ResenderHandle;
 
 
+
 /**
- * @brief ARSTREAM2 StreamReceiver configuration for initialization.
+ * @brief ARSTREAM2 StreamReceiver net configuration for initialization.
  */
 typedef struct
 {
@@ -64,6 +65,25 @@ typedef struct
     int serverControlPort;                                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
     int clientStreamPort;                                           /**< Client stream port */
     int clientControlPort;                                          /**< Client control port */
+
+} ARSTREAM2_StreamReceiver_NetConfig_t;
+
+// Forward declaration of the mux_ctx structure
+struct mux_ctx;
+
+/**
+ * @brief ARSTREAM2 StreamReceiver mux configuration for initialization.
+ */
+typedef struct
+{
+    struct mux_ctx *mux;                                            /**< libmux context */
+
+} ARSTREAM2_StreamReceiver_MuxConfig_t;
+/**
+ * @brief ARSTREAM2 StreamReceiver configuration for initialization.
+ */
+typedef struct
+{
     int maxPacketSize;                                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int maxBitrate;                                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
@@ -106,11 +126,16 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
  *
  * @param streamReceiverHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
+ * @param net_config The instance network configuration, or NULL if libmux is used.
+ * @param mux_config The instance libmux configuration, or NULL if network is used.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
+                                               ARSTREAM2_StreamReceiver_Config_t *config,
+                                               ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
+                                               ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config);
 
 
 /**

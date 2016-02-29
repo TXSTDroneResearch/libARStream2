@@ -19,5 +19,6 @@ android {
 }
 
 dependencies {
+    compile project(':libmux')
     compile project(':libARSAL')
 }
