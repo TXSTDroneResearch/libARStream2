@@ -164,7 +164,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeInit(JNIEnv *env, jobjec
 JNIEXPORT void JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeFree(JNIEnv *env, jobject thizz, jlong ref)
 {
-    jobject gthizz = (jobject)ref;
+    jobject gthizz = (jobject)(intptr_t)ref;
     (*env)->DeleteGlobalRef(env, gthizz);
 }
 
@@ -172,7 +172,7 @@ JNIEXPORT jboolean JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeStart(JNIEnv *env, jobject thizz, jlong cStreamReceiver, jlong thisRef)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Receiver_nativeStart");
-    jobject gthizz = (jobject)thisRef;
+    jobject gthizz = (jobject)(intptr_t)thisRef;
     jboolean retVal = JNI_TRUE;
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = (ARSTREAM2_StreamReceiver_Handle)(intptr_t)cStreamReceiver;
 
