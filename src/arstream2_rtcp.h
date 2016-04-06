@@ -10,12 +10,14 @@
 
 #include <inttypes.h>
 
+
 /*
  * Macros
  */
 
 #define ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE 200
 #define ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE 201
+
 
 /*
  * Types
@@ -57,5 +59,14 @@ typedef struct {
     uint32_t senderPacketCount;
     uint32_t senderByteCount;
 } __attribute__ ((packed)) ARSTREAM2_RTCP_SenderReport_t;
+
+
+/*
+ * Functions
+ */
+
+int ARSTREAM2_Rtcp_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
+                                        uint32_t ssrc, uint32_t rtpClockRate, uint32_t rtpTimestampOffset,
+                                        uint32_t senderPacketCount, uint32_t senderByteCount);
 
 #endif /* _ARSTREAM2_RTCP_H_ */
