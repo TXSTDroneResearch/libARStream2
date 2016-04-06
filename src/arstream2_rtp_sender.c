@@ -18,6 +18,7 @@
 
 #include <libARStream2/arstream2_rtp_sender.h>
 #include "arstream2_rtp.h"
+#include "arstream2_rtcp.h"
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
@@ -136,6 +137,9 @@ struct ARSTREAM2_RtpSender_t {
 
     uint64_t lastAuTimestamp;
     uint16_t seqNum;
+    uint32_t packetCount;
+    uint32_t byteCount;
+    ARSAL_Mutex_t rtcpMutex;
     ARSAL_Mutex_t streamMutex;
 
     /* Thread status */
@@ -485,6 +489,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
 {
     ARSTREAM2_RtpSender_t *retSender = NULL;
     int streamMutexWasInit = 0;
+    int rtcpMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
     int fifoWasCreated = 0;
     int fifoMutexWasInit = 0;
@@ -568,6 +573,18 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         else
         {
             streamMutexWasInit = 1;
+        }
+    }
+    if (internalError == ARSTREAM2_OK)
+    {
+        int mutexInitRet = ARSAL_Mutex_Init(&(retSender->rtcpMutex));
+        if (mutexInitRet != 0)
+        {
+            internalError = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            rtcpMutexWasInit = 1;
         }
     }
     if (internalError == ARSTREAM2_OK)
@@ -699,6 +716,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         {
             ARSAL_Mutex_Destroy(&(retSender->streamMutex));
         }
+        if (rtcpMutexWasInit == 1)
+        {
+            ARSAL_Mutex_Destroy(&(retSender->rtcpMutex));
+        }
         if (monitoringMutexWasInit == 1)
         {
             ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
@@ -773,6 +794,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
         if (canDelete == 1)
         {
             ARSAL_Mutex_Destroy(&((*sender)->streamMutex));
+            ARSAL_Mutex_Destroy(&((*sender)->rtcpMutex));
             ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
             free((*sender)->fifoPool);
             ARSAL_Mutex_Destroy(&((*sender)->fifoMutex));
@@ -1233,7 +1255,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
 }
 
 
-static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *sendBuffer, uint32_t sendSize, uint64_t inputTimestamp, uint64_t auTimestamp, int isLastInAu, int hasHeaderExtension, int maxLatencyUs, int maxNetworkLatencyUs, int seqNumForcedDiscontinuity)
+static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *sendBuffer, uint32_t sendSize, uint64_t inputTimestamp, uint64_t auTimestamp, int isLastInAu, int hasHeaderExtension, int maxLatencyUs, int maxNetworkLatencyUs, int seqNumForcedDiscontinuity, int payloadSize)
 {
     int ret = 0, totalLatencyDrop = 0, networkLatencyDrop = 0;
     ARSTREAM2_RTP_Header_t *header = (ARSTREAM2_RTP_Header_t *)sendBuffer;
@@ -1253,12 +1275,17 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
         flags |= (1 << 7);
     }
     header->flags = htons(flags);
-    sender->seqNum = sender->seqNum + seqNumForcedDiscontinuity;
-    header->seqNum = htons(sender->seqNum++);
+    sender->seqNum += seqNumForcedDiscontinuity;
+    header->seqNum = htons(sender->seqNum);
+    sender->seqNum++;
+    ARSAL_Mutex_Lock(&(sender->rtcpMutex));
+    sender->packetCount += seqNumForcedDiscontinuity + 1;
+    sender->byteCount += payloadSize;
+    ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
     rtpTimestamp = (uint32_t)((((auTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF); /* microseconds to 90000 Hz clock */
     //TODO: handle the timestamp 32 bits loopback
     header->timestamp = htonl(rtpTimestamp);
-    header->ssrc = htonl(ARSTREAM2_RTP_SSRC);
+    header->ssrc = htonl(ARSTREAM2_RTP_SENDER_SSRC);
 
     /* send to the network layer */
     ssize_t bytes;
@@ -1427,7 +1454,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
     /* Local declarations */
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
     uint8_t *sendBuffer = NULL;
-    uint32_t sendSize = 0;
+    uint32_t sendSize = 0, stapPayloadSize = 0;
     ARSTREAM2_RtpSender_Nalu_t nalu;
     uint64_t previousTimestamp = 0, stapAuTimestamp = 0, stapFirstNaluInputTimestamp = 0;
     void *previousAuUserPtr = NULL;
@@ -1491,9 +1518,10 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                     /* Finish the previous STAP-A packet */
                     uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                     *(sendBuffer + headersOffset) = stapHeader;
-                    ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity); // do not set the marker bit
+                    ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                     stapPending = 0;
                     sendSize = 0;
+                    stapPayloadSize = 0;
                 }
 
                 if (sender->auCallback != NULL)
@@ -1542,9 +1570,10 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         /* Finish the previous STAP-A packet */
                         uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                         *(sendBuffer + headersOffset) = stapHeader;
-                        ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity); // do not set the marker bit
+                        ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                         stapPending = 0;
                         sendSize = 0;
+                        stapPayloadSize = 0;
                     }
 
                     int i;
@@ -1589,7 +1618,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                                 endBit = ((i == fragmentCount - 1) && (fragmentOffset + packetSize == fragmentSize)) ? 0x40 : 0;
                                 *(sendBuffer + headersOffset + 1) = fuHeader | startBit | endBit;
 
-                                ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, nalu.naluInputTimestamp, nalu.auTimestamp, ((nalu.isLastInAu) && (endBit)) ? 1 : 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, (startBit) ? nalu.seqNumForcedDiscontinuity : 0);
+                                ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, nalu.naluInputTimestamp, nalu.auTimestamp, ((nalu.isLastInAu) && (endBit)) ? 1 : 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, (startBit) ? nalu.seqNumForcedDiscontinuity : 0, packetSize + 2);
                                 sendSize = 0;
                             }
                             else
@@ -1615,9 +1644,10 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                             /* Finish the previous STAP-A packet */
                             uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                             *(sendBuffer + headersOffset) = stapHeader;
-                            ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity); // do not set the marker bit
+                            ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                             stapPending = 0;
                             sendSize = 0;
+                            stapPayloadSize = 0;
 
                             stapSize = nalu.naluSize + 2 + ((!stapPending) ? headersOffset + 1 : 0);
                         }
@@ -1645,7 +1675,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         memcpy(sendBuffer + headersOffset, nalu.naluBuffer, nalu.naluSize);
                         sendSize = nalu.naluSize + headersOffset;
                         
-                        ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, nalu.naluInputTimestamp, nalu.auTimestamp, nalu.isLastInAu, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, nalu.seqNumForcedDiscontinuity);
+                        ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, nalu.naluInputTimestamp, nalu.auTimestamp, nalu.isLastInAu, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, nalu.seqNumForcedDiscontinuity, nalu.naluSize);
                         sendSize = 0;
                     }
                     else
@@ -1673,6 +1703,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                             stapMaxNri = 0;
                             stapNaluCount = 0;
                             sendSize = headersOffset + 1;
+                            stapPayloadSize = 1;
                             stapAuTimestamp = nalu.auTimestamp;
                             stapSeqNumForcedDiscontinuity = nalu.seqNumForcedDiscontinuity;
                             stapFirstNaluInputTimestamp = nalu.naluInputTimestamp;
@@ -1685,17 +1716,20 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         *(sendBuffer + sendSize) = ((nalu.naluSize >> 8) & 0xFF);
                         *(sendBuffer + sendSize + 1) = (nalu.naluSize & 0xFF);
                         sendSize += 2;
+                        stapPayloadSize += 2;
                         memcpy(sendBuffer + sendSize, nalu.naluBuffer, nalu.naluSize);
                         sendSize += nalu.naluSize;
+                        stapPayloadSize += nalu.naluSize;
                         stapNaluCount++;
                         if (nalu.isLastInAu)
                         {
                             /* Finish the STAP-A packet */
                             uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                             *(sendBuffer + headersOffset) = stapHeader;
-                            ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 1, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity); // set the marker bit
+                            ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 1, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // set the marker bit
                             stapPending = 0;
                             sendSize = 0;
+                            stapPayloadSize = 0;
                         }
                     }
                 }
@@ -1711,7 +1745,11 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                 uint32_t rtpTimestamp = (uint32_t)((((nalu.auTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF);
 
                 /* increment the sequence number to let the receiver know that we dropped something */
-                sender->seqNum = sender->seqNum + nalu.seqNumForcedDiscontinuity + 1;
+                sender->seqNum += nalu.seqNumForcedDiscontinuity + 1;
+                ARSAL_Mutex_Lock(&(sender->rtcpMutex));
+                sender->packetCount += nalu.seqNumForcedDiscontinuity + 1;
+                sender->byteCount += nalu.naluSize;
+                ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
 
                 ARSTREAM2_RtpSender_UpdateMonitoring(sender, nalu.naluInputTimestamp, nalu.auTimestamp, rtpTimestamp, sender->seqNum - 1, nalu.isLastInAu, 0, nalu.naluSize);
                 if (nalu.drop)
