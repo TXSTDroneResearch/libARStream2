@@ -69,4 +69,10 @@ int ARSTREAM2_Rtcp_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderRep
                                         uint32_t ssrc, uint32_t rtpClockRate, uint32_t rtpTimestampOffset,
                                         uint32_t senderPacketCount, uint32_t senderByteCount);
 
+int ARSTREAM2_Rtcp_IsSenderReport(const uint8_t *buffer, int bufferSize);
+
+int ARSTREAM2_Rtcp_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+                                     uint32_t *ssrc, uint64_t *ntpTimestamp, uint32_t *rtpTimestamp,
+                                     uint32_t *senderPacketCount, uint32_t *senderByteCount);
+
 #endif /* _ARSTREAM2_RTCP_H_ */
