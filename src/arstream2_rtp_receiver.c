@@ -2166,6 +2166,9 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                         ret = ARSTREAM2_RTCP_UpdateRtpSenderState(&receiver->senderState,
                                                                   ssrc, ntpTimestamp, rtpTimestamp,
                                                                   senderPacketCount, senderByteCount);
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
+                                    (float)receiver->senderState.lastReportInterval / 1000., (float)receiver->senderState.intervalPacketCount * 1000000. / (float)receiver->senderState.lastReportInterval,
+                                    (float)receiver->senderState.intervalByteCount * 8000. / (float)receiver->senderState.lastReportInterval);
                     }
                 }
 

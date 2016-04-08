@@ -72,6 +72,9 @@ typedef struct ARSTREAM2_RTCP_RtpSenderState_s {
     int64_t tsAnum;
     int64_t tsAden;
     int64_t tsB;
+    uint32_t lastReportInterval; // in microseconds
+    uint32_t intervalPacketCount; // over the last SR interval
+    uint32_t intervalByteCount; // over the last SR interval
 } ARSTREAM2_RTCP_RtpSenderState_t;
 
 

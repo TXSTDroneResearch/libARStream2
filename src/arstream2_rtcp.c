@@ -150,10 +150,30 @@ int ARSTREAM2_RTCP_UpdateRtpSenderState(ARSTREAM2_RTCP_RtpSenderState_t *sender,
         return -1;
     }
 
+    if (ntpTimestamp <= sender->prevNtpTimestamp)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report");
+        return -1;
+    }
+
+    // NTP to RTP linear regression: RTP = a * NTP + b
     sender->tsAnum = (int64_t)(rtpTimestamp - sender->prevRtpTimestamp);
     sender->tsAden = (int64_t)(ntpTimestamp - sender->prevNtpTimestamp);
     sender->tsB = (int64_t)rtpTimestamp - (int64_t)((sender->tsAnum * ntpTimestamp + sender->tsAden / 2) / sender->tsAden);
 
+    // Packet and byte rates
+    sender->lastReportInterval = (uint32_t)(ntpTimestamp - sender->prevNtpTimestamp);
+    if (sender->lastReportInterval > 0)
+    {
+        sender->intervalPacketCount = senderPacketCount - sender->prevSenderPacketCount;
+        sender->intervalByteCount = senderByteCount - sender->prevSenderByteCount;
+    }
+    else
+    {
+        sender->intervalPacketCount = sender->intervalByteCount = 0;
+    }
+
+    // Update values
     sender->prevRtpTimestamp = rtpTimestamp;
     sender->prevNtpTimestamp = ntpTimestamp;
     sender->prevSenderPacketCount = senderPacketCount;
