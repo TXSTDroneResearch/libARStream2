@@ -60,19 +60,49 @@ typedef struct {
     uint32_t senderByteCount;
 } __attribute__ ((packed)) ARSTREAM2_RTCP_SenderReport_t;
 
+/**
+ * @brief RTP sender state data
+ */
+typedef struct ARSTREAM2_RTCP_RtpSenderState_s {
+    uint32_t ssrc;
+    uint32_t prevRtpTimestamp;
+    uint64_t prevNtpTimestamp;
+    uint32_t prevSenderPacketCount;
+    uint32_t prevSenderByteCount;
+    int64_t tsAnum;
+    int64_t tsAden;
+    int64_t tsB;
+} ARSTREAM2_RTCP_RtpSenderState_t;
+
 
 /*
  * Functions
  */
 
-int ARSTREAM2_Rtcp_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
+int ARSTREAM2_RTCP_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
                                         uint32_t ssrc, uint32_t rtpClockRate, uint32_t rtpTimestampOffset,
                                         uint32_t senderPacketCount, uint32_t senderByteCount);
 
-int ARSTREAM2_Rtcp_IsSenderReport(const uint8_t *buffer, int bufferSize);
+int ARSTREAM2_RTCP_IsSenderReport(const uint8_t *buffer, int bufferSize);
 
-int ARSTREAM2_Rtcp_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+int ARSTREAM2_RTCP_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
                                      uint32_t *ssrc, uint64_t *ntpTimestamp, uint32_t *rtpTimestamp,
                                      uint32_t *senderPacketCount, uint32_t *senderByteCount);
+
+int ARSTREAM2_RTCP_UpdateRtpSenderState(ARSTREAM2_RTCP_RtpSenderState_t *sender,
+                                        uint32_t ssrc, uint64_t ntpTimestamp, uint32_t rtpTimestamp,
+                                        uint32_t senderPacketCount, uint32_t senderByteCount);
+
+static inline uint64_t ARSTREAM2_RTCP_GetNtpTimestampFromRtpTimestamp(ARSTREAM2_RTCP_RtpSenderState_t *sender, uint32_t rtpTimestamp);
+
+
+/*
+ * Inline functions
+ */
+
+static inline uint64_t ARSTREAM2_RTCP_GetNtpTimestampFromRtpTimestamp(ARSTREAM2_RTCP_RtpSenderState_t *sender, uint32_t rtpTimestamp)
+{
+    return (uint64_t)((((int64_t)rtpTimestamp - sender->tsB) * sender->tsAden + sender->tsAnum / 2) / sender->tsAnum);
+}
 
 #endif /* _ARSTREAM2_RTCP_H_ */

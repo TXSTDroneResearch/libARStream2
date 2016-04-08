@@ -1890,7 +1890,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
         senderByteCount = sender->byteCount;
         ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
 
-        ret = ARSTREAM2_Rtcp_GenerateSenderReport(senderReport, ARSTREAM2_RTP_SENDER_SSRC, 90000, 0,
+        ret = ARSTREAM2_RTCP_GenerateSenderReport(senderReport, ARSTREAM2_RTP_SENDER_SSRC, 90000, 0,
                                                   senderPacketCount, senderByteCount);
 
         if (ret == 0)

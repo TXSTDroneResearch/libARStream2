@@ -17,7 +17,7 @@
 #define ARSTREAM2_RTCP_TAG "ARSTREAM2_Rtcp"
 
 
-int ARSTREAM2_Rtcp_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
+int ARSTREAM2_RTCP_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
 										uint32_t ssrc, uint32_t rtpClockRate, uint32_t rtpTimestampOffset,
 										uint32_t senderPacketCount, uint32_t senderByteCount)
 {
@@ -46,7 +46,7 @@ int ARSTREAM2_Rtcp_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderRep
 }
 
 
-int ARSTREAM2_Rtcp_IsSenderReport(const uint8_t *buffer, int bufferSize)
+int ARSTREAM2_RTCP_IsSenderReport(const uint8_t *buffer, int bufferSize)
 {
     if (!buffer)
     {
@@ -74,7 +74,7 @@ int ARSTREAM2_Rtcp_IsSenderReport(const uint8_t *buffer, int bufferSize)
 }
 
 
-int ARSTREAM2_Rtcp_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+int ARSTREAM2_RTCP_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
                                      uint32_t *ssrc, uint64_t *ntpTimestamp, uint32_t *rtpTimestamp,
                                      uint32_t *senderPacketCount, uint32_t *senderByteCount)
 {
@@ -130,6 +130,34 @@ int ARSTREAM2_Rtcp_ParseSenderReport(const ARSTREAM2_RTCP_SenderReport_t *sender
     {
         *senderByteCount = ntohl(senderReport->senderByteCount);
     }
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_UpdateRtpSenderState(ARSTREAM2_RTCP_RtpSenderState_t *sender,
+                                        uint32_t ssrc, uint64_t ntpTimestamp, uint32_t rtpTimestamp,
+                                        uint32_t senderPacketCount, uint32_t senderByteCount)
+{
+    if (sender->ssrc == 0)
+    {
+        sender->ssrc = ssrc;
+    }
+
+    if (ssrc != sender->ssrc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
+        return -1;
+    }
+
+    sender->tsAnum = (int64_t)(rtpTimestamp - sender->prevRtpTimestamp);
+    sender->tsAden = (int64_t)(ntpTimestamp - sender->prevNtpTimestamp);
+    sender->tsB = (int64_t)rtpTimestamp - (int64_t)((sender->tsAnum * ntpTimestamp + sender->tsAden / 2) / sender->tsAden);
+
+    sender->prevRtpTimestamp = rtpTimestamp;
+    sender->prevNtpTimestamp = ntpTimestamp;
+    sender->prevSenderPacketCount = senderPacketCount;
+    sender->prevSenderByteCount = senderByteCount;
 
     return 0;
 }

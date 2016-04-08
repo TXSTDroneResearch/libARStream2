@@ -101,8 +101,9 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  *
  * @param auBuffer Pointer to the AU buffer
  * @param auSize AU size in bytes
- * @param auTimestamp AU timestamp in microseconds
- * @param auTimestampShifted AU timestamp shifted to the sender's clock in microseconds
+ * @param auRtpTimestamp Access unit RTP timestamp (90000 Hz clock)
+ * @param auNtpTimestamp Access unit NTP timestamp (microseconds) in the sender's clock reference (0 if RTCP is not available)
+ * @param auNtpTimestampLocal Access unit NTP timestamp (microseconds) in the local clock reference (0 if clock sync or RTCP is not available)
  * @param auSyncType AU synchronization type
  * @param auMetadata AU metadata buffer
  * @param auMetadataSize AU metadata size in bytes
@@ -118,7 +119,8 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  * @warning This callback function is mandatory.
  * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted,
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp,
+                                                                   uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
                                                                    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType,
                                                                    void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize,
                                                                    void *auBufferUserPtr, void *userPtr);
@@ -241,9 +243,9 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
  * @see ARSTREAM2_RtpReceiver_NaluCallback_t.
  *
  */
-uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                      uint64_t auTimestampShifted, uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
-                                                      int missingPacketsBefore, int *newNaluBufferSize, void *custom);
+uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint32_t auRtpTimestamp,
+                                                      uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, uint8_t *naluMetadata, int naluMetadataSize,
+                                                      int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
 #ifdef __cplusplus

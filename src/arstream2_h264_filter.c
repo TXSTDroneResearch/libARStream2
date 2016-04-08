@@ -95,8 +95,9 @@ typedef struct ARSTREAM2_H264Filter_s
     int tempAuBufferSize;
 
     int currentAuSize;
-    uint64_t currentAuTimestamp;
-    uint64_t currentAuTimestampShifted;
+    uint32_t currentAuRtpTimestamp;
+    uint64_t currentAuNtpTimestamp;
+    uint64_t currentAuNtpTimestampLocal;
     uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
     eARSTREAM2_H264_FILTER_AU_SYNC_TYPE currentAuSyncType;
@@ -520,7 +521,8 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             /* call the auReadyCallback */
             ARSAL_Mutex_Unlock(&(filter->mutex));
 
-            cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
+            cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuRtpTimestamp, filter->currentAuNtpTimestamp,
+                                            filter->currentAuNtpTimestampLocal, filter->currentAuSyncType,
                                             (filter->currentAuMetadataSize > 0) ? filter->currentAuMetadata : NULL, filter->currentAuMetadataSize,
                                             (filter->currentAuUserDataSize > 0) ? filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
                                             auBufferUserPtr, filter->auReadyCallbackUserPtr);
@@ -610,8 +612,9 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
             int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
             int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
-            uint64_t savedAuTimestamp = filter->currentAuTimestamp;
-            uint64_t savedAuTimestampShifted = filter->currentAuTimestampShifted;
+            uint32_t savedAuRtpTimestamp = filter->currentAuRtpTimestamp;
+            uint64_t savedAuNtpTimestamp = filter->currentAuNtpTimestamp;
+            uint64_t savedAuNtpTimestampLocal = filter->currentAuNtpTimestampLocal;
             uint64_t savedAuFirstNaluInputTime = filter->currentAuFirstNaluInputTime;
             ret = 0;
 
@@ -634,8 +637,9 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
 
             ARSTREAM2_H264Filter_resetCurrentAu(filter);
             filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
-            filter->currentAuTimestamp -= ((filter->currentAuTimestamp >= 1000) ? 1000 : ((filter->currentAuTimestamp >= 1) ? 1 : 0));
-            filter->currentAuTimestampShifted -= ((filter->currentAuTimestampShifted >= 1000) ? 1000 : ((filter->currentAuTimestampShifted >= 1) ? 1 : 0));
+            filter->currentAuRtpTimestamp -= ((filter->currentAuRtpTimestamp >= 90) ? 90 : ((filter->currentAuRtpTimestamp >= 1) ? 1 : 0));
+            filter->currentAuNtpTimestamp -= ((filter->currentAuNtpTimestamp >= 1000) ? 1000 : ((filter->currentAuNtpTimestamp >= 1) ? 1 : 0));
+            filter->currentAuNtpTimestampLocal -= ((filter->currentAuNtpTimestampLocal >= 1000) ? 1000 : ((filter->currentAuNtpTimestampLocal >= 1) ? 1 : 0));
             filter->currentAuFirstNaluInputTime -= ((filter->currentAuFirstNaluInputTime >= 1000) ? 1000 : ((filter->currentAuFirstNaluInputTime >= 1) ? 1 : 0));
 
             if (!filter->filterOutSpsPps)
@@ -702,8 +706,9 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                             memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
                         }
 
-                        filter->currentAuTimestamp = savedAuTimestamp;
-                        filter->currentAuTimestampShifted = savedAuTimestampShifted;
+                        filter->currentAuRtpTimestamp = savedAuRtpTimestamp;
+                        filter->currentAuNtpTimestamp = savedAuNtpTimestamp;
+                        filter->currentAuNtpTimestampLocal = savedAuNtpTimestampLocal;
                         filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
                         filter->currentAuSize = savedAuSize;
                         filter->currentAuIncomplete = savedAuIncomplete;
@@ -729,8 +734,9 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                 {
                     // The access unit has not been enqueued: reuse current auBuffer
                     ARSTREAM2_H264Filter_resetCurrentAu(filter);
-                    filter->currentAuTimestamp = savedAuTimestamp;
-                    filter->currentAuTimestampShifted = savedAuTimestampShifted;
+                    filter->currentAuRtpTimestamp = savedAuRtpTimestamp;
+                    filter->currentAuNtpTimestamp = savedAuNtpTimestamp;
+                    filter->currentAuNtpTimestampLocal = savedAuNtpTimestampLocal;
                     filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
 
                     if (tmpBuf)
@@ -985,9 +991,9 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 }
 
 
-uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint64_t auTimestamp,
-                                                      uint64_t auTimestampShifted, uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
-                                                      int missingPacketsBefore, int *newNaluBufferSize, void *custom)
+uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint32_t auRtpTimestamp,
+                                                      uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, uint8_t *naluMetadata, int naluMetadataSize,
+                                                      int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore, int *newNaluBufferSize, void *custom)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)custom;
     ARSTREAM2_H264Filter_H264NaluType_t naluType = ARSTREAM2_H264_FILTER_H264_NALU_TYPE_UNKNOWN;
@@ -1017,7 +1023,7 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
 
             // Handle a previous access unit that has not been output
             if ((filter->currentAuSize > 0)
-                    && ((isFirstNaluInAu) || ((filter->currentAuTimestamp != 0) && (auTimestamp != filter->currentAuTimestamp))))
+                    && ((isFirstNaluInAu) || ((filter->currentAuRtpTimestamp != 0) && (auRtpTimestamp != filter->currentAuRtpTimestamp))))
             {
                 uint8_t *tmpBuf = malloc(naluSize); //TODO
                 if (tmpBuf)
@@ -1105,8 +1111,9 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
             }
             else
             {
-                filter->currentAuTimestamp = auTimestamp;
-                filter->currentAuTimestampShifted = auTimestampShifted;
+                filter->currentAuRtpTimestamp = auRtpTimestamp;
+                filter->currentAuNtpTimestamp = auNtpTimestamp;
+                filter->currentAuNtpTimestampLocal = auNtpTimestampLocal;
                 if (filter->currentAuFirstNaluInputTime == 0) filter->currentAuFirstNaluInputTime = curTime;
                 filter->previousSliceType = sliceType;
                 if ((naluMetadataSize > 0) && (naluMetadataSize <= ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE))

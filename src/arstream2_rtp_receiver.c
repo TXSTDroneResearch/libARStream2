@@ -177,6 +177,7 @@ struct ARSTREAM2_RtpReceiver_t {
     int maxLatencyMs;
     int maxNetworkLatencyMs;
     int insertStartCodes;
+    ARSTREAM2_RTCP_RtpSenderState_t senderState;
 
     /* Current frame storage */
     int currentNaluBufferSize; // Usable length of the buffer
@@ -1115,7 +1116,7 @@ static int ARSTREAM2_RtpReceiver_CheckBufferSize(ARSTREAM2_RtpReceiver_t *receiv
     if ((receiver->currentNaluBuffer == NULL) || (receiver->currentNaluSize + payloadSize > receiver->currentNaluBufferSize))
     {
         int32_t nextNaluBufferSize = receiver->currentNaluSize + payloadSize, dummy = 0;
-        uint8_t *nextNaluBuffer = receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, receiver->currentNaluBuffer, 0, 0, 0, NULL, 0, 0, 0, 0, &nextNaluBufferSize, receiver->naluCallbackUserPtr);
+        uint8_t *nextNaluBuffer = receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, receiver->currentNaluBuffer, 0, 0, 0, 0, NULL, 0, 0, 0, 0, &nextNaluBufferSize, receiver->naluCallbackUserPtr);
         ret = -1;
         if ((nextNaluBuffer != NULL) && (nextNaluBufferSize > 0) && (nextNaluBufferSize >= receiver->currentNaluSize + payloadSize))
         {
@@ -1123,7 +1124,7 @@ static int ARSTREAM2_RtpReceiver_CheckBufferSize(ARSTREAM2_RtpReceiver_t *receiv
             {
                 memcpy(nextNaluBuffer, receiver->currentNaluBuffer, receiver->currentNaluSize);
             }
-            receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE, receiver->currentNaluBuffer, 0, 0, 0, NULL, 0, 0, 0, 0, &dummy, receiver->naluCallbackUserPtr);
+            receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE, receiver->currentNaluBuffer, 0, 0, 0, 0, NULL, 0, 0, 0, 0, &dummy, receiver->naluCallbackUserPtr);
             ret = 0;
         }
         receiver->currentNaluBuffer = nextNaluBuffer;
@@ -1134,21 +1135,22 @@ static int ARSTREAM2_RtpReceiver_CheckBufferSize(ARSTREAM2_RtpReceiver_t *receiv
 }
 
 
-static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, uint32_t timestamp, int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore)
+static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, uint32_t rtpTimestamp, int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore)
 {
-    uint64_t timestampScaled, timestampScaledShifted;
+    uint64_t rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal;
 
-    timestampScaled = ((((uint64_t)timestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
+    rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
     //TODO: handle the timestamp 32 bits loopback
-    timestampScaledShifted = (receiver->clockDelta != 0) ? (timestampScaled - receiver->clockDelta) : 0; /* 90000 Hz clock to microseconds */
+    ntpTimestampLocal = (receiver->clockDelta != 0) ? (rtpTimestampScaled - receiver->clockDelta) : 0;
+    ntpTimestamp = ARSTREAM2_RTCP_GetNtpTimestampFromRtpTimestamp(&receiver->senderState, rtpTimestamp);
 
     if (receiver->resenderCount > 0)
     {
-        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, timestampScaled, isLastNaluInAu, missingPacketsBefore);
+        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, rtpTimestampScaled, isLastNaluInAu, missingPacketsBefore);
     }
 
     receiver->currentNaluBuffer = receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE, receiver->currentNaluBuffer, receiver->currentNaluSize,
-                                                         timestampScaled, timestampScaledShifted,
+                                                         rtpTimestamp, ntpTimestamp, ntpTimestampLocal,
                                                          (receiver->naluMetadataSize > 0) ? receiver->naluMetadata : NULL, receiver->naluMetadataSize,
                                                          isFirstNaluInAu, isLastNaluInAu, missingPacketsBefore, &(receiver->currentNaluBufferSize), receiver->naluCallbackUserPtr);
 }
@@ -2069,7 +2071,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
     }
 
-    receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL, receiver->currentNaluBuffer, 0, 0, 0, NULL, 0, 0, 0, 0, &(receiver->currentNaluBufferSize), receiver->naluCallbackUserPtr);
+    receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL, receiver->currentNaluBuffer, 0, 0, 0, 0, NULL, 0, 0, 0, 0, &(receiver->currentNaluBufferSize), receiver->naluCallbackUserPtr);
 
     ret = receiver->ops.streamChannelTeardown(receiver);
     if (ret != 0)
@@ -2144,12 +2146,12 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         {
             do
             {
-                if (ARSTREAM2_Rtcp_IsSenderReport(msgBuffer, bytes))
+                if (ARSTREAM2_RTCP_IsSenderReport(msgBuffer, bytes))
                 {
                     uint32_t ssrc = 0, rtpTimestamp = 0, senderPacketCount = 0, senderByteCount = 0;
                     uint64_t ntpTimestamp = 0;
 
-                    ret = ARSTREAM2_Rtcp_ParseSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msgBuffer, &ssrc,
+                    ret = ARSTREAM2_RTCP_ParseSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msgBuffer, &ssrc,
                                                            &ntpTimestamp, &rtpTimestamp, &senderPacketCount, &senderByteCount);
 
                     if (ret != 0)
@@ -2161,6 +2163,9 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                         //TODO
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender report received: ssrc=0x%08X, ntp=%llu, rtp=%u, packets=%u, bytes=%u",
                                     ssrc, ntpTimestamp, rtpTimestamp, senderPacketCount, senderByteCount);
+                        ret = ARSTREAM2_RTCP_UpdateRtpSenderState(&receiver->senderState,
+                                                                  ssrc, ntpTimestamp, rtpTimestamp,
+                                                                  senderPacketCount, senderByteCount);
                     }
                 }
 
