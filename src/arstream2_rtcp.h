@@ -95,6 +95,7 @@ typedef struct ARSTREAM2_RTCP_RtpReceiverContext_s {
     uint32_t extHighestSeqNum;
     uint32_t packetsReceived;
     uint32_t packetsLost;
+    uint32_t interarrivalJitter;
     uint32_t lastRrExtHighestSeqNum;
     uint32_t lastRrPacketsReceived;
     uint32_t lastRrPacketsLost;

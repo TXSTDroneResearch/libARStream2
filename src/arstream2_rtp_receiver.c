@@ -129,7 +129,8 @@ struct ARSTREAM2_RtpReceiver_MuxInfos_t {
 
 struct ARSTREAM2_RtpReceiver_ProcessContext_t {
     int previousSeqNum;
-    uint32_t previousTimestamp;
+    uint32_t previousRtpTimestamp;
+    uint32_t previousRecvRtpTimestamp;
     uint16_t previousFlags;
     int auStartSeqNum;
     int naluStartSeqNum;
@@ -802,15 +803,12 @@ static int ARSTREAM2_RtpReceiver_ControlSocketTeardown(ARSTREAM2_RtpReceiver_t *
     return 0;
 }
 
-static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint32_t timestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytes)
+static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint64_t recvTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytes)
 {
-    uint64_t curTime, timestampShifted;
-    struct timespec t1;
-    ARSAL_Time_GetTime(&t1);
-    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    uint64_t timestampShifted;
 
     //TODO: handle the timestamp 32 bits loopback
-    timestampShifted = (receiver->clockDelta != 0) ? (((((uint64_t)timestamp * 1000) + 45) / 90) - receiver->clockDelta) : 0; /* 90000 Hz clock to microseconds */
+    timestampShifted = (receiver->clockDelta != 0) ? (((((uint64_t)rtpTimestamp * 1000) + 45) / 90) - receiver->clockDelta) : 0; /* 90000 Hz clock to microseconds */
 
     ARSAL_Mutex_Lock(&(receiver->monitoringMutex));
 
@@ -820,18 +818,18 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
     }
     receiver->monitoringIndex = (receiver->monitoringIndex + 1) % ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS;
     receiver->monitoringPoint[receiver->monitoringIndex].bytes = bytes;
-    receiver->monitoringPoint[receiver->monitoringIndex].timestamp = timestamp;
+    receiver->monitoringPoint[receiver->monitoringIndex].timestamp = rtpTimestamp;
     receiver->monitoringPoint[receiver->monitoringIndex].timestampShifted = timestampShifted;
     receiver->monitoringPoint[receiver->monitoringIndex].seqNum = seqNum;
     receiver->monitoringPoint[receiver->monitoringIndex].markerBit = markerBit;
-    receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = curTime;
+    receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = recvTimestamp;
 
     ARSAL_Mutex_Unlock(&(receiver->monitoringMutex));
 
 #ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
     if (receiver->fMonitorOut)
     {
-        fprintf(receiver->fMonitorOut, "%llu %lu %llu %u %u %lu\n", (long long unsigned int)curTime, (long unsigned int)timestamp, (long long unsigned int)timestampShifted, seqNum, markerBit, (long unsigned int)bytes);
+        fprintf(receiver->fMonitorOut, "%llu %lu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)timestampShifted, seqNum, markerBit, (long unsigned int)bytes);
     }
 #endif
 }
@@ -1168,6 +1166,11 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     uint16_t currentFlags;
     ARSTREAM2_RTP_Header_t *header = (ARSTREAM2_RTP_Header_t*)recvBuffer;
 
+    struct timespec t1;
+    ARSAL_Time_GetTime(&t1);
+    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    uint32_t recvRtpTimestamp = (uint32_t)((((curTime * 90) + 500) / 1000) & 0xFFFFFFFF);
+
     if (receiver->insertStartCodes)
     {
         startCode = htonl(ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE);
@@ -1191,7 +1194,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         extHeader = NULL;
         extHeaderSize = 0;
     }
-    ARSTREAM2_RtpReceiver_UpdateMonitoring(receiver, rtpTimestamp, currentSeqNum, (currentFlags & (1 << 7)) ? 1 : 0, (uint32_t)recvSize);
+    ARSTREAM2_RtpReceiver_UpdateMonitoring(receiver, curTime, rtpTimestamp, currentSeqNum, (currentFlags & (1 << 7)) ? 1 : 0, (uint32_t)recvSize);
 
     if (receiver->process.previousSeqNum != -1)
     {
@@ -1221,8 +1224,17 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
 
     if (seqNumDelta > 0)
     {
+        // Interarrival jitter computation
+        int64_t d;
+        d = ((int64_t)receiver->process.previousRecvRtpTimestamp - (int64_t)receiver->process.previousRtpTimestamp)
+            - ((int64_t)recvRtpTimestamp - (int64_t)rtpTimestamp);
+        if (d < 0) d = -d;
+        receiver->receptionContext.interarrivalJitter = (uint32_t)((int64_t)receiver->receptionContext.interarrivalJitter
+                                                        + (d - (int64_t)receiver->receptionContext.interarrivalJitter) / 16);
+
         receiver->receptionContext.packetsReceived++;
-        if ((receiver->process.previousTimestamp != 0) && (rtpTimestamp != receiver->process.previousTimestamp))
+
+        if ((receiver->process.previousRtpTimestamp != 0) && (rtpTimestamp != receiver->process.previousRtpTimestamp))
         {
             if (!(receiver->process.previousFlags & (1 << 7)))
             {
@@ -1463,7 +1475,8 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         }
 
         receiver->process.previousSeqNum = currentSeqNum;
-        receiver->process.previousTimestamp = rtpTimestamp;
+        receiver->process.previousRtpTimestamp = rtpTimestamp;
+        receiver->process.previousRecvRtpTimestamp = recvRtpTimestamp;
         receiver->process.previousFlags = currentFlags;
     }
     else
@@ -2039,7 +2052,8 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
     ARSAL_Mutex_Unlock(&(receiver->streamMutex));
 
     receiver->process.previousFlags = 0;
-    receiver->process.previousTimestamp = 0;
+    receiver->process.previousRtpTimestamp = 0;
+    receiver->process.previousRecvRtpTimestamp = 0;
     receiver->process.previousSeqNum = -1;
     receiver->process.fuPending = 0;
     receiver->process.currentAuSize = 0;

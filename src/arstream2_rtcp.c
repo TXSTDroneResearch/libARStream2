@@ -231,7 +231,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         receptionReport->ssrc = htonl(context->senderSsrc);
         receptionReport->lost = htonl(((fractionLost & 0xFF) << 24) | (cumulativeLost & 0x00FFFFFF));
         receptionReport->extHighestSeqNum = htonl(context->extHighestSeqNum);
-        receptionReport->interarrivalJitter = htonl(0); //TODO
+        receptionReport->interarrivalJitter = htonl(context->interarrivalJitter);
         receptionReport->lsr = htonl((uint32_t)(((context->prevSrNtpTimestamp << 16) / 1000000) & 0xFFFFFFFF));
         receptionReport->dlsr = htonl(((curTime - context->lastSrReceptionTimestamp) << 16) / 1000000);
 
