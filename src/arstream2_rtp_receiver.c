@@ -169,6 +169,7 @@ struct ARSTREAM2_RtpReceiver_t {
 
     /* Process context */
     struct ARSTREAM2_RtpReceiver_ProcessContext_t process;
+    ARSTREAM2_RTCP_RtpReceiverContext_t receptionContext;
 
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;
     void *naluCallbackUserPtr;
@@ -177,7 +178,6 @@ struct ARSTREAM2_RtpReceiver_t {
     int maxLatencyMs;
     int maxNetworkLatencyMs;
     int insertStartCodes;
-    ARSTREAM2_RTCP_RtpSenderState_t senderState;
 
     /* Current frame storage */
     int currentNaluBufferSize; // Usable length of the buffer
@@ -1142,7 +1142,7 @@ static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, 
     rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
     //TODO: handle the timestamp 32 bits loopback
     ntpTimestampLocal = (receiver->clockDelta != 0) ? (rtpTimestampScaled - receiver->clockDelta) : 0;
-    ntpTimestamp = ARSTREAM2_RTCP_GetNtpTimestampFromRtpTimestamp(&receiver->senderState, rtpTimestamp);
+    ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->receptionContext, rtpTimestamp);
 
     if (receiver->resenderCount > 0)
     {
@@ -1163,9 +1163,8 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     int uncertainAuChange = 0;
     uint32_t startCode = 0;
     int startCodeLength = 0;
-    int ret;
     uint8_t *extHeader = NULL;
-    uint32_t rtpTimestamp = 0;
+    uint32_t rtpTimestamp = 0, ssrc = 0;
     uint16_t currentFlags;
     ARSTREAM2_RTP_Header_t *header = (ARSTREAM2_RTP_Header_t*)recvBuffer;
 
@@ -1177,6 +1176,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
 
     headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
     rtpTimestamp = ntohl(header->timestamp);
+    ssrc = ntohl(header->ssrc);
     currentSeqNum = (int)ntohs(header->seqNum);
     currentFlags = ntohs(header->flags);
     if (currentFlags & (1 << 12))
@@ -1195,29 +1195,38 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
 
     if (receiver->process.previousSeqNum != -1)
     {
+        receiver->receptionContext.extHighestSeqNum = (receiver->receptionContext.extHighestSeqNum & 0xFFFF0000) | ((uint32_t)currentSeqNum & 0xFFFF);
         seqNumDelta = currentSeqNum - receiver->process.previousSeqNum;
         if (seqNumDelta < -32768)
         {
             seqNumDelta += 65536; /* handle seqNum 16 bits loopback */
+            receiver->receptionContext.extHighestSeqNum += 65536;
         }
         if (seqNumDelta > 0)
         {
             gapsInSeqNum += seqNumDelta - 1;
             receiver->process.gapsInSeqNumAu += seqNumDelta - 1;
+            receiver->receptionContext.packetsLost += gapsInSeqNum;
         }
     }
     else
     {
         seqNumDelta = 1;
+        receiver->receptionContext.senderSsrc = ssrc;
+        receiver->receptionContext.firstSeqNum = currentSeqNum;
+        receiver->receptionContext.extHighestSeqNum = currentSeqNum;
+        receiver->receptionContext.packetsReceived = 0;
+        receiver->receptionContext.packetsLost = 0;
     }
 
     if (seqNumDelta > 0)
     {
+        receiver->receptionContext.packetsReceived++;
         if ((receiver->process.previousTimestamp != 0) && (rtpTimestamp != receiver->process.previousTimestamp))
         {
             if (!(receiver->process.previousFlags & (1 << 7)))
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Change of timestamp without marker bit set on previous packet", ret);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Change of timestamp without marker bit set on previous packet");
             }
             if (receiver->process.gapsInSeqNumAu)
             {
@@ -1461,6 +1470,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     {
         /* out of order packet */
         //TODO
+        receiver->receptionContext.packetsLost++;
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Out of order sequence number (currentSeqNum=%d, previousSeqNum=%d, seqNumDelta=%d)", currentSeqNum, receiver->process.previousSeqNum, seqNumDelta); //TODO: debug
     }
 }
@@ -1600,6 +1610,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
         retReceiver->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
         retReceiver->insertStartCodes = (config->insertStartCodes > 0) ? 1 : 0;
+        retReceiver->receptionContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
 
         if (net_config)
         {
@@ -2099,6 +2110,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
     uint8_t *msgBuffer;
     int msgBufferSize = receiver->maxPacketSize;
+    int rrSize = sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
     int bytes;
     int shouldStop, ret;
 
@@ -2146,29 +2158,46 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         {
             do
             {
+                struct timespec t1;
+                ARSAL_Time_GetTime(&t1);
+
                 if (ARSTREAM2_RTCP_IsSenderReport(msgBuffer, bytes))
                 {
-                    uint32_t ssrc = 0, rtpTimestamp = 0, senderPacketCount = 0, senderByteCount = 0;
-                    uint64_t ntpTimestamp = 0;
+                    receiver->receptionContext.lastSrReceptionTimestamp = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-                    ret = ARSTREAM2_RTCP_ParseSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msgBuffer, &ssrc,
-                                                           &ntpTimestamp, &rtpTimestamp, &senderPacketCount, &senderByteCount);
-
+                    ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msgBuffer, &receiver->receptionContext);
                     if (ret != 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to parse sender report (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process sender report (%d)", ret);
                     }
                     else
                     {
-                        //TODO
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender report received: ssrc=0x%08X, ntp=%llu, rtp=%u, packets=%u, bytes=%u",
-                                    ssrc, ntpTimestamp, rtpTimestamp, senderPacketCount, senderByteCount);
-                        ret = ARSTREAM2_RTCP_UpdateRtpSenderState(&receiver->senderState,
-                                                                  ssrc, ntpTimestamp, rtpTimestamp,
-                                                                  senderPacketCount, senderByteCount);
+                                    receiver->receptionContext.senderSsrc, receiver->receptionContext.prevSrNtpTimestamp, receiver->receptionContext.prevSrRtpTimestamp,
+                                    receiver->receptionContext.prevSrPacketCount, receiver->receptionContext.prevSrByteCount);
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
-                                    (float)receiver->senderState.lastReportInterval / 1000., (float)receiver->senderState.intervalPacketCount * 1000000. / (float)receiver->senderState.lastReportInterval,
-                                    (float)receiver->senderState.intervalByteCount * 8000. / (float)receiver->senderState.lastReportInterval);
+                                    (float)receiver->receptionContext.lastSrInterval / 1000., (float)receiver->receptionContext.srIntervalPacketCount * 1000000. / (float)receiver->receptionContext.lastSrInterval,
+                                    (float)receiver->receptionContext.srIntervalByteCount * 8000. / (float)receiver->receptionContext.lastSrInterval);
+
+                        if (receiver->maxPacketSize >= rrSize)
+                        {
+                            usleep(5000); //TODO: remove this
+                            ret = ARSTREAM2_RTCP_Receiver_GenerateReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msgBuffer,
+                                                                                 (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msgBuffer + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                                                                                 &receiver->receptionContext);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to generate receiver report (%d)", ret);
+                            }
+                            else
+                            {
+                                bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, rrSize);
+                                if (bytes < 0)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2176,18 +2205,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
             }
             while (bytes > 0);
         }
-
-#if 0
-        bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, msgBufferSize);
-        if (bytes < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
-        }
-        else
-        {
-
-        }
-#endif
 
         if (shouldStop == 0)
         {

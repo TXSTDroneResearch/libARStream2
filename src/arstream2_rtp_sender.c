@@ -137,8 +137,7 @@ struct ARSTREAM2_RtpSender_t {
 
     uint64_t lastAuTimestamp;
     uint16_t seqNum;
-    uint32_t packetCount;
-    uint32_t byteCount;
+    ARSTREAM2_RTCP_RtpSenderContext_t senderContext;
     ARSAL_Mutex_t rtcpMutex;
     ARSAL_Mutex_t streamMutex;
 
@@ -560,6 +559,9 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         int minStreamSocketSendBufferSize = config->maxBitrate * 50 / 1000 / 8;
         retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
         retSender->naluFifoBufferSize = totalBufSize - retSender->streamSocketSendBufferSize;
+        retSender->senderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
+        retSender->senderContext.rtpClockRate = 90000;
+        retSender->senderContext.rtpTimestampOffset = 0;
     }
 
     /* Setup internal mutexes/sems */
@@ -1279,8 +1281,8 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
     header->seqNum = htons(sender->seqNum);
     sender->seqNum++;
     ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-    sender->packetCount += seqNumForcedDiscontinuity + 1;
-    sender->byteCount += payloadSize;
+    sender->senderContext.packetCount += seqNumForcedDiscontinuity + 1;
+    sender->senderContext.byteCount += payloadSize;
     ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
     rtpTimestamp = (uint32_t)((((auTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF); /* microseconds to 90000 Hz clock */
     //TODO: handle the timestamp 32 bits loopback
@@ -1747,8 +1749,8 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                 /* increment the sequence number to let the receiver know that we dropped something */
                 sender->seqNum += nalu.seqNumForcedDiscontinuity + 1;
                 ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                sender->packetCount += nalu.seqNumForcedDiscontinuity + 1;
-                sender->byteCount += nalu.naluSize;
+                sender->senderContext.packetCount += nalu.seqNumForcedDiscontinuity + 1;
+                sender->senderContext.byteCount += nalu.naluSize;
                 ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
 
                 ARSTREAM2_RtpSender_UpdateMonitoring(sender, nalu.naluInputTimestamp, nalu.auTimestamp, rtpTimestamp, sender->seqNum - 1, nalu.isLastInAu, 0, nalu.naluSize);
@@ -1848,7 +1850,6 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     uint8_t *msgBuffer = NULL;
     int msgBufferSize = sizeof(ARSTREAM2_RTCP_SenderReport_t);
     ARSTREAM2_RTCP_SenderReport_t *senderReport = NULL;
-    uint32_t senderPacketCount = 0, senderByteCount = 0;
     ssize_t bytes;
     int shouldStop, ret;
 
@@ -1886,12 +1887,8 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     while (shouldStop == 0)
     {
         ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-        senderPacketCount = sender->packetCount;
-        senderByteCount = sender->byteCount;
+        ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, &sender->senderContext);
         ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-
-        ret = ARSTREAM2_RTCP_GenerateSenderReport(senderReport, ARSTREAM2_RTP_SENDER_SSRC, 90000, 0,
-                                                  senderPacketCount, senderByteCount);
 
         if (ret == 0)
         {
