@@ -40,7 +40,7 @@
 /**
  * Socket timeout value for clock sync packets (milliseconds)
  */
-#define ARSTREAM2_RTP_SENDER_CLOCKSYNC_DATAREAD_TIMEOUT_MS (500)
+#define ARSTREAM2_RTP_SENDER_CONTROL_DATAREAD_TIMEOUT_MS (500)
 
 
 /**
@@ -1848,7 +1848,8 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 {
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t *)ARSTREAM2_RtpSender_t_Param;
     uint8_t *msgBuffer = NULL;
-    int msgBufferSize = sizeof(ARSTREAM2_RTCP_SenderReport_t);
+    int msgBufferSize = sender->maxPacketSize;
+    int srSize = sizeof(ARSTREAM2_RTCP_SenderReport_t);
     ARSTREAM2_RTCP_SenderReport_t *senderReport = NULL;
     ssize_t bytes;
     int shouldStop, ret;
@@ -1857,6 +1858,11 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     if (sender == NULL)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error while starting %s, bad parameters", __FUNCTION__);
+        return (void *)0;
+    }
+    if (msgBufferSize < srSize)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Max packet size is too small to hold a sender report, aborting", __FUNCTION__);
         return (void *)0;
     }
 
@@ -1886,27 +1892,86 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 
     while (shouldStop == 0)
     {
-        ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-        ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, &sender->senderContext);
-        ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
+        struct pollfd p;
+        int pollRet;
 
-        if (ret == 0)
+        p.fd = sender->controlSocket;
+        p.events = POLLIN;
+        p.revents = 0;
+        pollRet = poll(&p, 1, ARSTREAM2_RTP_SENDER_CONTROL_DATAREAD_TIMEOUT_MS);
+        if (pollRet == 0)
         {
-            bytes = ARSAL_Socket_Send(sender->controlSocket, msgBuffer, msgBufferSize, 0);
-            if (bytes < 0)
+            /* failed: poll timeout */
+            ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Polling timed out");
+        }
+        else if (pollRet < 0)
+        {
+            /* failed: poll error */
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Poll error: error=%d (%s)", errno, strerror(errno));
+        }
+        else if (p.revents & POLLIN)
+        {
+            bytes = ARSAL_Socket_Recv(sender->controlSocket, msgBuffer, msgBufferSize, 0);
+            while (bytes > 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
+                struct timespec t1;
+                ARSAL_Time_GetTime(&t1);
+                int receptionReportCount = 0;
+
+                if ((ARSTREAM2_RTCP_IsReceiverReport(msgBuffer, bytes, &receptionReportCount)) && (receptionReportCount > 0))
+                {
+                    ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msgBuffer,
+                                                                      (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msgBuffer + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                                                                      (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000,
+                                                                      &sender->senderContext);
+                    if (ret != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process receiver report (%d)", ret);
+                    }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
+                                    (float)sender->senderContext.roundTripDelay / 1000., (float)sender->senderContext.interarrivalJitter / 1000.,
+                                    sender->senderContext.receiverLostCount, (float)sender->senderContext.receiverFractionLost * 100. / 256.,
+                                    sender->senderContext.receiverExtHighestSeqNum);
+                    }
+                }
+
+                bytes = ARSAL_Socket_Recv(sender->controlSocket, msgBuffer, msgBufferSize, 0);
+            }
+        }
+        else
+        {
+            /* no poll error, no timeout, but socket is not ready */
+            int error = 0;
+            socklen_t errlen = sizeof(error);
+            ARSAL_Socket_Getsockopt(sender->controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
+        }
+
+        struct timespec t1;
+        ARSAL_Time_GetTime(&t1);
+        uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+        uint32_t srDelay = (uint32_t)(curTime - sender->senderContext.lastSrTimestamp);
+        if (srDelay > 500000) //TODO
+        {
+            ARSAL_Mutex_Lock(&(sender->rtcpMutex));
+            ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, &sender->senderContext);
+            ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
+
+            if (ret == 0)
+            {
+                bytes = ARSAL_Socket_Send(sender->controlSocket, msgBuffer, srSize, 0);
+                if (bytes < 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
+                }
             }
         }
 
         ARSAL_Mutex_Lock(&(sender->streamMutex));
         shouldStop = sender->threadsShouldStop;
         ARSAL_Mutex_Unlock(&(sender->streamMutex));
-
-        if (shouldStop == 0)
-        {
-            usleep(500 * 1000); //TODO
-        }
     }
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender control thread ended");

@@ -81,9 +81,84 @@ int ARSTREAM2_RTCP_IsReceiverReport(const uint8_t *buffer, int bufferSize, int *
 
 int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                 ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
+                                                uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_RtpSenderContext_t *context)
 {
-    return -1;
+    uint32_t ssrc, ssrc_1;
+    uint32_t lost, extHighestSeqNum, interarrivalJitter;
+    uint32_t lsr, dlsr;
+    uint64_t lsr_us, dlsr_us;
+
+    if ((!receiverReport) || (!receptionReport) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    uint8_t version = (receiverReport->flags >> 6) & 0x3;
+    if (version != 2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid receiver report protocol version (%d)", version);
+        return -1;
+    }
+
+    if (receiverReport->packetType != ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid receiver report packet type (%d)", receiverReport->packetType);
+        return -1;
+    }
+
+    uint16_t length = ntohs(receiverReport->length);
+    if (length < 7)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid receiver report length");
+        return -1;
+    }
+
+    ssrc = ntohl(receiverReport->ssrc);
+    ssrc_1 = ntohl(receptionReport->ssrc);
+    lost = ntohl(receptionReport->lost);
+    extHighestSeqNum = ntohl(receptionReport->extHighestSeqNum);
+    interarrivalJitter = ntohl(receptionReport->interarrivalJitter);
+    lsr = ntohl(receptionReport->lsr);
+    dlsr = ntohl(receptionReport->dlsr);
+
+    if (context->receiverSsrc == 0)
+    {
+        context->receiverSsrc = ssrc;
+    }
+
+    if (ssrc != context->receiverSsrc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected receiver SSRC");
+        return -1;
+    }
+
+    if (ssrc_1 != context->senderSsrc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
+        return -1;
+    }
+
+    context->receiverFractionLost = ((lost >> 24) & 0xFF);
+    context->receiverLostCount = (lost & 0x00FFFFFF);
+    context->receiverExtHighestSeqNum = extHighestSeqNum;
+    context->interarrivalJitter = (uint32_t)(((uint64_t)interarrivalJitter * 1000000 + context->rtpClockRate / 2) / context->rtpClockRate);
+    if ((lsr > 0) || (dlsr > 0))
+    {
+        lsr_us = ((uint64_t)lsr * 1000000) >> 16;
+        //TODO: handle the LSR timestamp loopback after 18h
+        dlsr_us = ((uint64_t)dlsr * 1000000) >> 16;
+        context->roundTripDelay = (uint32_t)(receptionTimestamp - lsr_us - dlsr_us);
+    }
+    else
+    {
+        lsr_us = dlsr_us = 0;
+        context->roundTripDelay = 0;
+    }
+    context->lastRrReceptionTimestamp = receptionTimestamp;
+
+    return 0;
 }
 
 
@@ -113,11 +188,14 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
     senderReport->senderPacketCount = htonl(context->packetCount);
     senderReport->senderByteCount = htonl(context->byteCount);
 
+    context->lastSrTimestamp = ntpTimestamp;
+
     return 0;
 }
 
 
 int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+                                                uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_RtpReceiverContext_t *context)
 {
     uint32_t ssrc, rtpTimestamp, senderPacketCount, senderByteCount;
@@ -161,16 +239,24 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
         return -1;
     }
 
-    if (ntpTimestamp <= context->prevSrNtpTimestamp)
+    if (!context->prevSrNtpTimestamp)
+    {
+        context->prevSrNtpTimestamp = ntpTimestamp;
+    }
+    else if (ntpTimestamp <= context->prevSrNtpTimestamp)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report");
         return -1;
+    }
+    if (!context->prevSrRtpTimestamp)
+    {
+        context->prevSrRtpTimestamp = rtpTimestamp;
     }
 
     // NTP to RTP linear regression: RTP = a * NTP + b
     context->tsAnum = (int64_t)(rtpTimestamp - context->prevSrRtpTimestamp);
     context->tsAden = (int64_t)(ntpTimestamp - context->prevSrNtpTimestamp);
-    context->tsB = (int64_t)rtpTimestamp - (int64_t)((context->tsAnum * ntpTimestamp + context->tsAden / 2) / context->tsAden);
+    context->tsB = (context->tsAden) ? (int64_t)rtpTimestamp - (int64_t)((context->tsAnum * ntpTimestamp + context->tsAden / 2) / context->tsAden) : 0;
 
     // Packet and byte rates
     context->lastSrInterval = (uint32_t)(ntpTimestamp - context->prevSrNtpTimestamp);
@@ -189,6 +275,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
     context->prevSrNtpTimestamp = ntpTimestamp;
     context->prevSrPacketCount = senderPacketCount;
     context->prevSrByteCount = senderByteCount;
+
+    context->lastSrReceptionTimestamp = receptionTimestamp;
 
     return 0;
 }

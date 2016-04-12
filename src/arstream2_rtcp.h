@@ -71,6 +71,15 @@ typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
     uint32_t rtpTimestampOffset;
     uint32_t packetCount;
     uint32_t byteCount;
+
+    uint64_t lastRrReceptionTimestamp;
+    uint32_t roundTripDelay;
+    uint32_t interarrivalJitter;
+    uint32_t receiverFractionLost;
+    uint32_t receiverLostCount;
+    uint32_t receiverExtHighestSeqNum;
+
+    uint64_t lastSrTimestamp;
 } ARSTREAM2_RTCP_RtpSenderContext_t;
 
 /**
@@ -114,12 +123,14 @@ int ARSTREAM2_RTCP_IsReceiverReport(const uint8_t *buffer, int bufferSize, int *
 
 int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                 ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
+                                                uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_RtpSenderContext_t *context);
 
 int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
                                                ARSTREAM2_RTCP_RtpSenderContext_t *context);
 
 int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+                                                uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_RtpReceiverContext_t *context);
 
 int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
