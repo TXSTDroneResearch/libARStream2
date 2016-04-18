@@ -17,65 +17,57 @@
 #define ARSTREAM2_RTCP_TAG "ARSTREAM2_Rtcp"
 
 
-int ARSTREAM2_RTCP_IsSenderReport(const uint8_t *buffer, int bufferSize)
+static const char *ARSTREAM2_RTCP_SdesItemName[8] =
+{
+    "CNAME",
+    "NAME",
+    "EMAIL",
+    "PHONE",
+    "LOC",
+    "TOOL",
+    "NOTE",
+    "PRIV",
+};
+
+
+int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, int bufferSize, int *receptionReportCount, int *size)
 {
     if (!buffer)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
-        return 0;
-    }
-
-    if (bufferSize < 28)
-    {
-        return 0;
-    }
-
-    uint8_t version = (*buffer >> 6) & 0x3;
-    if (version != 2)
-    {
-        return 0;
-    }
-
-    if (*(buffer + 1) != ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE)
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-
-int ARSTREAM2_RTCP_IsReceiverReport(const uint8_t *buffer, int bufferSize, int *receptionReportCount)
-{
-    if (!buffer)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
-        return 0;
+        return -1;
     }
 
     if (bufferSize < 8)
     {
-        return 0;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid buffer size (%d)", bufferSize);
+        return -1;
     }
 
     uint8_t version = (*buffer >> 6) & 0x3;
     if (version != 2)
     {
-        return 0;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid RTCP protocol version (%d)", version);
+        return -1;
     }
 
-    if (*(buffer + 1) != ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE)
+    uint8_t type = *(buffer + 1);
+    if ((type == ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE) || (type == ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE))
     {
-        return 0;
+        uint8_t rc = *buffer & 0x1F;
+        if (receptionReportCount)
+        {
+            *receptionReportCount = (int)rc;
+        }
     }
 
-    uint8_t rc = *buffer & 0x1F;
-    if (receptionReportCount)
+    uint16_t length = ntohs(*((uint16_t*)(buffer + 2)));
+    if (size)
     {
-        *receptionReportCount = (int)rc;
+        *size = (length + 1) * 4;
     }
 
-    return 1;
+    return type;
 }
 
 
@@ -332,6 +324,107 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unsupported receiver report count");
         return -1;
+    }
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int maxSize, uint32_t ssrc, const char *cname, int *size)
+{
+    if ((!sdes) || (!cname))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+    int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname) + 1 + 3) & ~0x3;
+    if (maxSize < _size)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
+        return -1;
+    }
+
+    uint32_t *ssrc_1 = (uint32_t*)((uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t));
+    uint8_t *cnameItem = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4;
+
+    int sourceCount = 1;
+    sdes->flags = (2 << 6) | (sourceCount & 0x1F);
+    sdes->packetType = ARSTREAM2_RTCP_SDES_PACKET_TYPE;
+    sdes->length = htons((4 + 2 + strlen(cname) + 1 + 3) / 4 * sourceCount);
+    *ssrc_1 = htonl(ssrc);
+    *cnameItem = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
+    *(cnameItem + 1) = strlen(cname);
+    memcpy(cnameItem + 2, cname, strlen(cname));
+    memset(cnameItem + 2 + strlen(cname), 0, _size - (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname)));
+
+    if (size)
+        *size = _size;
+
+    return 0;
+}
+
+int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes)
+{
+    uint32_t ssrc;
+    uint8_t *ptr = (uint8_t*)sdes + 4;
+
+    if (!sdes)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    uint8_t version = (sdes->flags >> 6) & 0x3;
+    if (version != 2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid source description protocol version (%d)", version);
+        return -1;
+    }
+
+    if (sdes->packetType != ARSTREAM2_RTCP_SDES_PACKET_TYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid source description packet type (%d)", sdes->packetType);
+        return -1;
+    }
+
+    uint8_t sc = sdes->flags & 0x1F;
+    uint16_t length = ntohs(sdes->length);
+    int remLength = length * 4, i;
+
+    if (length < sc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid length (%d) for %d source count", length, sc);
+        return -1;
+    }
+
+    for (i = 0; i < sc; i++)
+    {
+        // read the SSRC
+        ssrc = ntohl(*((uint32_t*)ptr));
+        ptr += 4;
+        remLength -= 4;
+        // read the SDES items
+        while ((*ptr != 0) && (remLength >= 3))
+        {
+            uint8_t id = *ptr;
+            uint8_t len = *(ptr + 1);
+            ptr += 2;
+            remLength -= 2;
+            char str[256];
+            memcpy(str, ptr, len);
+            str[len] = '\0';
+            if (id <= 8)
+                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s=%s", ssrc, ARSTREAM2_RTCP_SdesItemName[id - 1], str);
+            ptr += len;
+            remLength -= len;
+        }
+        // align to multiple of 4 bytes
+        if ((*ptr == 0) && (remLength))
+        {
+            int align = ((remLength + 3) & ~3) - remLength;
+            remLength -= align;
+            ptr += align;
+        }
     }
 
     return 0;

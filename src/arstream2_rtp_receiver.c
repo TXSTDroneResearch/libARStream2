@@ -2124,8 +2124,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
     uint8_t *msgBuffer;
     int msgBufferSize = receiver->maxPacketSize;
-    int rrSize = sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
-    int bytes;
+    int bytes, size;
     int shouldStop, ret;
     struct timespec t1;
 
@@ -2135,7 +2134,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error while starting %s, bad parameters", __FUNCTION__);
         return (void *)0;
     }
-    if (msgBufferSize < rrSize)
+    if (msgBufferSize < (int)(sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Max packet size is too small to hold a receiver report, aborting", __FUNCTION__);
         return (void *)0;
@@ -2179,25 +2178,47 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
             do
             {
                 ARSAL_Time_GetTime(&t1);
+                uint8_t *msg = msgBuffer;
+                int type = 0, totalSize = 0;
+                size = 0;
 
-                if (ARSTREAM2_RTCP_IsSenderReport(msgBuffer, bytes))
+                while (totalSize < bytes)
                 {
-                    ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msgBuffer,
-                                                                      (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000,
-                                                                      &receiver->receiverContext);
-                    if (ret != 0)
+                    type = ARSTREAM2_RTCP_GetPacketType(msg, bytes - totalSize, NULL, &size);
+                    switch (type)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process sender report (%d)", ret);
+                        case ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE:
+                            ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msg,
+                                                                              (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000,
+                                                                              &receiver->receiverContext);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process sender report (%d)", ret);
+                            }
+                            else
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender report received: ssrc=0x%08X, ntp=%llu, rtp=%u, packets=%u, bytes=%u",
+                                            receiver->receiverContext.senderSsrc, receiver->receiverContext.prevSrNtpTimestamp, receiver->receiverContext.prevSrRtpTimestamp,
+                                            receiver->receiverContext.prevSrPacketCount, receiver->receiverContext.prevSrByteCount);
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
+                                            (float)receiver->receiverContext.lastSrInterval / 1000., (float)receiver->receiverContext.srIntervalPacketCount * 1000000. / (float)receiver->receiverContext.lastSrInterval,
+                                            (float)receiver->receiverContext.srIntervalByteCount * 8000. / (float)receiver->receiverContext.lastSrInterval);
+                            }
+                            break;
+                        case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
+                            ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)msg);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process source description (%d)", ret);
+                            }
+                            break;
+                        default:
+                            break;
                     }
-                    else
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender report received: ssrc=0x%08X, ntp=%llu, rtp=%u, packets=%u, bytes=%u",
-                                    receiver->receiverContext.senderSsrc, receiver->receiverContext.prevSrNtpTimestamp, receiver->receiverContext.prevSrRtpTimestamp,
-                                    receiver->receiverContext.prevSrPacketCount, receiver->receiverContext.prevSrByteCount);
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
-                                    (float)receiver->receiverContext.lastSrInterval / 1000., (float)receiver->receiverContext.srIntervalPacketCount * 1000000. / (float)receiver->receiverContext.lastSrInterval,
-                                    (float)receiver->receiverContext.srIntervalByteCount * 8000. / (float)receiver->receiverContext.lastSrInterval);
-                    }
+                    if (type < 0)
+                        break;
+                    totalSize += size;
+                    msg += size;
                 }
 
                 bytes = receiver->ops.controlChannelRead(receiver, msgBuffer, msgBufferSize, 0);
@@ -2210,19 +2231,49 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         uint32_t rrDelay = (uint32_t)(curTime - receiver->receiverContext.lastRrTimestamp);
         if ((rrDelay > 500000) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
         {
-            ret = ARSTREAM2_RTCP_Receiver_GenerateReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msgBuffer,
-                                                                 (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msgBuffer + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
-                                                                 &receiver->receiverContext);
-            if (ret != 0)
+            ret = 0;
+            size = 0;
+
+            if (ret == 0)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to generate receiver report (%d)", ret);
+                ret = ARSTREAM2_RTCP_Receiver_GenerateReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msgBuffer,
+                                                                     (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msgBuffer + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                                                                     &receiver->receiverContext);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to generate receiver report (%d)", ret);
+                }
+                else
+                {
+                    size += sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
+                }
             }
-            else
+
+            if (ret == 0)
             {
-                bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, rrSize);
+                int sdesSize = 0;
+                ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(msgBuffer + size),
+                                                               msgBufferSize - size,
+                                                               ARSTREAM2_RTP_RECEIVER_SSRC,
+                                                               ARSTREAM2_RTP_RECEIVER_CNAME,
+                                                               &sdesSize);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to generate source description (%d)", ret);
+                }
+                else
+                {
+                    size += sdesSize;
+                }
+            }
+
+            if (ret == 0)
+            {
+                bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, size);
                 if (bytes < 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
+                    ret = -1;
                 }
             }
         }

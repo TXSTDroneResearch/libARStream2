@@ -17,11 +17,38 @@
 
 #define ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE 200
 #define ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE 201
+#define ARSTREAM2_RTCP_SDES_PACKET_TYPE 202
+#define ARSTREAM2_RTCP_BYE_PACKET_TYPE 203
+#define ARSTREAM2_RTCP_APP_PACKET_TYPE 204
+
+#define ARSTREAM2_RTCP_SDES_CNAME_ITEM 1
+#define ARSTREAM2_RTCP_SDES_NAME_ITEM 2
+#define ARSTREAM2_RTCP_SDES_EMAIL_ITEM 3
+#define ARSTREAM2_RTCP_SDES_PHONE_ITEM 4
+#define ARSTREAM2_RTCP_SDES_LOC_ITEM 5
+#define ARSTREAM2_RTCP_SDES_TOOL_ITEM 6
+#define ARSTREAM2_RTCP_SDES_NOTE_ITEM 7
+#define ARSTREAM2_RTCP_SDES_PRIV_ITEM 8
 
 
 /*
  * Types
  */
+
+/**
+ * @brief RTCP Sender Report (SR) Packet (see RFC3550)
+ */
+typedef struct {
+    uint8_t flags;
+    uint8_t packetType;
+    uint16_t length;
+    uint32_t ssrc;
+    uint32_t ntpTimestampH;
+    uint32_t ntpTimestampL;
+    uint32_t rtpTimestamp;
+    uint32_t senderPacketCount;
+    uint32_t senderByteCount;
+} __attribute__ ((packed)) ARSTREAM2_RTCP_SenderReport_t;
 
 /**
  * @brief RTCP Reception Report Block (see RFC3550)
@@ -36,7 +63,7 @@ typedef struct {
 } __attribute__ ((packed)) ARSTREAM2_RTCP_ReceptionReportBlock_t;
 
 /**
- * @brief RTCP Receiver Report Packet (see RFC3550)
+ * @brief RTCP Receiver Report (RR) Packet (see RFC3550)
  */
 typedef struct {
     uint8_t flags;
@@ -46,19 +73,34 @@ typedef struct {
 } __attribute__ ((packed)) ARSTREAM2_RTCP_ReceiverReport_t;
 
 /**
- * @brief RTCP Sender Report Packet (see RFC3550)
+ * @brief RTCP Source Description (SDES) Packet (see RFC3550)
+ */
+typedef struct {
+    uint8_t flags;
+    uint8_t packetType;
+    uint16_t length;
+} __attribute__ ((packed)) ARSTREAM2_RTCP_Sdes_t;
+
+/**
+ * @brief RTCP Goodbye (BYE) Packet (see RFC3550)
  */
 typedef struct {
     uint8_t flags;
     uint8_t packetType;
     uint16_t length;
     uint32_t ssrc;
-    uint32_t ntpTimestampH;
-    uint32_t ntpTimestampL;
-    uint32_t rtpTimestamp;
-    uint32_t senderPacketCount;
-    uint32_t senderByteCount;
-} __attribute__ ((packed)) ARSTREAM2_RTCP_SenderReport_t;
+} __attribute__ ((packed)) ARSTREAM2_RTCP_Goodbye_t;
+
+/**
+ * @brief RTCP Application-Defined (APP) Packet (see RFC3550)
+ */
+typedef struct {
+    uint8_t flags;
+    uint8_t packetType;
+    uint16_t length;
+    uint32_t ssrc;
+    uint32_t name;
+} __attribute__ ((packed)) ARSTREAM2_RTCP_Application_t;
 
 /**
  * @brief RTCP sender context
@@ -117,9 +159,7 @@ typedef struct ARSTREAM2_RTCP_RtpReceiverContext_s {
  * Functions
  */
 
-int ARSTREAM2_RTCP_IsSenderReport(const uint8_t *buffer, int bufferSize);
-
-int ARSTREAM2_RTCP_IsReceiverReport(const uint8_t *buffer, int bufferSize, int *receptionReportCount);
+int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, int bufferSize, int *receptionReportCount, int *size);
 
 int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                 ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
@@ -136,6 +176,10 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
 int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                    ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                    ARSTREAM2_RTCP_RtpReceiverContext_t *context);
+
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int maxSize, uint32_t ssrc, const char *cname, int *size);
+
+int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes);
 
 static inline uint64_t ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(ARSTREAM2_RTCP_RtpReceiverContext_t *context, uint32_t rtpTimestamp);
 
