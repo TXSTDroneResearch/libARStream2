@@ -82,8 +82,8 @@
 
 typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
     uint64_t recvTimestamp;
-    uint64_t timestampShifted;
-    uint32_t timestamp;
+    uint64_t localTimestamp;
+    uint32_t rtpTimestamp;
     uint16_t seqNum;
     uint16_t markerBit;
     uint32_t bytes;
@@ -184,7 +184,6 @@ struct ARSTREAM2_RtpReceiver_t {
     int currentNaluBufferSize; // Usable length of the buffer
     int currentNaluSize;       // Actual data length
     uint8_t *currentNaluBuffer;
-    uint64_t clockDelta;
     int scheduleNaluBufferChange;
     uint8_t *naluMetadata;
     int naluMetadataSize;
@@ -805,10 +804,10 @@ static int ARSTREAM2_RtpReceiver_ControlSocketTeardown(ARSTREAM2_RtpReceiver_t *
 
 static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint64_t recvTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytes)
 {
-    uint64_t timestampShifted;
+    uint64_t localTimestamp;
 
     //TODO: handle the timestamp 32 bits loopback
-    timestampShifted = (receiver->clockDelta != 0) ? (((((uint64_t)rtpTimestamp * 1000) + 45) / 90) - receiver->clockDelta) : 0; /* 90000 Hz clock to microseconds */
+    localTimestamp = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (((((uint64_t)rtpTimestamp * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0; /* 90000 Hz clock to microseconds */
 
     ARSAL_Mutex_Lock(&(receiver->monitoringMutex));
 
@@ -818,8 +817,8 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
     }
     receiver->monitoringIndex = (receiver->monitoringIndex + 1) % ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS;
     receiver->monitoringPoint[receiver->monitoringIndex].bytes = bytes;
-    receiver->monitoringPoint[receiver->monitoringIndex].timestamp = rtpTimestamp;
-    receiver->monitoringPoint[receiver->monitoringIndex].timestampShifted = timestampShifted;
+    receiver->monitoringPoint[receiver->monitoringIndex].rtpTimestamp = rtpTimestamp;
+    receiver->monitoringPoint[receiver->monitoringIndex].localTimestamp = localTimestamp;
     receiver->monitoringPoint[receiver->monitoringIndex].seqNum = seqNum;
     receiver->monitoringPoint[receiver->monitoringIndex].markerBit = markerBit;
     receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = recvTimestamp;
@@ -829,7 +828,7 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
 #ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
     if (receiver->fMonitorOut)
     {
-        fprintf(receiver->fMonitorOut, "%llu %lu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)timestampShifted, seqNum, markerBit, (long unsigned int)bytes);
+        fprintf(receiver->fMonitorOut, "%llu %lu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)localTimestamp, seqNum, markerBit, (long unsigned int)bytes);
     }
 #endif
 }
@@ -1139,7 +1138,7 @@ static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, 
 
     rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
     //TODO: handle the timestamp 32 bits loopback
-    ntpTimestampLocal = (receiver->clockDelta != 0) ? (rtpTimestampScaled - receiver->clockDelta) : 0;
+    ntpTimestampLocal = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (rtpTimestampScaled - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0;
     ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->receiverContext, rtpTimestamp);
 
     if (receiver->resenderCount > 0)
@@ -1817,7 +1816,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 
         if (retReceiver->fMonitorOut)
         {
-            fprintf(retReceiver->fMonitorOut, "recvTimestamp rtpTimestamp rtpTimestampShifted rtpSeqNum rtpMarkerBit bytes\n");
+            fprintf(retReceiver->fMonitorOut, "recvTimestamp rtpTimestamp localTimestamp rtpSeqNum rtpMarkerBit bytes\n");
         }
     }
 #endif //#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
@@ -2178,6 +2177,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
             do
             {
                 ARSAL_Time_GetTime(&t1);
+                uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                 uint8_t *msg = msgBuffer;
                 int type = 0, totalSize = 0;
                 size = 0;
@@ -2189,8 +2189,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                     {
                         case ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE:
                             ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)msg,
-                                                                              (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000,
-                                                                              &receiver->receiverContext);
+                                                                              curTime, &receiver->receiverContext);
                             if (ret != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process sender report (%d)", ret);
@@ -2210,6 +2209,21 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                             if (ret != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process source description (%d)", ret);
+                            }
+                            break;
+                        case ARSTREAM2_RTCP_APP_PACKET_TYPE:
+                            ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)msg,
+                                                                              (ARSTREAM2_RTCP_ClockDelta_t*)(msg + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                              curTime, receiver->receiverContext.senderSsrc,
+                                                                              &receiver->receiverContext.clockDelta);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process application clock delta (%d)", ret);
+                            }
+                            else
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                            receiver->receiverContext.clockDelta.clockDeltaAvg, receiver->receiverContext.clockDelta.rtDelay);
                             }
                             break;
                         default:
@@ -2254,7 +2268,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                 int sdesSize = 0;
                 ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(msgBuffer + size),
                                                                msgBufferSize - size,
-                                                               ARSTREAM2_RTP_RECEIVER_SSRC,
+                                                               receiver->receiverContext.receiverSsrc,
                                                                ARSTREAM2_RTP_RECEIVER_CNAME,
                                                                &sdesSize);
                 if (ret != 0)
@@ -2264,6 +2278,22 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                 else
                 {
                     size += sdesSize;
+                }
+            }
+
+            if (ret == 0)
+            {
+                ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(msgBuffer + size),
+                                                                   (ARSTREAM2_RTCP_ClockDelta_t*)(msgBuffer + size + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                   curTime, receiver->receiverContext.receiverSsrc,
+                                                                   &receiver->receiverContext.clockDelta);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to generate application defined clock delta (%d)", ret);
+                }
+                else
+                {
+                    size += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
                 }
             }
 
@@ -2368,7 +2398,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
             curTime = receiver->monitoringPoint[idx].recvTimestamp;
             bytes = receiver->monitoringPoint[idx].bytes;
             bytesSum += bytes;
-            auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].timestamp /*TODO*/) * 1000) + 45) / 90) - receiver->clockDelta; /* 90000 Hz clock to microseconds */
+            auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].rtpTimestamp /*TODO*/) * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg; /* 90000 Hz clock to microseconds */
             receptionTime = curTime - auTimestamp;
             receptionTimeSum += receptionTime;
             currentSeqNum = receiver->monitoringPoint[idx].seqNum;
@@ -2393,7 +2423,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
                 idx = (idx - 1 >= 0) ? idx - 1 : ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS - 1;
                 curTime = receiver->monitoringPoint[idx].recvTimestamp;
                 bytes = receiver->monitoringPoint[idx].bytes;
-                auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].timestamp /*TODO*/) * 1000) + 45) / 90) - receiver->clockDelta; /* 90000 Hz clock to microseconds */
+                auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].rtpTimestamp /*TODO*/) * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg; /* 90000 Hz clock to microseconds */
                 receptionTime = curTime - auTimestamp;
                 packetSizeVarSum += ((bytes - _meanPacketSize) * (bytes - _meanPacketSize));
                 receptionTimeVarSum += ((receptionTime - meanReceptionTime) * (receptionTime - meanReceptionTime));

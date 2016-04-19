@@ -320,7 +320,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         context->lastRrPacketsLost = context->packetsLost;
         context->lastRrTimestamp = curTime;
     }
-    else
+    else if (rrCount > 1)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unsupported receiver report count");
         return -1;
@@ -362,6 +362,7 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int ma
 
     return 0;
 }
+
 
 int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes)
 {
@@ -426,6 +427,116 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes)
             ptr += align;
         }
     }
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+                                                 uint64_t sendTimestamp, uint32_t ssrc,
+                                                 ARSTREAM2_RTCP_ClockDeltaContext_t *context)
+{
+    if ((!app) || (!clockDelta))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    app->flags = (2 << 6) | (ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE & 0x1F);
+    app->packetType = ARSTREAM2_RTCP_APP_PACKET_TYPE;
+    app->length = htons((sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t)) / 4 - 1);
+    app->ssrc = htonl(ssrc);
+    app->name = htonl(ARSTREAM2_RTCP_APP_PACKET_NAME);
+
+    clockDelta->originateTimestampH = htonl((uint32_t)(context->nextPeerOriginateTimestamp >> 32));
+    clockDelta->originateTimestampL = htonl((uint32_t)(context->nextPeerOriginateTimestamp & 0xFFFFFFFF));
+    clockDelta->receiveTimestampH = htonl((uint32_t)(context->nextReceiveTimestamp >> 32));
+    clockDelta->receiveTimestampL = htonl((uint32_t)(context->nextReceiveTimestamp & 0xFFFFFFFF));
+    clockDelta->transmitTimestampH = htonl((uint32_t)(sendTimestamp >> 32));
+    clockDelta->transmitTimestampL = htonl((uint32_t)(sendTimestamp & 0xFFFFFFFF));
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_ProcessApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+                                                uint64_t receptionTimestamp, uint32_t peerSsrc,
+                                                ARSTREAM2_RTCP_ClockDeltaContext_t *context)
+{
+    if ((!app) || (!clockDelta) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    uint8_t version = (app->flags >> 6) & 0x3;
+    if (version != 2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet protocol version (%d)", version);
+        return -1;
+    }
+
+    if (app->packetType != ARSTREAM2_RTCP_APP_PACKET_TYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet type (%d)", app->packetType);
+        return -1;
+    }
+
+    uint32_t name = ntohl(app->name);
+    if (name != ARSTREAM2_RTCP_APP_PACKET_NAME)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet name (0x%08X)", name);
+        return -1;
+    }
+
+    uint8_t subType = (app->flags & 0x1F);
+    if (subType != ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet subtype (%d)", subType);
+        return -1;
+    }
+
+    uint32_t ssrc = ntohl(app->ssrc);
+    if (ssrc != peerSsrc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected peer SSRC");
+        return -1;
+    }
+
+    uint16_t length = ntohs(app->length);
+    if (length != (sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t)) / 4 - 1)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet length (%d)", length);
+        return -1;
+    }
+
+    uint32_t originateTimestampH = ntohl(clockDelta->originateTimestampH);
+    uint32_t originateTimestampL = ntohl(clockDelta->originateTimestampL);
+    uint64_t originateTimestamp = ((uint64_t)originateTimestampH << 32) + ((uint64_t)originateTimestampL & 0xFFFFFFFF);
+    uint32_t receiveTimestampH = ntohl(clockDelta->receiveTimestampH);
+    uint32_t receiveTimestampL = ntohl(clockDelta->receiveTimestampL);
+    uint64_t peerReceiveTimestamp = ((uint64_t)receiveTimestampH << 32) + ((uint64_t)receiveTimestampL & 0xFFFFFFFF);
+    uint32_t transmitTimestampH = ntohl(clockDelta->transmitTimestampH);
+    uint32_t transmitTimestampL = ntohl(clockDelta->transmitTimestampL);
+    uint64_t peerTransmitTimestamp = ((uint64_t)transmitTimestampH << 32) + ((uint64_t)transmitTimestampL & 0xFFFFFFFF);
+
+    if ((originateTimestamp != 0) && (peerReceiveTimestamp != 0) && (peerTransmitTimestamp != 0))
+    {
+        context->clockDelta = (int64_t)(peerReceiveTimestamp + peerTransmitTimestamp) / 2 - (int64_t)(originateTimestamp + receptionTimestamp) / 2;
+        context->rtDelay = (receptionTimestamp - originateTimestamp) - (peerTransmitTimestamp - peerReceiveTimestamp);
+        if (context->clockDeltaAvg == 0)
+        {
+            context->clockDeltaAvg = context->clockDelta;
+        }
+        else
+        {
+            // sliding average, alpha = 1/32
+            context->clockDeltaAvg = context->clockDeltaAvg + (context->clockDelta - context->clockDeltaAvg) / 32;
+        }
+    }
+
+    context->nextPeerOriginateTimestamp = peerTransmitTimestamp;
+    context->nextReceiveTimestamp = receptionTimestamp;
 
     return 0;
 }

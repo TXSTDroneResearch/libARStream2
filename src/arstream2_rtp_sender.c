@@ -1287,7 +1287,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
     rtpTimestamp = (uint32_t)((((auTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF); /* microseconds to 90000 Hz clock */
     //TODO: handle the timestamp 32 bits loopback
     header->timestamp = htonl(rtpTimestamp);
-    header->ssrc = htonl(ARSTREAM2_RTP_SENDER_SSRC);
+    header->ssrc = htonl(sender->senderContext.senderSsrc);
 
     /* send to the network layer */
     ssize_t bytes;
@@ -1915,6 +1915,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
             {
                 struct timespec t1;
                 ARSAL_Time_GetTime(&t1);
+                uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                 uint8_t *msg = msgBuffer;
                 int receptionReportCount = 0;
                 int type = 0, totalSize = 0;
@@ -1930,7 +1931,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                             {
                                 ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msg,
                                                                                   (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msg + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
-                                                                                  (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000,
+                                                                                  curTime,
                                                                                   &sender->senderContext);
                                 if (ret != 0)
                                 {
@@ -1950,6 +1951,21 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                             if (ret != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process source description (%d)", ret);
+                            }
+                            break;
+                        case ARSTREAM2_RTCP_APP_PACKET_TYPE:
+                            ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)msg,
+                                                                              (ARSTREAM2_RTCP_ClockDelta_t*)(msg + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                              curTime, sender->senderContext.receiverSsrc,
+                                                                              &sender->senderContext.clockDelta);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process application clock delta (%d)", ret);
+                            }
+                            else
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                            sender->senderContext.clockDelta.clockDelta, sender->senderContext.clockDelta.rtDelay);
                             }
                             break;
                         default:
@@ -2002,7 +2018,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                 int sdesSize = 0;
                 ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(msgBuffer + size),
                                                                msgBufferSize - size,
-                                                               ARSTREAM2_RTP_SENDER_SSRC,
+                                                               sender->senderContext.senderSsrc,
                                                                ARSTREAM2_RTP_SENDER_CNAME,
                                                                &sdesSize);
                 if (ret != 0)
@@ -2012,6 +2028,22 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                 else
                 {
                     size += sdesSize;
+                }
+            }
+
+            if (ret == 0)
+            {
+                ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(msgBuffer + size),
+                                                                   (ARSTREAM2_RTCP_ClockDelta_t*)(msgBuffer + size + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                   curTime, sender->senderContext.senderSsrc,
+                                                                   &sender->senderContext.clockDelta);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to generate application defined clock delta (%d)", ret);
+                }
+                else
+                {
+                    size += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
                 }
             }
 

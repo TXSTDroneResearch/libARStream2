@@ -30,6 +30,9 @@
 #define ARSTREAM2_RTCP_SDES_NOTE_ITEM 7
 #define ARSTREAM2_RTCP_SDES_PRIV_ITEM 8
 
+#define ARSTREAM2_RTCP_APP_PACKET_NAME 0x41525354
+#define ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE 1
+
 
 /*
  * Types
@@ -103,6 +106,30 @@ typedef struct {
 } __attribute__ ((packed)) ARSTREAM2_RTCP_Application_t;
 
 /**
+ * @brief Application defined clock delta data
+ */
+typedef struct {
+    uint32_t originateTimestampH;
+    uint32_t originateTimestampL;
+    uint32_t receiveTimestampH;
+    uint32_t receiveTimestampL;
+    uint32_t transmitTimestampH;
+    uint32_t transmitTimestampL;
+} __attribute__ ((packed)) ARSTREAM2_RTCP_ClockDelta_t;
+
+
+/**
+ * @brief Application clock delta context
+ */
+typedef struct ARSTREAM2_RTCP_ClockDeltaContext_s {
+    uint64_t nextPeerOriginateTimestamp;
+    uint64_t nextReceiveTimestamp;
+    int64_t clockDelta;
+    int64_t clockDeltaAvg;
+    int64_t rtDelay;
+} ARSTREAM2_RTCP_ClockDeltaContext_t;
+
+/**
  * @brief RTCP sender context
  */
 typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
@@ -122,6 +149,8 @@ typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
     uint32_t receiverExtHighestSeqNum;
 
     uint64_t lastSrTimestamp;
+
+    ARSTREAM2_RTCP_ClockDeltaContext_t clockDelta;
 } ARSTREAM2_RTCP_RtpSenderContext_t;
 
 /**
@@ -152,6 +181,8 @@ typedef struct ARSTREAM2_RTCP_RtpReceiverContext_s {
     uint32_t lastRrPacketsLost;
     uint64_t lastSrReceptionTimestamp;
     uint64_t lastRrTimestamp;
+
+    ARSTREAM2_RTCP_ClockDeltaContext_t clockDelta;
 } ARSTREAM2_RTCP_RtpReceiverContext_t;
 
 
@@ -180,6 +211,14 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int maxSize, uint32_t ssrc, const char *cname, int *size);
 
 int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes);
+
+int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+                                                 uint64_t sendTimestamp, uint32_t ssrc,
+                                                 ARSTREAM2_RTCP_ClockDeltaContext_t *context);
+
+int ARSTREAM2_RTCP_ProcessApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+                                                uint64_t receptionTimestamp, uint32_t peerSsrc,
+                                                ARSTREAM2_RTCP_ClockDeltaContext_t *context);
 
 static inline uint64_t ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(ARSTREAM2_RTCP_RtpReceiverContext_t *context, uint32_t rtpTimestamp);
 
