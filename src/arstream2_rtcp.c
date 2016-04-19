@@ -180,6 +180,25 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
     senderReport->senderPacketCount = htonl(context->packetCount);
     senderReport->senderByteCount = htonl(context->byteCount);
 
+    // Packet and byte rates
+    if (context->lastSrTimestamp)
+    {
+        context->lastSrInterval = (uint32_t)(ntpTimestamp - context->lastSrTimestamp);
+        if (context->lastSrInterval > 0)
+        {
+            context->srIntervalPacketCount = context->packetCount - context->prevSrPacketCount;
+            context->srIntervalByteCount = context->byteCount - context->prevSrByteCount;
+        }
+        else
+        {
+            context->srIntervalPacketCount = context->srIntervalByteCount = 0;
+        }
+
+        // Update values
+        context->prevSrPacketCount = context->packetCount;
+        context->prevSrByteCount = context->byteCount;
+    }
+
     context->lastSrTimestamp = ntpTimestamp;
 
     return 0;

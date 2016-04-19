@@ -2196,10 +2196,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender report received: ssrc=0x%08X, ntp=%llu, rtp=%u, packets=%u, bytes=%u",
-                                            receiver->receiverContext.senderSsrc, receiver->receiverContext.prevSrNtpTimestamp, receiver->receiverContext.prevSrRtpTimestamp,
-                                            receiver->receiverContext.prevSrPacketCount, receiver->receiverContext.prevSrByteCount);
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
+                                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_RECEIVER_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
                                             (float)receiver->receiverContext.lastSrInterval / 1000., (float)receiver->receiverContext.srIntervalPacketCount * 1000000. / (float)receiver->receiverContext.lastSrInterval,
                                             (float)receiver->receiverContext.srIntervalByteCount * 8000. / (float)receiver->receiverContext.lastSrInterval);
                             }
@@ -2222,7 +2219,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_RECEIVER_TAG, "Clock delta: delta=%lli RTD=%lli",
                                             receiver->receiverContext.clockDelta.clockDeltaAvg, receiver->receiverContext.clockDelta.rtDelay);
                             }
                             break;

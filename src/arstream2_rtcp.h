@@ -149,6 +149,11 @@ typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
     uint32_t receiverExtHighestSeqNum;
 
     uint64_t lastSrTimestamp;
+    uint32_t lastSrInterval; // in microseconds
+    uint32_t prevSrPacketCount;
+    uint32_t prevSrByteCount;
+    uint32_t srIntervalPacketCount; // over the last SR interval
+    uint32_t srIntervalByteCount; // over the last SR interval
 
     ARSTREAM2_RTCP_ClockDeltaContext_t clockDelta;
 } ARSTREAM2_RTCP_RtpSenderContext_t;

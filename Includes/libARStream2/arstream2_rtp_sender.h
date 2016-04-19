@@ -45,6 +45,26 @@ typedef enum {
 
 
 /**
+ * @brief RTCP receiver report data
+ */
+typedef struct ARSTREAM2_RtpSender_ReceiverReportData_t
+{
+    uint64_t lastReceiverReportReceptionTimestamp;  /**< Last receiver report reception timestamp */
+    uint32_t roundTripDelay;                        /**< Round-trip delay in microseconds */
+    uint32_t interarrivalJitter;                    /**< Interarrival jitter in microseconds */
+    uint32_t receiverLostCount;                     /**< Cumulated lost packets count on the receiver side */
+    uint32_t receiverFractionLost;                  /**< Fraction of packets lost on the receiver side since the last report */
+    uint32_t receiverExtHighestSeqNum;              /**< Extended highest sequence number received on the receiver side */
+    uint32_t lastSenderReportInterval;              /**< Time interval between the last two sender reports in microseconds */
+    uint32_t senderReportIntervalPacketCount;       /**< Sent packets count over the last sender report interval */
+    uint32_t senderReportIntervalByteCount;         /**< Sent bytes count over the last sender report interval */
+    int64_t peerClockDelta;                         /**< Peer clock delta in microseconds */
+    uint32_t roundTripDelayFromClockDelta;          /**< Round-trip delay in microseconds (from the clock delta computation) */
+
+} ARSTREAM2_RtpSender_ReceiverReportData_t;
+
+
+/**
  * @brief Callback function for access units
  * This callback function is called when buffers associated with an access unit are no longer used by the sender.
  * This occurs when packets corresponding to an access unit have all been sent or dropped.
@@ -71,6 +91,17 @@ typedef void (*ARSTREAM2_RtpSender_NaluCallback_t) (eARSTREAM2_RTP_SENDER_STATUS
 
 
 /**
+ * @brief Callback function for receiver reports
+ * This callback function is called when an RTCP receiver report has been received.
+ *
+ * @param[in] report RTCP receiver report data
+ * @param[in] userPtr Global receiver report callback user pointer
+ * @see eARSTREAM2_RTP_SENDER_STATUS
+ */
+typedef void (*ARSTREAM2_RtpSender_ReceiverReportCallback_t) (ARSTREAM2_RtpSender_ReceiverReportData_t *report, void *userPtr);
+
+
+/**
  * @brief RtpSender configuration parameters
  */
 typedef struct ARSTREAM2_RtpSender_Config_t
@@ -86,6 +117,8 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_RtpSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;   /**< NAL unit callback function (optional, can be NULL) */
+    void *receiverReportCallbackUserPtr;            /**< NAL unit callback function user pointer (optional, can be NULL) */
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */

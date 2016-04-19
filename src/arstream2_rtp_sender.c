@@ -128,6 +128,8 @@ struct ARSTREAM2_RtpSender_t {
     void *auCallbackUserPtr;
     ARSTREAM2_RtpSender_NaluCallback_t naluCallback;
     void *naluCallbackUserPtr;
+    ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;
+    void *receiverReportCallbackUserPtr;
     int naluFifoSize;
     int maxPacketSize;
     int targetPacketSize;
@@ -549,6 +551,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->auCallbackUserPtr = config->auCallbackUserPtr;
         retSender->naluCallback = config->naluCallback;
         retSender->naluCallbackUserPtr = config->naluCallbackUserPtr;
+        retSender->receiverReportCallback = config->receiverReportCallback;
+        retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
         retSender->maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retSender->targetPacketSize = (config->targetPacketSize > 0) ? config->targetPacketSize - (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->maxPacketSize;
@@ -1918,7 +1922,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                 uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                 uint8_t *msg = msgBuffer;
                 int receptionReportCount = 0;
-                int type = 0, totalSize = 0;
+                int type = 0, totalSize = 0, gotReceiverReport = 0;
                 size = 0;
 
                 while (totalSize < bytes)
@@ -1939,7 +1943,8 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                                 }
                                 else
                                 {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
+                                    gotReceiverReport = 1;
+                                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_SENDER_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
                                                 (float)sender->senderContext.roundTripDelay / 1000., (float)sender->senderContext.interarrivalJitter / 1000.,
                                                 sender->senderContext.receiverLostCount, (float)sender->senderContext.receiverFractionLost * 100. / 256.,
                                                 sender->senderContext.receiverExtHighestSeqNum);
@@ -1964,7 +1969,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_SENDER_TAG, "Clock delta: delta=%lli RTD=%lli",
                                             sender->senderContext.clockDelta.clockDelta, sender->senderContext.clockDelta.rtDelay);
                             }
                             break;
@@ -1975,6 +1980,25 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                         break;
                     totalSize += size;
                     msg += size;
+                }
+                if ((gotReceiverReport) && (sender->receiverReportCallback != NULL))
+                {
+                    ARSTREAM2_RtpSender_ReceiverReportData_t report;
+                    memset(&report, 0, sizeof(ARSTREAM2_RtpSender_ReceiverReportData_t));
+                    report.lastReceiverReportReceptionTimestamp = sender->senderContext.lastRrReceptionTimestamp;
+                    report.roundTripDelay = sender->senderContext.roundTripDelay;
+                    report.interarrivalJitter = sender->senderContext.interarrivalJitter;
+                    report.receiverLostCount = sender->senderContext.receiverLostCount;
+                    report.receiverFractionLost = sender->senderContext.receiverFractionLost;
+                    report.receiverExtHighestSeqNum = sender->senderContext.receiverExtHighestSeqNum;
+                    report.lastSenderReportInterval = sender->senderContext.lastSrInterval;
+                    report.senderReportIntervalPacketCount = sender->senderContext.srIntervalPacketCount;
+                    report.senderReportIntervalByteCount = sender->senderContext.srIntervalByteCount;
+                    report.peerClockDelta = sender->senderContext.clockDelta.clockDeltaAvg;
+                    report.roundTripDelayFromClockDelta = (uint32_t)sender->senderContext.clockDelta.rtDelay;
+
+                    // Call the receiver report callback function
+                    sender->receiverReportCallback(&report, sender->receiverReportCallbackUserPtr);
                 }
 
                 bytes = ARSAL_Socket_Recv(sender->controlSocket, msgBuffer, msgBufferSize, 0);
