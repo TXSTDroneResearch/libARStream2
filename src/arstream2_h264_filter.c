@@ -1032,7 +1032,7 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                 }
 
                 // Fill the missing slices with fake bitstream
-                ret = ARSTREAM2_H264Filter_fillMissingEndOfFrame(filter, filter->previousSliceType, filter->currentAuTimestamp);
+                ret = ARSTREAM2_H264Filter_fillMissingEndOfFrame(filter, filter->previousSliceType, filter->currentAuNtpTimestamp);
                 if (ret < 0)
                 {
                     if (ret != -2)
@@ -1155,7 +1155,7 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                     if (missingPacketsBefore)
                     {
                         // Fill the missing slices with fake bitstream
-                        ret = ARSTREAM2_H264Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu, filter->currentAuTimestamp);
+                        ret = ARSTREAM2_H264Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu, filter->currentAuNtpTimestamp);
                         if (ret < 0)
                         {
                             if (ret != -2)
