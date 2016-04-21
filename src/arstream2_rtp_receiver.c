@@ -82,7 +82,8 @@
 
 typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
     uint64_t recvTimestamp;
-    uint64_t localTimestamp;
+    uint64_t ntpTimestamp;
+    uint64_t ntpTimestampLocal;
     uint32_t rtpTimestamp;
     uint16_t seqNum;
     uint16_t markerBit;
@@ -191,6 +192,7 @@ struct ARSTREAM2_RtpReceiver_t {
     /* Thread status */
     ARSAL_Mutex_t streamMutex;
     ARSAL_Cond_t streamCond;
+    ARSAL_Mutex_t rtcpMutex;
     int threadsShouldStop;
     int streamThreadStarted;
     int controlThreadStarted;
@@ -802,13 +804,8 @@ static int ARSTREAM2_RtpReceiver_ControlSocketTeardown(ARSTREAM2_RtpReceiver_t *
     return 0;
 }
 
-static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint64_t recvTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytes)
+static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *receiver, uint64_t recvTimestamp, uint32_t rtpTimestamp, uint64_t ntpTimestamp, uint64_t ntpTimestampLocal, uint16_t seqNum, uint16_t markerBit, uint32_t bytes)
 {
-    uint64_t localTimestamp;
-
-    //TODO: handle the timestamp 32 bits loopback
-    localTimestamp = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (((((uint64_t)rtpTimestamp * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0; /* 90000 Hz clock to microseconds */
-
     ARSAL_Mutex_Lock(&(receiver->monitoringMutex));
 
     if (receiver->monitoringCount < ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS)
@@ -818,7 +815,8 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
     receiver->monitoringIndex = (receiver->monitoringIndex + 1) % ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS;
     receiver->monitoringPoint[receiver->monitoringIndex].bytes = bytes;
     receiver->monitoringPoint[receiver->monitoringIndex].rtpTimestamp = rtpTimestamp;
-    receiver->monitoringPoint[receiver->monitoringIndex].localTimestamp = localTimestamp;
+    receiver->monitoringPoint[receiver->monitoringIndex].ntpTimestamp = ntpTimestamp;
+    receiver->monitoringPoint[receiver->monitoringIndex].ntpTimestampLocal = ntpTimestampLocal;
     receiver->monitoringPoint[receiver->monitoringIndex].seqNum = seqNum;
     receiver->monitoringPoint[receiver->monitoringIndex].markerBit = markerBit;
     receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = recvTimestamp;
@@ -828,7 +826,7 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
 #ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
     if (receiver->fMonitorOut)
     {
-        fprintf(receiver->fMonitorOut, "%llu %lu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)localTimestamp, seqNum, markerBit, (long unsigned int)bytes);
+        fprintf(receiver->fMonitorOut, "%llu %lu %llu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)ntpTimestamp, (long long unsigned int)ntpTimestampLocal, seqNum, markerBit, (long unsigned int)bytes);
     }
 #endif
 }
@@ -1132,15 +1130,8 @@ static int ARSTREAM2_RtpReceiver_CheckBufferSize(ARSTREAM2_RtpReceiver_t *receiv
 }
 
 
-static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, uint32_t rtpTimestamp, int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore)
+static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, uint32_t rtpTimestamp, uint64_t rtpTimestampScaled, uint64_t ntpTimestamp, uint64_t ntpTimestampLocal, int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore)
 {
-    uint64_t rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal;
-
-    rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
-    //TODO: handle the timestamp 32 bits loopback
-    ntpTimestampLocal = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (rtpTimestampScaled - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0;
-    ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->receiverContext, rtpTimestamp);
-
     if (receiver->resenderCount > 0)
     {
         ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, rtpTimestampScaled, isLastNaluInAu, missingPacketsBefore);
@@ -1161,14 +1152,15 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     uint32_t startCode = 0;
     int startCodeLength = 0;
     uint8_t *extHeader = NULL;
-    uint32_t rtpTimestamp = 0, ssrc = 0;
+    uint32_t rtpTimestamp = 0, recvRtpTimestamp, ssrc = 0;
+    uint64_t rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, curTime;
     uint16_t currentFlags;
     ARSTREAM2_RTP_Header_t *header = (ARSTREAM2_RTP_Header_t*)recvBuffer;
-
     struct timespec t1;
+
     ARSAL_Time_GetTime(&t1);
-    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-    uint32_t recvRtpTimestamp = (uint32_t)((((curTime * 90) + 500) / 1000) & 0xFFFFFFFF);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    recvRtpTimestamp = (uint32_t)((((curTime * 90) + 500) / 1000) & 0xFFFFFFFF);
 
     if (receiver->insertStartCodes)
     {
@@ -1193,8 +1185,12 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         extHeader = NULL;
         extHeaderSize = 0;
     }
-    ARSTREAM2_RtpReceiver_UpdateMonitoring(receiver, curTime, rtpTimestamp, currentSeqNum, (currentFlags & (1 << 7)) ? 1 : 0, (uint32_t)recvSize);
 
+    ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
+    rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
+    //TODO: handle the timestamp 32 bits loopback
+    ntpTimestampLocal = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (rtpTimestampScaled - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0;
+    ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->receiverContext, rtpTimestamp);
     if (receiver->process.previousSeqNum != -1)
     {
         receiver->receiverContext.extHighestSeqNum = (receiver->receiverContext.extHighestSeqNum & 0xFFFF0000) | ((uint32_t)currentSeqNum & 0xFFFF);
@@ -1220,6 +1216,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         receiver->receiverContext.packetsReceived = 0;
         receiver->receiverContext.packetsLost = 0;
     }
+    //WARNING: the mutex unlock is in the if/else below
 
     if (seqNumDelta > 0)
     {
@@ -1232,6 +1229,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                                                         + (d - (int64_t)receiver->receiverContext.interarrivalJitter) / 16);
 
         receiver->receiverContext.packetsReceived++;
+        ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
         if ((receiver->process.previousRtpTimestamp != 0) && (rtpTimestamp != receiver->process.previousRtpTimestamp))
         {
@@ -1327,7 +1325,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                                 }
                                 /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output FU-A NALU (seqNum %d->%d) isFirst=%d isLast=%d gapsInSeqNum=%d",
                                   naluStartSeqNum, currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                                ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, isFirst, isLast, gapsInSeqNum);
+                                ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
                                 gapsInSeqNum = 0;
                             }
                         }
@@ -1396,7 +1394,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                             receiver->process.currentAuSize += naluSize;
                             /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output STAP-A NALU (seqNum %d) isFirst=%d isLast=%d gapsInSeqNum=%d",
                               currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                            ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, isFirst, isLast, gapsInSeqNum);
+                            ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
                             gapsInSeqNum = 0;
                         }
                         else
@@ -1450,7 +1448,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                     receiver->process.currentAuSize += payloadSize;
                     /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output single NALU (seqNum %d) isFirst=%d isLast=%d gapsInSeqNum=%d",
                       currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                    ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, isFirst, isLast, gapsInSeqNum);
+                    ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
                     gapsInSeqNum = 0;
                 }
                 else
@@ -1483,8 +1481,11 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         /* out of order packet */
         //TODO
         receiver->receiverContext.packetsLost++;
+        ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Out of order sequence number (currentSeqNum=%d, previousSeqNum=%d, seqNumDelta=%d)", currentSeqNum, receiver->process.previousSeqNum, seqNumDelta); //TODO: debug
     }
+
+    ARSTREAM2_RtpReceiver_UpdateMonitoring(receiver, curTime, rtpTimestamp, ntpTimestamp, ntpTimestampLocal, currentSeqNum, (currentFlags & (1 << 7)) ? 1 : 0, (uint32_t)recvSize);
 }
 
 void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
@@ -1537,6 +1538,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 {
     ARSTREAM2_RtpReceiver_t *retReceiver = NULL;
     int streamMutexWasInit = 0, streamCondWasInit = 0;
+    int rtcpMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
     int resenderMutexWasInit = 0;
     int naluBufferMutexWasInit = 0;
@@ -1708,6 +1710,18 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     }
     if (internalError == ARSTREAM2_OK)
     {
+        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->rtcpMutex));
+        if (mutexInitRet != 0)
+        {
+            internalError = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            rtcpMutexWasInit = 1;
+        }
+    }
+    if (internalError == ARSTREAM2_OK)
+    {
         int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->monitoringMutex));
         if (mutexInitRet != 0)
         {
@@ -1816,7 +1830,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 
         if (retReceiver->fMonitorOut)
         {
-            fprintf(retReceiver->fMonitorOut, "recvTimestamp rtpTimestamp localTimestamp rtpSeqNum rtpMarkerBit bytes\n");
+            fprintf(retReceiver->fMonitorOut, "recvTimestamp rtpTimestamp ntpTimestamp ntpTimestampLocal rtpSeqNum rtpMarkerBit bytes\n");
         }
     }
 #endif //#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
@@ -1831,6 +1845,10 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         if (streamCondWasInit == 1)
         {
             ARSAL_Cond_Destroy(&(retReceiver->streamCond));
+        }
+        if (rtcpMutexWasInit == 1)
+        {
+            ARSAL_Mutex_Destroy(&(retReceiver->rtcpMutex));
         }
         if (monitoringMutexWasInit == 1)
         {
@@ -1969,6 +1987,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 
             ARSAL_Mutex_Destroy(&((*receiver)->streamMutex));
             ARSAL_Cond_Destroy(&((*receiver)->streamCond));
+            ARSAL_Mutex_Destroy(&((*receiver)->rtcpMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
@@ -2179,9 +2198,12 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                 ARSAL_Time_GetTime(&t1);
                 uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
+                ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
                 ret = ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(msgBuffer, (unsigned int)bytes,
                                                   curTime,
                                                   &receiver->receiverContext);
+                ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
+
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process compound RTCP packet (%d)", ret);
@@ -2199,8 +2221,10 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         {
             unsigned int size = 0;
 
+            ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
             ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
                                                                  ARSTREAM2_RTP_RECEIVER_CNAME, &receiver->receiverContext, &size);
+            ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
             if ((ret == 0) && (size > 0))
             {
@@ -2303,7 +2327,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
             curTime = receiver->monitoringPoint[idx].recvTimestamp;
             bytes = receiver->monitoringPoint[idx].bytes;
             bytesSum += bytes;
-            auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].rtpTimestamp /*TODO*/) * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg; /* 90000 Hz clock to microseconds */
+            auTimestamp = receiver->monitoringPoint[idx].ntpTimestampLocal;
             receptionTime = curTime - auTimestamp;
             receptionTimeSum += receptionTime;
             currentSeqNum = receiver->monitoringPoint[idx].seqNum;
@@ -2328,7 +2352,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
                 idx = (idx - 1 >= 0) ? idx - 1 : ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS - 1;
                 curTime = receiver->monitoringPoint[idx].recvTimestamp;
                 bytes = receiver->monitoringPoint[idx].bytes;
-                auTimestamp = ((((uint64_t)(receiver->monitoringPoint[idx].rtpTimestamp /*TODO*/) * 1000) + 45) / 90) - receiver->receiverContext.clockDelta.clockDeltaAvg; /* 90000 Hz clock to microseconds */
+                auTimestamp = receiver->monitoringPoint[idx].ntpTimestampLocal;
                 receptionTime = curTime - auTimestamp;
                 packetSizeVarSum += ((bytes - _meanPacketSize) * (bytes - _meanPacketSize));
                 receptionTimeVarSum += ((receptionTime - meanReceptionTime) * (receptionTime - meanReceptionTime));

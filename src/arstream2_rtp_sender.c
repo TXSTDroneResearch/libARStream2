@@ -1922,10 +1922,13 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                 uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                 int gotReceiverReport = 0;
 
+                ARSAL_Mutex_Lock(&(sender->rtcpMutex));
                 ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(msgBuffer, (unsigned int)bytes,
                                                                   curTime,
                                                                   &sender->senderContext,
                                                                   &gotReceiverReport);
+                ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
+
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
