@@ -160,7 +160,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeRunControlThread(JNIEnv *
 
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *thizz);
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *thizz);
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auMetaData, int auMetaDataSize, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp, uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auMetaData, int auMetaDataSize, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr);
 
 JNIEXPORT void JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeInitClass(JNIEnv *env, jclass clazz)
@@ -343,7 +343,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t
     return (ret == 0) ? ARSTREAM2_OK : ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
 }
 
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auTimestamp, uint64_t auTimestampShifted, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auMetaData, int auMetaDataSize, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr)
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp, uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType, void *auMetaData, int auMetaDataSize, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr)
 {
     int ret = -1;
     JNIEnv *env = NULL;
@@ -365,7 +365,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *au
     }
 
     ret = (*env)->CallIntMethod(env, (jobject)userPtr, g_onBufferReady, (jint)auBufferUserPtr, (jint)auSize,
-                                (jint)auMetaData, (jint)auMetaDataSize, (jlong)auTimestamp, (jlong)auTimestampShifted, (jint)auSyncType);
+                                (jint)auMetaData, (jint)auMetaDataSize, (jlong)auNtpTimestamp, (jlong)auNtpTimestampLocal, (jint)auSyncType);
     if (wasAlreadyAttached == 0)
     {
         (*g_vm)->DetachCurrentThread(g_vm);
