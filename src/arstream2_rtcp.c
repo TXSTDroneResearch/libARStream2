@@ -155,26 +155,23 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t 
 
 
 int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
+                                               uint64_t sendTimestamp,
                                                ARSTREAM2_RTCP_RtpSenderContext_t *context)
 {
-    struct timespec t1;
-    ARSAL_Time_GetTime(&t1);
-
     if ((!senderReport) || (!context))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
     }
 
-    uint64_t ntpTimestamp = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-    uint64_t ntpTimestampL = ((uint64_t)t1.tv_nsec << 32) / (uint64_t)1000000000;
-    uint32_t rtpTimestamp = context->rtpTimestampOffset + (uint32_t)((((ntpTimestamp * context->rtpClockRate) + 500000) / 1000000) & 0xFFFFFFFF); /* microseconds to rtpClockRate */
+    uint64_t ntpTimestampL = (sendTimestamp << 32) / (uint64_t)1000000;
+    uint32_t rtpTimestamp = context->rtpTimestampOffset + (uint32_t)((((sendTimestamp * context->rtpClockRate) + 500000) / 1000000) & 0xFFFFFFFF); /* microseconds to rtpClockRate */
 
     senderReport->flags = (2 << 6);
     senderReport->packetType = ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE;
     senderReport->length = htons(6);
     senderReport->ssrc = htonl(context->senderSsrc);
-    senderReport->ntpTimestampH = htonl((uint32_t)t1.tv_sec);
+    senderReport->ntpTimestampH = htonl((uint32_t)(sendTimestamp / 1000000));
     senderReport->ntpTimestampL = htonl((uint32_t)(ntpTimestampL & 0xFFFFFFFF));
     senderReport->rtpTimestamp = htonl(rtpTimestamp);
     senderReport->senderPacketCount = htonl(context->packetCount);
@@ -183,7 +180,7 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
     // Packet and byte rates
     if (context->lastSrTimestamp)
     {
-        context->lastSrInterval = (uint32_t)(ntpTimestamp - context->lastSrTimestamp);
+        context->lastSrInterval = (uint32_t)(sendTimestamp - context->lastSrTimestamp);
         if (context->lastSrInterval > 0)
         {
             context->srIntervalPacketCount = context->packetCount - context->prevSrPacketCount;
@@ -199,7 +196,7 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
         context->prevSrByteCount = context->byteCount;
     }
 
-    context->lastSrTimestamp = ntpTimestamp;
+    context->lastSrTimestamp = sendTimestamp;
 
     return 0;
 }
@@ -295,12 +292,9 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
 
 int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                    ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
+                                                   uint64_t sendTimestamp,
                                                    ARSTREAM2_RTCP_RtpReceiverContext_t *context)
 {
-    struct timespec t1;
-    ARSAL_Time_GetTime(&t1);
-    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
     if ((!receiverReport) || (!receptionReport) || (!context))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
@@ -332,12 +326,12 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         receptionReport->extHighestSeqNum = htonl(context->extHighestSeqNum);
         receptionReport->interarrivalJitter = htonl(context->interarrivalJitter);
         receptionReport->lsr = htonl((uint32_t)(((context->prevSrNtpTimestamp << 16) / 1000000) & 0xFFFFFFFF));
-        receptionReport->dlsr = htonl(((curTime - context->lastSrReceptionTimestamp) << 16) / 1000000);
+        receptionReport->dlsr = htonl(((sendTimestamp - context->lastSrReceptionTimestamp) << 16) / 1000000);
 
         context->lastRrExtHighestSeqNum = context->extHighestSeqNum;
         context->lastRrPacketsReceived = context->packetsReceived;
         context->lastRrPacketsLost = context->packetsLost;
-        context->lastRrTimestamp = curTime;
+        context->lastRrTimestamp = sendTimestamp;
     }
     else if (rrCount > 1)
     {

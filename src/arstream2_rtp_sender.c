@@ -2025,7 +2025,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
             if (ret == 0)
             {
                 ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, &sender->senderContext);
+                ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, curTime, &sender->senderContext);
                 ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
                 if (ret != 0)
                 {
