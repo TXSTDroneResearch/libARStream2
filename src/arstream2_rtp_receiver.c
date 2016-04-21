@@ -180,6 +180,7 @@ struct ARSTREAM2_RtpReceiver_t {
     int maxLatencyMs;
     int maxNetworkLatencyMs;
     int insertStartCodes;
+    int generateReceiverReports;
 
     /* Current frame storage */
     int currentNaluBufferSize; // Usable length of the buffer
@@ -1624,6 +1625,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
         retReceiver->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
         retReceiver->insertStartCodes = (config->insertStartCodes > 0) ? 1 : 0;
+        retReceiver->generateReceiverReports = (config->generateReceiverReports > 0) ? 1 : 0;
         retReceiver->receiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
 
         if (net_config)
@@ -2214,25 +2216,28 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
             while (bytes > 0);
         }
 
-        ARSAL_Time_GetTime(&t1);
-        uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-        uint32_t rrDelay = (uint32_t)(curTime - receiver->receiverContext.lastRrTimestamp);
-        if ((rrDelay > 500000) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
+        if (receiver->generateReceiverReports)
         {
-            unsigned int size = 0;
-
-            ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
-            ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
-                                                                 ARSTREAM2_RTP_RECEIVER_CNAME, &receiver->receiverContext, &size);
-            ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
-
-            if ((ret == 0) && (size > 0))
+            ARSAL_Time_GetTime(&t1);
+            uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+            uint32_t rrDelay = (uint32_t)(curTime - receiver->receiverContext.lastRrTimestamp);
+            if ((rrDelay > 500000) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
             {
-                bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, size);
-                if (bytes < 0)
+                unsigned int size = 0;
+
+                ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
+                ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
+                                                                     ARSTREAM2_RTP_RECEIVER_CNAME, &receiver->receiverContext, &size);
+                ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
+
+                if ((ret == 0) && (size > 0))
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
-                    ret = -1;
+                    bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, size);
+                    if (bytes < 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
+                        ret = -1;
+                    }
                 }
             }
         }

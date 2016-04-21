@@ -101,6 +101,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
         receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
         receiverConfig.insertStartCodes = 1;
+        receiverConfig.generateReceiverReports = config->generateReceiverReports;
 
         if (usemux) {
             receiver_mux_config.mux = mux_config->mux;

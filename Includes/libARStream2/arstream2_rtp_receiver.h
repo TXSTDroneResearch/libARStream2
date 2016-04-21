@@ -112,6 +112,7 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds (should be provided by the server, can be 0) */
     int insertStartCodes;                           /**< Boolean-like (0-1) flag: if active insert a start code prefix before NAL units */
+    int generateReceiverReports;                    /**< Boolean-like (0-1) flag: if active generate RTCP receiver reports */
 } ARSTREAM2_RtpReceiver_Config_t;
 
 
