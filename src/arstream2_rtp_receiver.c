@@ -1161,7 +1161,6 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     int uncertainAuChange = 0;
     uint32_t startCode = 0;
     int startCodeLength = 0;
-    int ret;
     uint8_t *extHeader = NULL;
     uint32_t rtpTimestamp = 0;
     uint16_t currentFlags;
@@ -1215,7 +1214,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         {
             if (!(receiver->process.previousFlags & (1 << 7)))
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Change of timestamp without marker bit set on previous packet", ret);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Change of timestamp without marker bit set on previous packet");
             }
             if (receiver->process.gapsInSeqNumAu)
             {
