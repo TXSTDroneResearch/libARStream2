@@ -1855,7 +1855,8 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     int msgBufferSize = sender->maxPacketSize;
     ARSTREAM2_RTCP_SenderReport_t *senderReport = NULL;
     ssize_t bytes;
-    int shouldStop, ret, size;
+    int shouldStop, ret;
+    struct timespec t1;
 
     /* Parameters check */
     if (sender == NULL)
@@ -1917,70 +1918,19 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
             bytes = ARSAL_Socket_Recv(sender->controlSocket, msgBuffer, msgBufferSize, 0);
             while (bytes > 0)
             {
-                struct timespec t1;
                 ARSAL_Time_GetTime(&t1);
                 uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-                uint8_t *msg = msgBuffer;
-                int receptionReportCount = 0;
-                int type = 0, totalSize = 0, gotReceiverReport = 0;
-                size = 0;
+                int gotReceiverReport = 0;
 
-                while (totalSize < bytes)
+                ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(msgBuffer, (unsigned int)bytes,
+                                                                  curTime,
+                                                                  &sender->senderContext,
+                                                                  &gotReceiverReport);
+                if (ret != 0)
                 {
-                    type = ARSTREAM2_RTCP_GetPacketType(msg, bytes - totalSize, &receptionReportCount, &size);
-                    switch (type)
-                    {
-                        case ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE:
-                            if (receptionReportCount > 0)
-                            {
-                                ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)msg,
-                                                                                  (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(msg + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
-                                                                                  curTime,
-                                                                                  &sender->senderContext);
-                                if (ret != 0)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process receiver report (%d)", ret);
-                                }
-                                else
-                                {
-                                    gotReceiverReport = 1;
-                                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_SENDER_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
-                                                (float)sender->senderContext.roundTripDelay / 1000., (float)sender->senderContext.interarrivalJitter / 1000.,
-                                                sender->senderContext.receiverLostCount, (float)sender->senderContext.receiverFractionLost * 100. / 256.,
-                                                sender->senderContext.receiverExtHighestSeqNum);
-                                }
-                            }
-                            break;
-                        case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                            ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)msg);
-                            if (ret != 0)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process source description (%d)", ret);
-                            }
-                            break;
-                        case ARSTREAM2_RTCP_APP_PACKET_TYPE:
-                            ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)msg,
-                                                                              (ARSTREAM2_RTCP_ClockDelta_t*)(msg + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                                              curTime, sender->senderContext.receiverSsrc,
-                                                                              &sender->senderContext.clockDelta);
-                            if (ret != 0)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process application clock delta (%d)", ret);
-                            }
-                            else
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_SENDER_TAG, "Clock delta: delta=%lli RTD=%lli",
-                                            sender->senderContext.clockDelta.clockDelta, sender->senderContext.clockDelta.rtDelay);
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                    if (type < 0)
-                        break;
-                    totalSize += size;
-                    msg += size;
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
                 }
+
                 if ((gotReceiverReport) && (sender->receiverReportCallback != NULL))
                 {
                     ARSTREAM2_RtpSender_ReceiverReportData_t report;
@@ -2013,65 +1963,19 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
         }
 
-        struct timespec t1;
         ARSAL_Time_GetTime(&t1);
         uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
         uint32_t srDelay = (uint32_t)(curTime - sender->senderContext.lastSrTimestamp);
         if (srDelay > 500000) //TODO
         {
-            ret = 0;
-            size = 0;
+            unsigned int size = 0;
 
-            if (ret == 0)
-            {
-                ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport(senderReport, curTime, &sender->senderContext);
-                ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                if (ret != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to generate sender report (%d)", ret);
-                }
-                else
-                {
-                    size += sizeof(ARSTREAM2_RTCP_SenderReport_t);
-                }
-            }
+            ARSAL_Mutex_Lock(&(sender->rtcpMutex));
+            ret = ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
+                                                               ARSTREAM2_RTP_SENDER_CNAME, &sender->senderContext, &size);
+            ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
 
-            if (ret == 0)
-            {
-                int sdesSize = 0;
-                ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(msgBuffer + size),
-                                                               msgBufferSize - size,
-                                                               sender->senderContext.senderSsrc,
-                                                               ARSTREAM2_RTP_SENDER_CNAME,
-                                                               &sdesSize);
-                if (ret != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to generate source description (%d)", ret);
-                }
-                else
-                {
-                    size += sdesSize;
-                }
-            }
-
-            if (ret == 0)
-            {
-                ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(msgBuffer + size),
-                                                                   (ARSTREAM2_RTCP_ClockDelta_t*)(msgBuffer + size + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                                   curTime, sender->senderContext.senderSsrc,
-                                                                   &sender->senderContext.clockDelta);
-                if (ret != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to generate application defined clock delta (%d)", ret);
-                }
-                else
-                {
-                    size += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
-                }
-            }
-
-            if (ret == 0)
+            if ((ret == 0) && (size > 0))
             {
                 bytes = ARSAL_Socket_Send(sender->controlSocket, msgBuffer, size, 0);
                 if (bytes < 0)

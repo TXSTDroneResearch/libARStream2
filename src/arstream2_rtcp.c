@@ -30,7 +30,7 @@ static const char *ARSTREAM2_RTCP_SdesItemName[8] =
 };
 
 
-int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, int bufferSize, int *receptionReportCount, int *size)
+int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize, int *receptionReportCount, unsigned int *size)
 {
     if (!buffer)
     {
@@ -64,15 +64,15 @@ int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, int bufferSize, int *rec
     uint16_t length = ntohs(*((uint16_t*)(buffer + 2)));
     if (size)
     {
-        *size = (length + 1) * 4;
+        *size = ((unsigned int)length + 1) * 4;
     }
 
     return type;
 }
 
 
-int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
-                                                ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
+int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
+                                                const ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_RtpSenderContext_t *context)
 {
@@ -343,14 +343,14 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 }
 
 
-int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int maxSize, uint32_t ssrc, const char *cname, int *size)
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc, const char *cname, unsigned int *size)
 {
     if ((!sdes) || (!cname))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
     }
-    int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname) + 1 + 3) & ~0x3;
+    unsigned int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname) + 1 + 3) & ~0x3;
     if (maxSize < _size)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
@@ -377,10 +377,10 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, int ma
 }
 
 
-int ARSTREAM2_RTCP_ProcessSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes)
+int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
 {
     uint32_t ssrc;
-    uint8_t *ptr = (uint8_t*)sdes + 4;
+    const uint8_t *ptr = (uint8_t*)sdes + 4;
 
     if (!sdes)
     {
@@ -472,7 +472,8 @@ int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *a
 }
 
 
-int ARSTREAM2_RTCP_ProcessApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application_t *app,
+                                                const ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
                                                 uint64_t receptionTimestamp, uint32_t peerSsrc,
                                                 ARSTREAM2_RTCP_ClockDeltaContext_t *context)
 {
@@ -550,6 +551,290 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(ARSTREAM2_RTCP_Application_t *ap
 
     context->nextPeerOriginateTimestamp = peerTransmitTimestamp;
     context->nextReceiveTimestamp = receptionTimestamp;
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
+                                                 uint64_t sendTimestamp, int generateSenderReport,
+                                                 int generateSourceDescription, int generateApplicationClockDelta,
+                                                 const char *cname, ARSTREAM2_RTCP_RtpSenderContext_t *context,
+                                                 unsigned int *size)
+{
+    int ret = 0;
+    unsigned int totalSize = 0;
+
+    if ((!packet) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (maxPacketSize == 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid max packet size");
+        return -1;
+    }
+
+    if ((ret == 0) && (generateSenderReport) && (totalSize + sizeof(ARSTREAM2_RTCP_SenderReport_t) <= maxPacketSize))
+    {
+        ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport((ARSTREAM2_RTCP_SenderReport_t*)(packet + totalSize), sendTimestamp, context);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate sender report (%d)", ret);
+        }
+        else
+        {
+            totalSize += sizeof(ARSTREAM2_RTCP_SenderReport_t);
+        }
+    }
+
+    if ((ret == 0) && (generateSourceDescription) && (cname))
+    {
+        unsigned int sdesSize = 0;
+        ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
+                                                       context->senderSsrc, cname, &sdesSize);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
+        }
+        else
+        {
+            totalSize += sdesSize;
+        }
+    }
+
+    if ((ret == 0) && (generateApplicationClockDelta) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t) <= maxPacketSize))
+    {
+        ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
+                                                           (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                           sendTimestamp, context->senderSsrc,
+                                                           &context->clockDelta);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
+        }
+        else
+        {
+            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+        }
+    }
+
+    if (size) *size = totalSize;
+    return ret;
+}
+
+
+int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
+                                                   uint64_t sendTimestamp, int generateReceiverReport,
+                                                   int generateSourceDescription, int generateApplicationClockDelta,
+                                                   const char *cname, ARSTREAM2_RTCP_RtpReceiverContext_t *context,
+                                                   unsigned int *size)
+{
+    int ret = 0;
+    unsigned int totalSize = 0;
+
+    if ((!packet) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (maxPacketSize == 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid max packet size");
+        return -1;
+    }
+
+    if ((ret == 0) && (generateReceiverReport) && (totalSize + sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t) <= maxPacketSize))
+    {
+        ret = ARSTREAM2_RTCP_Receiver_GenerateReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)(packet + totalSize),
+                                                             (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                                                             sendTimestamp, context);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate receiver report (%d)", ret);
+        }
+        else
+        {
+            totalSize += sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
+        }
+    }
+
+    if ((ret == 0) && (generateSourceDescription) && (cname))
+    {
+        unsigned int sdesSize = 0;
+        ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
+                                                       context->receiverSsrc, cname, &sdesSize);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
+        }
+        else
+        {
+            totalSize += sdesSize;
+        }
+    }
+
+    if ((ret == 0) && (generateApplicationClockDelta) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t) <= maxPacketSize))
+    {
+        ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
+                                                           (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                           sendTimestamp, context->receiverSsrc,
+                                                           &context->clockDelta);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
+        }
+        else
+        {
+            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+        }
+    }
+
+    if (size) *size = totalSize;
+    return ret;
+}
+
+
+int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
+                                                uint64_t receptionTimestamp,
+                                                ARSTREAM2_RTCP_RtpSenderContext_t *context,
+                                                int *gotReceiverReport)
+{
+    unsigned int readSize = 0, size = 0;
+    int receptionReportCount = 0, type, ret;
+
+    if ((!packet) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    while (readSize < packetSize)
+    {
+        type = ARSTREAM2_RTCP_GetPacketType(packet, packetSize - readSize, &receptionReportCount, &size);
+        switch (type)
+        {
+            case ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE:
+                if (receptionReportCount > 0)
+                {
+                    ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)packet,
+                                                                      (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                                                                      receptionTimestamp,
+                                                                      context);
+                    if (ret != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process receiver report (%d)", ret);
+                    }
+                    else
+                    {
+                        if (gotReceiverReport) *gotReceiverReport = 1;
+                        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
+                                    (float)context->roundTripDelay / 1000., (float)context->interarrivalJitter / 1000.,
+                                    context->receiverLostCount, (float)context->receiverFractionLost * 100. / 256.,
+                                    context->receiverExtHighestSeqNum);
+                    }
+                }
+                break;
+            case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process source description (%d)", ret);
+                }
+                break;
+            case ARSTREAM2_RTCP_APP_PACKET_TYPE:
+                ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
+                                                                  (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                  receptionTimestamp, context->receiverSsrc,
+                                                                  &context->clockDelta);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                context->clockDelta.clockDelta, context->clockDelta.rtDelay);
+                }
+                break;
+            default:
+                break;
+        }
+        if (type < 0)
+            break;
+        readSize += size;
+        packet += size;
+    }
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
+                                                  uint64_t receptionTimestamp,
+                                                  ARSTREAM2_RTCP_RtpReceiverContext_t *context)
+{
+    unsigned int readSize = 0, size = 0;
+    int type, ret;
+
+    if ((!packet) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    while (readSize < packetSize)
+    {
+        type = ARSTREAM2_RTCP_GetPacketType(packet, packetSize - readSize, NULL, &size);
+        switch (type)
+        {
+            case ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE:
+                ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)packet,
+                                                                  receptionTimestamp, context);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process sender report (%d)", ret);
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
+                                (float)context->lastSrInterval / 1000., (float)context->srIntervalPacketCount * 1000000. / (float)context->lastSrInterval,
+                                (float)context->srIntervalByteCount * 8000. / (float)context->lastSrInterval);
+                }
+                break;
+            case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process source description (%d)", ret);
+                }
+                break;
+            case ARSTREAM2_RTCP_APP_PACKET_TYPE:
+                ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
+                                                                  (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                  receptionTimestamp, context->senderSsrc,
+                                                                  &context->clockDelta);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                context->clockDelta.clockDeltaAvg, context->clockDelta.rtDelay);
+                }
+                break;
+            default:
+                break;
+        }
+        if (type < 0)
+            break;
+        readSize += size;
+        packet += size;
+    }
 
     return 0;
 }
