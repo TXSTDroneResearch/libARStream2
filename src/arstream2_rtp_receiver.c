@@ -1178,7 +1178,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
     uint8_t *recvBuffer = NULL;
     int recvBufferSize;
-    int recvSize, payloadSize;
+    int recvSize, payloadSize, headersOffset;
     int fuPending = 0, currentAuSize = 0;
     ARSTREAM2_RTP_Header_t *header = NULL;
     uint32_t rtpTimestamp = 0, previousTimestamp = 0;
@@ -1240,9 +1240,15 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
         }
         else if (recvSize >= sizeof(ARSTREAM2_RTP_Header_t))
         {
+            headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
             rtpTimestamp = ntohl(header->timestamp);
             currentSeqNum = (int)ntohs(header->seqNum);
             currentFlags = ntohs(header->flags);
+            if (currentFlags & (1 << 12))
+            {
+                uint16_t extLength = ntohs(*((uint16_t*)(recvBuffer + headersOffset) + 1));
+                headersOffset += 4 + extLength * 4;
+            }
             ARSTREAM2_RtpReceiver_UpdateMonitoring(receiver, rtpTimestamp, currentSeqNum, (currentFlags & (1 << 7)) ? 1 : 0, (uint32_t)recvSize);
 
             if (previousSeqNum != -1)
@@ -1285,11 +1291,11 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
                     auStartSeqNum = currentSeqNum;
                 }
 
-                payloadSize = recvSize - sizeof(ARSTREAM2_RTP_Header_t);
+                payloadSize = recvSize - headersOffset;
 
                 if (payloadSize >= 1)
                 {
-                    uint8_t headByte = *(recvBuffer + sizeof(ARSTREAM2_RTP_Header_t));
+                    uint8_t headByte = *(recvBuffer + headersOffset);
 
                     if ((headByte & 0x1F) == ARSTREAM2_RTP_NALU_TYPE_FUA)
                     {
@@ -1299,7 +1305,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
                             uint8_t fuIndicator, fuHeader, startBit, endBit;
                             int outputSize = payloadSize - 2;
                             fuIndicator = headByte;
-                            fuHeader = *(recvBuffer + sizeof(ARSTREAM2_RTP_Header_t) + 1);
+                            fuHeader = *(recvBuffer + headersOffset + 1);
                             startBit = fuHeader & 0x80;
                             endBit = fuHeader & 0x40;
 
@@ -1326,7 +1332,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
                                         receiver->currentNaluSize += startCodeLength;
                                         currentAuSize += startCodeLength;
                                     }
-                                    memcpy(receiver->currentNaluBuffer + receiver->currentNaluSize + ((startBit) ? 1 : 0), recvBuffer + sizeof(ARSTREAM2_RTP_Header_t) + 2, payloadSize - 2);
+                                    memcpy(receiver->currentNaluBuffer + receiver->currentNaluSize + ((startBit) ? 1 : 0), recvBuffer + headersOffset + 2, payloadSize - 2);
                                     if (startBit)
                                     {
                                         /* restore the NALU header byte */
@@ -1380,7 +1386,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
 
                         if (payloadSize >= 3)
                         {
-                            uint8_t *curBuf = recvBuffer + sizeof(ARSTREAM2_RTP_Header_t) + 1;
+                            uint8_t *curBuf = recvBuffer + headersOffset + 1;
                             int sizeLeft = payloadSize - 1, naluCount = 0;
                             uint16_t naluSize = ((uint16_t)(*curBuf) << 8) | ((uint16_t)(*(curBuf + 1))), nextNaluSize = 0;
                             curBuf += 2;
@@ -1455,7 +1461,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
                                 receiver->currentNaluSize += startCodeLength;
                                 currentAuSize += startCodeLength;
                             }
-                            memcpy(receiver->currentNaluBuffer + receiver->currentNaluSize, recvBuffer + sizeof(ARSTREAM2_RTP_Header_t), payloadSize);
+                            memcpy(receiver->currentNaluBuffer + receiver->currentNaluSize, recvBuffer + headersOffset, payloadSize);
                             receiver->currentNaluSize += payloadSize;
                             currentAuSize += payloadSize;
                             /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output single NALU (seqNum %d) isFirst=%d isLast=%d gapsInSeqNum=%d",

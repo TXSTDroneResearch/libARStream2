@@ -297,9 +297,10 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
                                     filter->currentAuStreamingInfoAvailable = 1;
                                 }
                             }
-                            else
+                            else if (userDataSeiSize <= ARSTREAM2_H264_FILTER_USER_DATA_BUFFER_SIZE)
                             {
-                                //TODO
+                                memcpy(filter->currentAuUserData, pUserDataSei, userDataSeiSize);
+                                filter->currentAuUserDataSize = userDataSeiSize;
                             }
                         }
                     }
@@ -515,7 +516,7 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             ARSAL_Mutex_Unlock(&(filter->mutex));
 
             cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
-                                            (filter->currentAuUserDataSize > 0) ? &filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
+                                            (filter->currentAuUserDataSize > 0) ? filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
                                             auBufferUserPtr, filter->auReadyCallbackUserPtr);
 
             ARSAL_Mutex_Lock(&(filter->mutex));
