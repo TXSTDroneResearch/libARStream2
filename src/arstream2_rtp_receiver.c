@@ -12,7 +12,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -172,7 +171,7 @@ struct ARSTREAM2_RtpReceiver_t {
 
     /* Process context */
     struct ARSTREAM2_RtpReceiver_ProcessContext_t process;
-    ARSTREAM2_RTCP_RtpReceiverContext_t receiverContext;
+    ARSTREAM2_RTCP_ReceiverContext_t receiverContext;
 
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;
     void *naluCallbackUserPtr;

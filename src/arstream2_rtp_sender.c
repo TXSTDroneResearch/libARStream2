@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -146,7 +145,7 @@ struct ARSTREAM2_RtpSender_t {
 
     uint64_t lastAuTimestamp;
     uint16_t seqNum;
-    ARSTREAM2_RTCP_RtpSenderContext_t senderContext;
+    ARSTREAM2_RTCP_SenderContext_t senderContext;
     ARSAL_Mutex_t rtcpMutex;
     ARSAL_Mutex_t streamMutex;
 
