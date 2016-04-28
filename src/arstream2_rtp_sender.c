@@ -17,6 +17,7 @@
 
 #include <libARStream2/arstream2_rtp_sender.h>
 #include "arstream2_rtp.h"
+#include "arstream2_rtp_h264.h"
 #include "arstream2_rtcp.h"
 
 #include <libARSAL/ARSAL_Print.h>
@@ -1530,7 +1531,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                 if (stapPending)
                 {
                     /* Finish the previous STAP-A packet */
-                    uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
+                    uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                     *(sendBuffer + headersOffset) = stapHeader;
                     ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                     stapPending = 0;
@@ -1582,7 +1583,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                     if (stapPending)
                     {
                         /* Finish the previous STAP-A packet */
-                        uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
+                        uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                         *(sendBuffer + headersOffset) = stapHeader;
                         ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                         stapPending = 0;
@@ -1594,7 +1595,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                     uint8_t fuIndicator, fuHeader, startBit, endBit;
                     fuIndicator = fuHeader = *nalu.naluBuffer;
                     fuIndicator &= ~0x1F;
-                    fuIndicator |= ARSTREAM2_RTP_NALU_TYPE_FUA;
+                    fuIndicator |= ARSTREAM2_RTPH264_NALU_TYPE_FUA;
                     fuHeader &= ~0xE0;
                     meanFragmentSize = (nalu.naluSize + nalu.auMetadataSize + fragmentCount / 2) / fragmentCount;
 
@@ -1656,7 +1657,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         if (stapPending)
                         {
                             /* Finish the previous STAP-A packet */
-                            uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
+                            uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                             *(sendBuffer + headersOffset) = stapHeader;
                             ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 0, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // do not set the marker bit
                             stapPending = 0;
@@ -1738,7 +1739,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         if (nalu.isLastInAu)
                         {
                             /* Finish the STAP-A packet */
-                            uint8_t stapHeader = ARSTREAM2_RTP_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
+                            uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
                             *(sendBuffer + headersOffset) = stapHeader;
                             ret = ARSTREAM2_RtpSender_SendData(sender, sendBuffer, sendSize, stapFirstNaluInputTimestamp, stapAuTimestamp, 1, hasHeaderExtension, maxLatencyUs, maxNetworkLatencyUs, stapSeqNumForcedDiscontinuity, stapPayloadSize); // set the marker bit
                             stapPending = 0;

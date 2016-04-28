@@ -20,6 +20,7 @@
 #include <libARStream2/arstream2_rtp_receiver.h>
 #include <libARStream2/arstream2_rtp_sender.h>
 #include "arstream2_rtp.h"
+#include "arstream2_rtp_h264.h"
 #include "arstream2_rtcp.h"
 #include "arstream2_h264.h"
 
@@ -1273,7 +1274,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         {
             uint8_t headByte = *(recvBuffer + headersOffset);
 
-            if ((headByte & 0x1F) == ARSTREAM2_RTP_NALU_TYPE_FUA)
+            if ((headByte & 0x1F) == ARSTREAM2_RTPH264_NALU_TYPE_FUA)
             {
                 /* Fragmentation (FU-A) */
                 if (payloadSize >= 2)
@@ -1356,7 +1357,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Invalid payload size (%d) for FU-A packet at seqNum %d", payloadSize, currentSeqNum);
                 }
             }
-            else if ((headByte & 0x1F) == ARSTREAM2_RTP_NALU_TYPE_STAPA)
+            else if ((headByte & 0x1F) == ARSTREAM2_RTPH264_NALU_TYPE_STAPA)
             {
                 /* Aggregation (STAP-A) */
                 if (receiver->process.fuPending)
