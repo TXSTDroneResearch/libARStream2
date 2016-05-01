@@ -56,6 +56,12 @@
 
 
 /**
+ * Default minimum stream socket send buffer size: 50ms @ 5Mbit/s
+ */
+#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE (31250)
+
+
+/**
  * Sets *PTR to VAL if PTR is not null
  */
 #define SET_WITH_CHECK(PTR,VAL)                 \
@@ -559,11 +565,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
         retSender->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
         retSender->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
-        int totalBufSize = config->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8;
-        int minStreamSocketSendBufferSize = config->maxBitrate * 50 / 1000 / 8;
+        int totalBufSize = retSender->maxBitrate * retSender->maxNetworkLatencyMs / 1000 / 8;
+        int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
         retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
         retSender->naluFifoBufferSize = totalBufSize - retSender->streamSocketSendBufferSize;
         retSender->senderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
+        retSender->senderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->senderContext.rtpClockRate = 90000;
         retSender->senderContext.rtpTimestampOffset = 0;
     }
@@ -1857,6 +1864,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     ssize_t bytes;
     int shouldStop, ret;
     struct timespec t1;
+    uint32_t nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
 
     /* Parameters check */
     if (sender == NULL)
@@ -1969,7 +1977,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
         ARSAL_Time_GetTime(&t1);
         uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
         uint32_t srDelay = (uint32_t)(curTime - sender->senderContext.lastSrTimestamp);
-        if (srDelay > 500000) //TODO
+        if (srDelay >= nextSrDelay)
         {
             unsigned int size = 0;
 
@@ -1986,6 +1994,9 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
                 }
             }
+
+            nextSrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / sender->senderContext.rtcpByteRate;
+            if (nextSrDelay < ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL) nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
         }
 
         ARSAL_Mutex_Lock(&(sender->streamMutex));

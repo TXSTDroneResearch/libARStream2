@@ -33,6 +33,13 @@
 #define ARSTREAM2_RTCP_APP_PACKET_NAME 0x41525354
 #define ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE 1
 
+#define ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE 25000
+#define ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE 25000
+#define ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE 0.025
+#define ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE 0.025
+#define ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL 100000
+#define ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL 100000
+
 
 /*
  * Types
@@ -135,6 +142,7 @@ typedef struct ARSTREAM2_RTCP_ClockDeltaContext_s {
 typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
     uint32_t senderSsrc;
     uint32_t receiverSsrc;
+    uint32_t rtcpByteRate;
 
     uint32_t rtpClockRate;
     uint32_t rtpTimestampOffset;
@@ -164,6 +172,7 @@ typedef struct ARSTREAM2_RTCP_RtpSenderContext_s {
 typedef struct ARSTREAM2_RTCP_RtpReceiverContext_s {
     uint32_t receiverSsrc;
     uint32_t senderSsrc;
+    uint32_t rtcpByteRate;
 
     uint32_t prevSrRtpTimestamp;
     uint64_t prevSrNtpTimestamp;

@@ -1627,6 +1627,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->insertStartCodes = (config->insertStartCodes > 0) ? 1 : 0;
         retReceiver->generateReceiverReports = (config->generateReceiverReports > 0) ? 1 : 0;
         retReceiver->receiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
+        retReceiver->receiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
 
         if (net_config)
         {
@@ -2147,6 +2148,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     int bytes;
     int shouldStop, ret;
     struct timespec t1;
+    uint32_t nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
 
     /* Parameters check */
     if (receiver == NULL)
@@ -2221,7 +2223,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
             ARSAL_Time_GetTime(&t1);
             uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
             uint32_t rrDelay = (uint32_t)(curTime - receiver->receiverContext.lastRrTimestamp);
-            if ((rrDelay > 500000) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
+            if ((rrDelay >= nextRrDelay) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
 
@@ -2239,6 +2241,9 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                         ret = -1;
                     }
                 }
+
+                nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->receiverContext.rtcpByteRate;
+                if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
             }
         }
 
