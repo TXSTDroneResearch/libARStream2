@@ -22,6 +22,9 @@
 
 int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount)
 {
+    int i;
+    ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
+
     if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
@@ -44,15 +47,15 @@ int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount)
     }
     memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
 
-    int i;
-    ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
-    for (i = 0, cur = &fifo->pool[i]; i < maxCount; i++)
+    for (i = 0; i < maxCount; i++)
     {
+        cur = &fifo->pool[i];
         if (fifo->free)
         {
             fifo->free->prev = cur;
-            cur->next = fifo->free;
         }
+        cur->next = fifo->free;
+        cur->prev = NULL;
         fifo->free = cur;
     }
 
@@ -91,6 +94,7 @@ ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoPopFreeItem(ARSTREAM2_RTP_Pack
         ARSTREAM2_RTP_PacketFifoItem_t* cur = fifo->free;
         fifo->free = cur->next;
         if (cur->next) cur->next->prev = NULL;
+        cur->prev = NULL;
         cur->next = NULL;
         return cur;
     }
@@ -126,6 +130,77 @@ int ARSTREAM2_RTP_FifoPushFreeItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_R
 }
 
 
+int ARSTREAM2_RTP_FifoEnqueueItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item)
+{
+    if ((!fifo) || (!item))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (fifo->count >= fifo->size)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Packet FIFO is full");
+        return -2;
+    }
+
+    item->next = NULL;
+    if (fifo->tail)
+    {
+        fifo->tail->next = item;
+        item->prev = fifo->tail;
+    }
+    else
+    {
+        item->prev = NULL;
+    }
+    fifo->tail = item;
+    if (!fifo->head)
+    {
+        fifo->head = item;
+    }
+    fifo->count++;
+
+    return 0;
+}
+
+
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoDequeueItem(ARSTREAM2_RTP_PacketFifo_t *fifo)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
+
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if ((!fifo->head) || (!fifo->count))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Packet FIFO is empty");
+        return NULL;
+    }
+
+    cur = fifo->head;
+    if (cur->next)
+    {
+        cur->next->prev = NULL;
+        fifo->head = cur->next;
+        fifo->count--;
+    }
+    else
+    {
+        fifo->head = NULL;
+        fifo->count = 0;
+        fifo->tail = NULL;
+    }
+    cur->prev = NULL;
+    cur->next = NULL;
+
+    return cur;
+}
+
+
 int ARSTREAM2_RTP_FifoEnqueuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARSTREAM2_RTP_Packet_t *packet)
 {
     if ((!fifo) || (!packet))
@@ -148,30 +223,13 @@ int ARSTREAM2_RTP_FifoEnqueuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARST
     }
     memcpy(&cur->packet, packet, sizeof(ARSTREAM2_RTP_Packet_t));
 
-    cur->next = NULL;
-    if (fifo->tail)
-    {
-        fifo->tail->next = cur;
-        cur->prev = fifo->tail;
-    }
-    else
-    {
-        cur->prev = NULL;
-    }
-    fifo->tail = cur; 
-    if (!fifo->head)
-    {
-        fifo->head = cur;
-    }
-    fifo->count++;
-
-    return 0;
+    return ARSTREAM2_RTP_FifoEnqueueItem(fifo, cur);
 }
 
 
 int ARSTREAM2_RTP_FifoEnqueuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARSTREAM2_RTP_Packet_t *packets, int packetCount)
 {
-    int i;
+    int i, ret = 0;
 
     if ((!fifo) || (!packets) || (packetCount <= 0))
     {
@@ -195,22 +253,11 @@ int ARSTREAM2_RTP_FifoEnqueuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARS
         }
         memcpy(&cur->packet, &packets[i], sizeof(ARSTREAM2_RTP_Packet_t));
 
-        cur->next = NULL;
-        if (fifo->tail)
+        ret = ARSTREAM2_RTP_FifoEnqueueItem(fifo, cur);
+        if (ret != 0)
         {
-            fifo->tail->next = cur;
-            cur->prev = fifo->tail;
+            break;
         }
-        else
-        {
-            cur->prev = NULL;
-        }
-        fifo->tail = cur; 
-        if (!fifo->head)
-        {
-            fifo->head = cur;
-        }
-        fifo->count++;
     }
 
     return 0;
@@ -219,7 +266,7 @@ int ARSTREAM2_RTP_FifoEnqueuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARS
 
 int ARSTREAM2_RTP_FifoDequeuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_Packet_t *packet)
 {
-    ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
 
     if ((!fifo) || (!packet))
     {
@@ -233,18 +280,11 @@ int ARSTREAM2_RTP_FifoDequeuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_
         return -2;
     }
 
-    cur = fifo->head;
-    if (cur->next)
+    cur = ARSTREAM2_RTP_FifoDequeueItem(fifo);
+    if (!cur)
     {
-        cur->next->prev = NULL;
-        fifo->head = cur->next;
-        fifo->count--;
-    }
-    else
-    {
-        fifo->head = NULL;
-        fifo->count = 0;
-        fifo->tail = NULL;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Failed to dequeue FIFO item");
+        return -1;
     }
 
     memcpy(packet, &cur->packet, sizeof(ARSTREAM2_RTP_Packet_t));
@@ -262,7 +302,7 @@ int ARSTREAM2_RTP_FifoDequeuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_
 
 int ARSTREAM2_RTP_FifoDequeuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_Packet_t *packets, int maxPacketCount, int *packetCount)
 {
-    ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
     int count = 0;
 
     if ((!fifo) || (!packets) || (!packetCount))
@@ -285,18 +325,11 @@ int ARSTREAM2_RTP_FifoDequeuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2
 
     while ((fifo->head) && (count < maxPacketCount))
     {
-        cur = fifo->head;
-        if (cur->next)
+        cur = ARSTREAM2_RTP_FifoDequeueItem(fifo);
+        if (!cur)
         {
-            cur->next->prev = NULL;
-            fifo->head = cur->next;
-            fifo->count--;
-        }
-        else
-        {
-            fifo->head = NULL;
-            fifo->count = 0;
-            fifo->tail = NULL;
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Failed to dequeue FIFO item");
+            return -1;
         }
 
         memcpy(&packets[count], &cur->packet, sizeof(ARSTREAM2_RTP_Packet_t));
@@ -429,7 +462,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
 
     for (cur = fifo->head, count = 0; cur != NULL; cur = next, count++)
     {
-        if (cur->packet.timeoutTimestamp <= curTime)
+        if ((cur->packet.timeoutTimestamp != 0) && (cur->packet.timeoutTimestamp <= curTime))
         {
             if (cur->next)
             {

@@ -21,6 +21,9 @@
 
 int ARSTREAM2_RTPH264_FifoInit(ARSTREAM2_RTPH264_NaluFifo_t *fifo, int maxCount)
 {
+    int i;
+    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
+
     if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
@@ -43,15 +46,15 @@ int ARSTREAM2_RTPH264_FifoInit(ARSTREAM2_RTPH264_NaluFifo_t *fifo, int maxCount)
     }
     memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_RTPH264_NaluFifoItem_t));
 
-    int i;
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur = NULL;
-    for (i = 0, cur = &fifo->pool[i]; i < maxCount; i++)
+    for (i = 0; i < maxCount; i++)
     {
+        cur = &fifo->pool[i];
         if (fifo->free)
         {
             fifo->free->prev = cur;
-            cur->next = fifo->free;
         }
+        cur->next = fifo->free;
+        cur->prev = NULL;
         fifo->free = cur;
     }
 
@@ -90,6 +93,7 @@ ARSTREAM2_RTPH264_NaluFifoItem_t* ARSTREAM2_RTPH264_FifoPopFreeItem(ARSTREAM2_RT
         ARSTREAM2_RTPH264_NaluFifoItem_t* cur = fifo->free;
         fifo->free = cur->next;
         if (cur->next) cur->next->prev = NULL;
+        cur->prev = NULL;
         cur->next = NULL;
         return cur;
     }
@@ -125,6 +129,77 @@ int ARSTREAM2_RTPH264_FifoPushFreeItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTR
 }
 
 
+int ARSTREAM2_RTPH264_FifoEnqueueItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_NaluFifoItem_t *item)
+{
+    if ((!fifo) || (!item))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (fifo->count >= fifo->size)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full");
+        return -2;
+    }
+
+    item->next = NULL;
+    if (fifo->tail)
+    {
+        fifo->tail->next = item;
+        item->prev = fifo->tail;
+    }
+    else
+    {
+        item->prev = NULL;
+    }
+    fifo->tail = item;
+    if (!fifo->head)
+    {
+        fifo->head = item;
+    }
+    fifo->count++;
+
+    return 0;
+}
+
+
+ARSTREAM2_RTPH264_NaluFifoItem_t* ARSTREAM2_RTPH264_FifoDequeueItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo)
+{
+    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
+
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if ((!fifo->head) || (!fifo->count))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "NALU FIFO is empty");
+        return NULL;
+    }
+
+    cur = fifo->head;
+    if (cur->next)
+    {
+        cur->next->prev = NULL;
+        fifo->head = cur->next;
+        fifo->count--;
+    }
+    else
+    {
+        fifo->head = NULL;
+        fifo->count = 0;
+        fifo->tail = NULL;
+    }
+    cur->prev = NULL;
+    cur->next = NULL;
+
+    return cur;
+}
+
+
 int ARSTREAM2_RTPH264_FifoEnqueueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const ARSTREAM2_RTPH264_Nalu_t *nalu)
 {
     if ((!fifo) || (!nalu))
@@ -147,30 +222,13 @@ int ARSTREAM2_RTPH264_FifoEnqueueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const 
     }
     memcpy(&cur->nalu, nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
 
-    cur->next = NULL;
-    if (fifo->tail)
-    {
-        fifo->tail->next = cur;
-        cur->prev = fifo->tail;
-    }
-    else
-    {
-        cur->prev = NULL;
-    }
-    fifo->tail = cur; 
-    if (!fifo->head)
-    {
-        fifo->head = cur;
-    }
-    fifo->count++;
-
-    return 0;
+    return ARSTREAM2_RTPH264_FifoEnqueueItem(fifo, cur);
 }
 
 
 int ARSTREAM2_RTPH264_FifoEnqueueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const ARSTREAM2_RTPH264_Nalu_t *nalus, int naluCount)
 {
-    int i;
+    int i, ret = 0;
 
     if ((!fifo) || (!nalus) || (naluCount <= 0))
     {
@@ -194,31 +252,20 @@ int ARSTREAM2_RTPH264_FifoEnqueueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const
         }
         memcpy(&cur->nalu, &nalus[i], sizeof(ARSTREAM2_RTPH264_Nalu_t));
 
-        cur->next = NULL;
-        if (fifo->tail)
+        ret = ARSTREAM2_RTPH264_FifoEnqueueItem(fifo, cur);
+        if (ret != 0)
         {
-            fifo->tail->next = cur;
-            cur->prev = fifo->tail;
+            break;
         }
-        else
-        {
-            cur->prev = NULL;
-        }
-        fifo->tail = cur; 
-        if (!fifo->head)
-        {
-            fifo->head = cur;
-        }
-        fifo->count++;
     }
 
-    return 0;
+    return ret;
 }
 
 
 int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_Nalu_t *nalu)
 {
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur = NULL;
+    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
 
     if ((!fifo) || (!nalu))
     {
@@ -232,18 +279,11 @@ int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTRE
         return -2;
     }
 
-    cur = fifo->head;
-    if (cur->next)
+    cur = ARSTREAM2_RTPH264_FifoDequeueItem(fifo);
+    if (!cur)
     {
-        cur->next->prev = NULL;
-        fifo->head = cur->next;
-        fifo->count--;
-    }
-    else
-    {
-        fifo->head = NULL;
-        fifo->count = 0;
-        fifo->tail = NULL;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to dequeue FIFO item");
+        return -1;
     }
 
     memcpy(nalu, &cur->nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
@@ -261,7 +301,7 @@ int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTRE
 
 int ARSTREAM2_RTPH264_FifoDequeueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_Nalu_t *nalus, int maxNaluCount, int *naluCount)
 {
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur = NULL;
+    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
     int count = 0;
 
     if ((!fifo) || (!nalus) || (!naluCount))
@@ -284,18 +324,11 @@ int ARSTREAM2_RTPH264_FifoDequeueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTR
 
     while ((fifo->head) && (count < maxNaluCount))
     {
-        cur = fifo->head;
-        if (cur->next)
+        cur = ARSTREAM2_RTPH264_FifoDequeueItem(fifo);
+        if (!cur)
         {
-            cur->next->prev = NULL;
-            fifo->head = cur->next;
-            fifo->count--;
-        }
-        else
-        {
-            fifo->head = NULL;
-            fifo->count = 0;
-            fifo->tail = NULL;
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to dequeue FIFO item");
+            return -1;
         }
 
         memcpy(&nalus[count], &cur->nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
