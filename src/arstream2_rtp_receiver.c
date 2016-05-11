@@ -189,7 +189,6 @@ struct ARSTREAM2_RtpReceiver_t {
 
     /* Thread status */
     ARSAL_Mutex_t streamMutex;
-    ARSAL_Cond_t streamCond;
     int threadsShouldStop;
     int streamThreadStarted;
     int controlThreadStarted;
@@ -1471,7 +1470,6 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Stopping receiver...");
         ARSAL_Mutex_Lock(&(receiver->streamMutex));
         receiver->threadsShouldStop = 1;
-        ARSAL_Cond_Signal(&(receiver->streamCond));
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
 
         if (receiver->useMux) {
@@ -1511,7 +1509,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
                                                    eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpReceiver_t *retReceiver = NULL;
-    int streamMutexWasInit = 0, streamCondWasInit = 0;
+    int streamMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
     int resenderMutexWasInit = 0;
     int naluBufferMutexWasInit = 0;
@@ -1670,18 +1668,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     }
     if (internalError == ARSTREAM2_OK)
     {
-        int condInitRet = ARSAL_Cond_Init(&(retReceiver->streamCond));
-        if (condInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            streamCondWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
         int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->monitoringMutex));
         if (mutexInitRet != 0)
         {
@@ -1802,10 +1788,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             ARSAL_Mutex_Destroy(&(retReceiver->streamMutex));
         }
-        if (streamCondWasInit == 1)
-        {
-            ARSAL_Cond_Destroy(&(retReceiver->streamCond));
-        }
         if (monitoringMutexWasInit == 1)
         {
             ARSAL_Mutex_Destroy(&(retReceiver->monitoringMutex));
@@ -1866,7 +1848,6 @@ void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(ARSTREAM2_RtpReceiver_t *receive
         if (receiver->streamThreadStarted)
         {
             receiver->scheduleNaluBufferChange = 1;
-            ARSAL_Cond_Wait(&(receiver->streamCond), &(receiver->streamMutex));
         }
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "NALU buffer invalidated");
@@ -1942,7 +1923,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 #endif
 
             ARSAL_Mutex_Destroy(&((*receiver)->streamMutex));
-            ARSAL_Cond_Destroy(&((*receiver)->streamCond));
             ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
@@ -2063,7 +2043,6 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
             receiver->currentNaluBuffer = NULL;
             receiver->currentNaluBufferSize = 0;
             receiver->scheduleNaluBufferChange = 0;
-            ARSAL_Cond_Signal(&(receiver->streamCond));
         }
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
     }
