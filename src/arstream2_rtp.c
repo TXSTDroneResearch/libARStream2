@@ -20,7 +20,7 @@
 
 
 
-int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount)
+int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize)
 {
     int i;
     ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
@@ -43,6 +43,7 @@ int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount)
     if (!fifo->pool)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
+        ARSTREAM2_RTP_FifoFree(fifo);
         return -1;
     }
     memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
@@ -59,12 +60,37 @@ int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount)
         fifo->free = cur;
     }
 
+    if (packetBufferSize > 0)
+    {
+        for (i = 0; i < maxCount; i++)
+        {
+            fifo->pool[i].packet.buffer = malloc(packetBufferSize);
+            if (!fifo->pool[i].packet.buffer)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO item packet buffer allocation failed (size %d)", packetBufferSize);
+                ARSTREAM2_RTP_FifoFree(fifo);
+                return -1;
+            }
+        }
+    }
+
+    fifo->msgVec = malloc(maxCount * sizeof(struct mmsghdr));
+    if (!fifo->msgVec)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(struct mmsghdr));
+        ARSTREAM2_RTP_FifoFree(fifo);
+        return -1;
+    }
+    memset(fifo->msgVec, 0, maxCount * sizeof(struct mmsghdr));
+
     return 0;
 }
 
 
 int ARSTREAM2_RTP_FifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo)
 {
+    int i;
+
     if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
@@ -73,7 +99,20 @@ int ARSTREAM2_RTP_FifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo)
 
     if (fifo->pool)
     {
+        for (i = 0; i < fifo->size; i++)
+        {
+            if (fifo->pool[i].packet.buffer)
+            {
+                free(fifo->pool[i].packet.buffer);
+                fifo->pool[i].packet.buffer = NULL;
+            }
+        }
+
         free(fifo->pool);
+    }
+    if (fifo->msgVec)
+    {
+        free(fifo->msgVec);
     }
     memset(fifo, 0, sizeof(ARSTREAM2_RTP_PacketFifo_t));
 
@@ -350,12 +389,12 @@ int ARSTREAM2_RTP_FifoDequeuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2
 }
 
 
-int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct mmsghdr *msgVec, unsigned int msgVecMaxCount)
+int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo)
 {
     ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
-    unsigned int i;
+    int i;
 
-    if ((!fifo) || (!msgVec))
+    if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
         return -1;
@@ -367,28 +406,28 @@ int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct
         return -2;
     }
 
-    for (cur = fifo->head, i = 0; ((cur) && (i < msgVecMaxCount)); cur = cur->next, i++)
+    for (cur = fifo->head, i = 0; ((cur) && (i < fifo->size)); cur = cur->next, i++)
     {
-        msgVec[i].msg_hdr.msg_name = NULL;
-        msgVec[i].msg_hdr.msg_namelen = 0;
-        msgVec[i].msg_hdr.msg_iov = cur->packet.msgIov;
-        msgVec[i].msg_hdr.msg_iovlen = cur->packet.msgIovLength;
-        msgVec[i].msg_hdr.msg_control = NULL;
-        msgVec[i].msg_hdr.msg_controllen = 0;
-        msgVec[i].msg_hdr.msg_flags = 0;
-        msgVec[i].msg_len = 0;
+        fifo->msgVec[i].msg_hdr.msg_name = NULL;
+        fifo->msgVec[i].msg_hdr.msg_namelen = 0;
+        fifo->msgVec[i].msg_hdr.msg_iov = cur->packet.msgIov;
+        fifo->msgVec[i].msg_hdr.msg_iovlen = cur->packet.msgIovLength;
+        fifo->msgVec[i].msg_hdr.msg_control = NULL;
+        fifo->msgVec[i].msg_hdr.msg_controllen = 0;
+        fifo->msgVec[i].msg_hdr.msg_flags = 0;
+        fifo->msgVec[i].msg_len = 0;
     }
 
-    return (int)i;
+    return i;
 }
 
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct mmsghdr *msgVec, unsigned int msgVecCount)
+int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount)
 {
     ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
     unsigned int i;
 
-    if ((!fifo) || (!msgVec))
+    if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
         return -1;
@@ -403,13 +442,13 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, s
     for (cur = fifo->head, i = 0; ((cur != NULL) && (i < msgVecCount)); cur = fifo->head, i++)
     {
         size_t k, len;
-        for (k = 0, len = 0; k < msgVec[i].msg_hdr.msg_iovlen; k++)
+        for (k = 0, len = 0; k < fifo->msgVec[i].msg_hdr.msg_iovlen; k++)
         {
-            len += msgVec[i].msg_hdr.msg_iov[k].iov_len;
+            len += fifo->msgVec[i].msg_hdr.msg_iov[k].iov_len;
         }
-        if (msgVec[i].msg_len != len)
+        if (fifo->msgVec[i].msg_len != len)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Sent size (%d) does not match message iov total size (%d)", msgVec[i].msg_len, len);
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Sent size (%d) does not match message iov total size (%d)", fifo->msgVec[i].msg_len, len);
         }
 
         if (cur->next)
@@ -448,7 +487,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
         return -1;
     }
 
-    if (curTime)
+    if (!curTime)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid current time");
         return -1;
@@ -460,7 +499,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
         return -2;
     }
 
-    for (cur = fifo->head, count = 0; cur != NULL; cur = next, count++)
+    for (cur = fifo->head, count = 0; cur != NULL; cur = next)
     {
         if ((cur->packet.timeoutTimestamp != 0) && (cur->packet.timeoutTimestamp <= curTime))
         {
@@ -481,6 +520,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
                 fifo->head = cur->next;
             }
             fifo->count--;
+            count++;
 
             next = cur->next;
 
@@ -490,6 +530,10 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Failed to push free FIFO item");
                 return -1;
             }
+        }
+        else
+        {
+            next = cur->next;
         }
     }
 
@@ -517,11 +561,14 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
         return -1;
     }
 
+    /* Timestamps and sequence number */
     packet->timeoutTimestamp = timeoutTimestamp;
     packet->ntpTimestamp = ntpTimestamp;
     packet->rtpTimestamp = (ntpTimestamp * context->rtpClockRate + (uint64_t)context->rtpTimestampOffset + 500000) / 1000000;
     packet->seqNum = seqNum;
     packet->markerBit = markerBit;
+
+    /* Data */
     if ((headerExtension) && (headerExtensionSize > 0))
     {
         packet->headerExtension = headerExtension;
@@ -554,11 +601,11 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
     packet->msgIovLength++;
     if (headerExtensionSize > 0)
     {
-        packet->msgIov[packet->msgIovLength].iov_base = (void*)headerExtension;
+        packet->msgIov[packet->msgIovLength].iov_base = (void*)packet->headerExtension;
         packet->msgIov[packet->msgIovLength].iov_len = (size_t)headerExtensionSize;
         packet->msgIovLength++;
     }
-    packet->msgIov[packet->msgIovLength].iov_base = (void*)payload;
+    packet->msgIov[packet->msgIovLength].iov_base = (void*)packet->payload;
     packet->msgIov[packet->msgIovLength].iov_len = (size_t)payloadSize;
     packet->msgIovLength++;
 

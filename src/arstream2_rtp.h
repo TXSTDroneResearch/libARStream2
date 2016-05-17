@@ -12,7 +12,6 @@
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#define ARSTREAM2_HAS_SENDMMSG //TODO
 
 
 /*
@@ -61,6 +60,7 @@ typedef struct ARSTREAM2_RTP_Packet_s {
     unsigned int payloadSize;
     struct iovec msgIov[3];
     size_t msgIovLength;
+    uint8_t *buffer;
 } ARSTREAM2_RTP_Packet_t;
 
 /**
@@ -83,6 +83,7 @@ typedef struct ARSTREAM2_RTP_PacketFifo_s {
     ARSTREAM2_RTP_PacketFifoItem_t *tail;
     ARSTREAM2_RTP_PacketFifoItem_t *free;
     ARSTREAM2_RTP_PacketFifoItem_t *pool;
+    struct mmsghdr *msgVec;
 } ARSTREAM2_RTP_PacketFifo_t;
 
 /**
@@ -92,6 +93,7 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
     uint32_t senderSsrc;
     uint32_t rtpClockRate;
     uint32_t rtpTimestampOffset;
+    uint32_t maxPacketSize;
 } ARSTREAM2_RTP_SenderContext_t;
 
 
@@ -99,7 +101,7 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
  * Functions
  */
 
-int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount);
+int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize);
 
 int ARSTREAM2_RTP_FifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
@@ -119,9 +121,9 @@ int ARSTREAM2_RTP_FifoDequeuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_
 
 int ARSTREAM2_RTP_FifoDequeuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_Packet_t *packets, int maxPacketCount, int *packetCount);
 
-int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct mmsghdr *msgVec, unsigned int msgVecMaxCount);
+int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct mmsghdr *msgVec, unsigned int msgVecCount);
+int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount);
 
 int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
 
