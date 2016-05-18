@@ -117,21 +117,12 @@ struct ARSTREAM2_RtpSender_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
-    ARSTREAM2_RtpSender_AuCallback_t auCallback;
-    void *auCallbackUserPtr;
-    ARSTREAM2_RtpSender_NaluCallback_t naluCallback;
-    void *naluCallbackUserPtr;
     ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;
     void *receiverReportCallbackUserPtr;
     int naluFifoSize;
-    int maxPacketSize;
-    int targetPacketSize;
     int maxBitrate;
     uint32_t maxLatencyUs;
-    int useRtpHeaderExtensions;
 
-    uint64_t lastAuTimestamp;
-    uint16_t seqNum;
     ARSTREAM2_RTP_SenderContext_t rtpSenderContext;
     ARSTREAM2_RTCP_SenderContext_t rtcpSenderContext;
     ARSAL_Mutex_t rtcpMutex;
@@ -272,27 +263,23 @@ static int ARSTREAM2_RtpSender_FlushNaluFifo(ARSTREAM2_RtpSender_t *sender)
 
     while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(&sender->naluFifo, &nalu)) == 0)
     {
+        //TODO: prune the NALUs and remove them in the thread to avoid calling the AU callback multiple times due to lastAuTimestamp concurrent access
+
         /* call the naluCallback */
-        if (sender->naluCallback != NULL)
+        if (sender->rtpSenderContext.naluCallback != NULL)
         {
-            sender->naluCallback(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, sender->naluCallbackUserPtr);
+            ((ARSTREAM2_RtpSender_NaluCallback_t)sender->rtpSenderContext.naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, sender->rtpSenderContext.naluCallbackUserPtr);
         }
 
         /* last NALU in the Access Unit: call the auCallback */
-        if ((sender->auCallback != NULL) && (nalu.isLastInAu))
+        if ((sender->rtpSenderContext.auCallback != NULL) && (nalu.isLastInAu))
         {
-            ARSAL_Mutex_Lock(&(sender->streamMutex));
-            if (nalu.ntpTimestamp != sender->lastAuTimestamp)
+            if (nalu.ntpTimestamp != sender->rtpSenderContext.lastAuCallbackTimestamp)
             {
-                sender->lastAuTimestamp = nalu.ntpTimestamp;
-                ARSAL_Mutex_Unlock(&(sender->streamMutex));
+                sender->rtpSenderContext.lastAuCallbackTimestamp = nalu.ntpTimestamp;
 
                 /* call the auCallback */
-                sender->auCallback(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.auUserPtr, sender->auCallbackUserPtr);
-            }
-            else
-            {
-                ARSAL_Mutex_Unlock(&(sender->streamMutex));
+                ((ARSTREAM2_RtpSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.auUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
             }
         }
     }
@@ -363,17 +350,17 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->serverControlPort = (config->serverControlPort > 0) ? config->serverControlPort : ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT;
         retSender->clientStreamPort = config->clientStreamPort;
         retSender->clientControlPort = config->clientControlPort;
-        retSender->auCallback = config->auCallback;
-        retSender->auCallbackUserPtr = config->auCallbackUserPtr;
-        retSender->naluCallback = config->naluCallback;
-        retSender->naluCallbackUserPtr = config->naluCallbackUserPtr;
+        retSender->rtpSenderContext.auCallback = config->auCallback;
+        retSender->rtpSenderContext.auCallbackUserPtr = config->auCallbackUserPtr;
+        retSender->rtpSenderContext.naluCallback = config->naluCallback;
+        retSender->rtpSenderContext.naluCallbackUserPtr = config->naluCallbackUserPtr;
         retSender->receiverReportCallback = config->receiverReportCallback;
         retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
-        retSender->maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
-        retSender->targetPacketSize = (config->targetPacketSize > 0) ? config->targetPacketSize - (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->maxPacketSize;
+        retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
+        retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
+        retSender->rtpSenderContext.useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-        retSender->useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         int totalBufSize = (config->maxLatencyMs > 0) ? retSender->maxBitrate * config->maxLatencyMs / 1000 / 8 : 0;
         int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
         retSender->streamSocketSendBufferSize = (totalBufSize / 6 > minStreamSocketSendBufferSize) ? totalBufSize / 6 : minStreamSocketSendBufferSize;
@@ -382,7 +369,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtpSenderContext.rtpClockRate = 90000;
         retSender->rtpSenderContext.rtpTimestampOffset = 0;
-        retSender->maxPacketSize = retSender->maxPacketSize;
         retSender->rtcpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtcpSenderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->rtcpSenderContext.rtpClockRate = 90000;
@@ -468,7 +454,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
     /* Setup the packet FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retSender->packetFifo, config->naluFifoSize, retSender->maxPacketSize); //TODO: size?
+        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retSender->packetFifo, config->naluFifoSize, retSender->rtpSenderContext.maxPacketSize); //TODO: size?
         if (packetFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
@@ -1198,12 +1184,12 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
         flags |= (1 << 7);
     }
     header->flags = htons(flags);
-    sender->seqNum += seqNumForcedDiscontinuity;
+    /*sender->seqNum += seqNumForcedDiscontinuity;
     header->seqNum = htons(sender->seqNum);
-    sender->seqNum++;
+    sender->seqNum++;*/
     ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-    sender->rtcpSenderContext.packetCount += seqNumForcedDiscontinuity + 1;
-    sender->rtcpSenderContext.byteCount += payloadSize;
+    sender->rtpSenderContext.packetCount += seqNumForcedDiscontinuity + 1;
+    sender->rtpSenderContext.byteCount += payloadSize;
     ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
     rtpTimestamp = (uint32_t)((((ntpTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF); /* microseconds to 90000 Hz clock */
     //TODO: handle the timestamp 32 bits loopback
@@ -1250,15 +1236,15 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                     if (pollRet == 0)
                     {
                         /* failed: poll timeout */
-                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (polling timed out: timeout = %dms) (seqNum = %d)",
-                                    ntpTimestamp, pollTimeMs, sender->seqNum - 1);
+                                    ntpTimestamp, pollTimeMs, 0 /*sender->seqNum - 1*/);
                         ret = -2;
                     }
                     else if (pollRet < 0)
                     {
                         /* failed: poll error */
-                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Poll error: error=%d (%s)", errno, strerror(errno));
                         ret = -1;
                     }
@@ -1282,21 +1268,21 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                             if (bytes > -1)
                             {
                                 /* socket send successful */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, (uint32_t)bytes, 0);
+                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
                                 ret = 0;
                             }
                             else if (errno == EAGAIN)
                             {
                                 /* failed: socket buffer full */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (socket buffer full #2) (seqNum = %d)",
-                                            ntpTimestamp, sender->seqNum - 1);
+                                            ntpTimestamp, 0 /*sender->seqNum - 1*/);
                                 ret = -2;
                             }
                             else
                             {
                                 /* failed: socket error */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error #2 error=%d (%s)", errno, strerror(errno));
                                 ret = -1;
                             }
@@ -1304,11 +1290,11 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                         else
                         {
                             /* packet dropped: too late */
-                            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                             if (latencyDrop)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (after poll latency %.1fms > %.1fms) (seqNum = %d)",
-                                            ntpTimestamp, (float)(curTime - ntpTimestamp) / 1000., (float)sender->maxLatencyUs / 1000., sender->seqNum - 1);
+                                            ntpTimestamp, (float)(curTime - ntpTimestamp) / 1000., (float)sender->maxLatencyUs / 1000., 0 /*sender->seqNum - 1*/);
                             }
                             ret = -2;
                         }
@@ -1317,16 +1303,16 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                 else
                 {
                     /* packet dropped: poll timeout too short */
-                    ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                    ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                     ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (poll timeout too short: timeout = %dms) (seqNum = %d)",
-                                ntpTimestamp, pollTimeMs, sender->seqNum - 1);
+                                ntpTimestamp, pollTimeMs, 0 /*sender->seqNum - 1*/);
                     ret = -2;
                 }
                 break;
             }
             default:
                 /* failed: socket error */
-                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
                 ret = -1;
                 break;
@@ -1335,17 +1321,17 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
         else
         {
             /* socket send successful */
-            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, (uint32_t)bytes, 0);
+            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
         }
     }
     else
     {
         /* packet dropped: too late */
-        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, sender->seqNum - 1, isLastInAu, 0, sendSize);
+        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
         if (latencyDrop)
         {
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (latency %.1fms > %.1fms) (seqNum = %d)",
-                        ntpTimestamp, (float)(curTime - ntpTimestamp) / 1000., (float)sender->maxLatencyUs / 1000., sender->seqNum - 1);
+                        ntpTimestamp, (float)(curTime - ntpTimestamp) / 1000., (float)sender->maxLatencyUs / 1000., 0 /*sender->seqNum - 1*/);
         }
         ret = -2;
     }
@@ -1358,18 +1344,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
 {
     /* Local declarations */
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
-    ARSTREAM2_RTPH264_Nalu_t nalu;
-    uint64_t previousTimestamp = 0, stapNtpTimestamp = 0, stapTimeoutTimestamp = 0;
-    void *previousAuUserPtr = NULL;
-    int shouldStop;
-    int targetPacketSize, maxPacketSize, packetSize, fragmentSize, meanFragmentSize, offset, fragmentOffset, fragmentCount;
-    int ret, latencyDrop;
-    int stapPending = 0, stapSeqNumForcedDiscontinuity = 0;
-    uint8_t stapMaxNri = 0;
-    ARSTREAM2_RTP_PacketFifoItem_t *stapItem = NULL;
-    unsigned int stapOffsetInBuffer = 0;
-    uint8_t *stapPayload = NULL, *stapHeaderExtension = NULL;
-    unsigned int stapPayloadSize = 0, stapHeaderExtensionSize = 0;
+    int shouldStop, ret;
     uint64_t curTime;
     struct timespec t1;
 
@@ -1388,9 +1363,6 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
         return (void*)0;
     }
 
-    targetPacketSize = sender->targetPacketSize;
-    maxPacketSize = sender->maxPacketSize;
-
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender stream thread running");
     ARSAL_Mutex_Lock(&(sender->streamMutex));
     sender->streamThreadStarted = 1;
@@ -1401,477 +1373,14 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
     {
         ARSAL_Time_GetTime(&t1);
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-        int naluCount = 0;
 
-        int fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(&sender->naluFifo, &nalu);
-
-        while (fifoRes == 0)
+        ARSAL_Mutex_Lock(&(sender->rtcpMutex));
+        ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo, &sender->packetFifo, curTime);
+        ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
+        if (ret != 0)
         {
-            naluCount++;
-            if ((previousTimestamp != 0) && (nalu.ntpTimestamp != previousTimestamp))
-            {
-                if (stapPending)
-                {
-                    /* Finish the previous STAP-A packet */
-                    uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
-                    *(stapPayload) = stapHeader;
-                    sender->seqNum += stapSeqNumForcedDiscontinuity;
-                    ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &stapItem->packet,
-                                                              stapPayload, stapPayloadSize,
-                                                              (stapHeaderExtensionSize > 0) ? stapHeaderExtension : NULL, stapHeaderExtensionSize,
-                                                              stapNtpTimestamp, stapTimeoutTimestamp,
-                                                              sender->seqNum, 0); // do not set the marker bit
-
-                    ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                    sender->rtcpSenderContext.packetCount += stapSeqNumForcedDiscontinuity + 1;
-                    sender->rtcpSenderContext.byteCount += stapPayloadSize;
-                    ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                    sender->seqNum++;
-
-                    if (ret == 0)
-                    {
-                        ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, stapItem);
-                        if (ret != 0)
-                        {
-                            ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, stapItem);
-                        }
-                    }
-                    stapPayloadSize = 0;
-                    stapHeaderExtensionSize = 0;
-                    stapPending = 0;
-                }
-
-                if (sender->auCallback != NULL)
-                {
-                    /* new Access Unit: do we need to call the auCallback? */
-                    ARSAL_Mutex_Lock(&(sender->streamMutex));
-                    if (previousTimestamp != sender->lastAuTimestamp)
-                    {
-                        sender->lastAuTimestamp = previousTimestamp;
-                        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-
-                        /* call the auCallback */
-                        sender->auCallback(ARSTREAM2_RTP_SENDER_STATUS_SENT, previousAuUserPtr, sender->auCallbackUserPtr);
-                    }
-                    else
-                    {
-                        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-                    }
-                }
-            }
-
-            /* check that the NALU is not too old */
-            latencyDrop = ((nalu.timeoutTimestamp != 0) && (nalu.timeoutTimestamp <= curTime)) ? 1 : 0;
-
-            /* check that the NALU has not been flagged for dropping */
-            if (!latencyDrop)
-            {
-                /* A NALU is ready to send */
-                fragmentCount = (nalu.naluSize + nalu.metadataSize + targetPacketSize / 2) / targetPacketSize;
-                if (fragmentCount < 1) fragmentCount = 1;
-
-                if ((fragmentCount > 1) || (nalu.naluSize > (uint32_t)maxPacketSize))
-                {
-                    /* Fragmentation (FU-A) */
-
-                    if (stapPending)
-                    {
-                        /* Finish the previous STAP-A packet */
-                        uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
-                        *(stapPayload) = stapHeader;
-                        sender->seqNum += stapSeqNumForcedDiscontinuity;
-                        ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &stapItem->packet,
-                                                                  stapPayload, stapPayloadSize,
-                                                                  (stapHeaderExtensionSize > 0) ? stapHeaderExtension : NULL, stapHeaderExtensionSize,
-                                                                  stapNtpTimestamp, stapTimeoutTimestamp,
-                                                                  sender->seqNum, 0); // do not set the marker bit
-
-                        ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                        sender->rtcpSenderContext.packetCount += stapSeqNumForcedDiscontinuity + 1;
-                        sender->rtcpSenderContext.byteCount += stapPayloadSize;
-                        ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                        sender->seqNum++;
-
-                        if (ret == 0)
-                        {
-                            ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, stapItem);
-                            if (ret != 0)
-                            {
-                                ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, stapItem);
-                            }
-                        }
-                        stapPending = 0;
-                        stapPayloadSize = 0;
-                        stapHeaderExtensionSize = 0;
-                    }
-
-                    int i;
-                    uint8_t fuIndicator, fuHeader;
-                    fuIndicator = fuHeader = *nalu.nalu;
-                    fuIndicator &= ~0x1F;
-                    fuIndicator |= ARSTREAM2_RTPH264_NALU_TYPE_FUA;
-                    fuHeader &= ~0xE0;
-                    meanFragmentSize = (nalu.naluSize + nalu.metadataSize + fragmentCount / 2) / fragmentCount;
-
-                    for (i = 0, offset = 1; i < fragmentCount; i++)
-                    {
-                        fragmentSize = (i == fragmentCount - 1) ? (int)nalu.naluSize - offset : meanFragmentSize;
-                        fragmentOffset = 0;
-                        do
-                        {
-                            packetSize = (fragmentSize - fragmentOffset > maxPacketSize - 2) ? maxPacketSize - 2 : fragmentSize - fragmentOffset;
-                            if ((offset == 1) && (nalu.metadataSize < (uint32_t)packetSize)) packetSize -= nalu.metadataSize;
-
-                            if (packetSize + 2 <= maxPacketSize)
-                            {
-                                ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_FifoPopFreeItem(&sender->packetFifo);
-                                if (item)
-                                {
-                                    unsigned int offsetInBuffer = 0;
-                                    uint8_t *payload = NULL, *headerExtension = NULL;
-                                    unsigned int payloadSize = 0, headerExtensionSize = 0;
-                                    uint8_t startBit = 0, endBit = 0;
-
-                                    if ((sender->useRtpHeaderExtensions) && (offset == 1) && (nalu.metadata) && (nalu.metadataSize > 4) && (nalu.metadataSize < (uint32_t)packetSize))
-                                    {
-                                        uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.metadata + 1)) * 4 + 4;
-                                        if (headerExtensionSize != nalu.metadataSize)
-                                        {
-                                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu.metadataSize, headerExtensionSize);
-                                        }
-                                        else
-                                        {
-                                            if (nalu.metadataSize <= (unsigned int)maxPacketSize)
-                                            {
-                                                memcpy(item->packet.buffer + offsetInBuffer, nalu.metadata, nalu.metadataSize);
-                                                headerExtension = item->packet.buffer + offsetInBuffer;
-                                                headerExtensionSize = nalu.metadataSize;
-                                                offsetInBuffer += nalu.metadataSize;
-                                            }
-                                            else
-                                            {
-                                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Header extension size exceeds max packet size (%d)", maxPacketSize);
-                                            }
-                                        }
-                                    }
-                                    if (offsetInBuffer + packetSize + 2 <= (unsigned int)maxPacketSize)
-                                    {
-                                        memcpy(item->packet.buffer + offsetInBuffer + 2, nalu.nalu + offset, packetSize);
-                                        *(item->packet.buffer + offsetInBuffer) = fuIndicator;
-                                        startBit = (offset == 1) ? 0x80 : 0;
-                                        endBit = ((i == fragmentCount - 1) && (fragmentOffset + packetSize == fragmentSize)) ? 0x40 : 0;
-                                        *(item->packet.buffer + offsetInBuffer + 1) = fuHeader | startBit | endBit;
-                                        payload = item->packet.buffer + offsetInBuffer;
-                                        payloadSize = packetSize + 2;
-                                        offsetInBuffer += packetSize + 2;
-                                    }
-                                    else
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Payload size exceeds max packet size (%d)", maxPacketSize);
-                                    }
-
-                                    if (offset == 1) sender->seqNum += nalu.seqNumForcedDiscontinuity;
-                                    ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &item->packet,
-                                                                              payload, payloadSize,
-                                                                              (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
-                                                                              nalu.ntpTimestamp, nalu.timeoutTimestamp,
-                                                                              sender->seqNum, ((nalu.isLastInAu) && (endBit)) ? 1 : 0);
-
-                                    ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                                    sender->rtcpSenderContext.packetCount += nalu.seqNumForcedDiscontinuity + 1;
-                                    sender->rtcpSenderContext.byteCount += payloadSize;
-                                    ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                                    sender->seqNum++;
-
-                                    if (ret == 0)
-                                    {
-                                        ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, item);
-                                        if (ret != 0)
-                                        {
-                                            ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, item);
-                                        }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: FU-A, packetSize + 2 > maxPacketSize (packetSize=%d)", nalu.ntpTimestamp, packetSize);
-                            }
-
-                            fragmentOffset += packetSize;
-                            offset += packetSize;
-                        }
-                        while (fragmentOffset != fragmentSize);
-                    }
-                }
-                else
-                {
-                    unsigned int newStapSize = ((!stapPending) ? sizeof(ARSTREAM2_RTP_Header_t) + nalu.metadataSize + 1 : 0) + 2 + nalu.naluSize;
-                    if ((stapPayloadSize + stapHeaderExtensionSize + newStapSize >= (unsigned int)maxPacketSize)
-                            || (stapPayloadSize + stapHeaderExtensionSize + newStapSize > (unsigned int)targetPacketSize)
-                            || (nalu.seqNumForcedDiscontinuity))
-                    {
-                        if (stapPending)
-                        {
-                            /* Finish the previous STAP-A packet */
-                            uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
-                            *(stapPayload) = stapHeader;
-                            sender->seqNum += stapSeqNumForcedDiscontinuity;
-                            ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &stapItem->packet,
-                                                                      stapPayload, stapPayloadSize,
-                                                                      (stapHeaderExtensionSize > 0) ? stapHeaderExtension : NULL, stapHeaderExtensionSize,
-                                                                      stapNtpTimestamp, stapTimeoutTimestamp,
-                                                                      sender->seqNum, 0); // do not set the marker bit
-
-                            ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                            sender->rtcpSenderContext.packetCount += stapSeqNumForcedDiscontinuity + 1;
-                            sender->rtcpSenderContext.byteCount += stapPayloadSize;
-                            ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                            sender->seqNum++;
-
-                            if (ret == 0)
-                            {
-                                ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, stapItem);
-                                if (ret != 0)
-                                {
-                                    ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, stapItem);
-                                }
-                            }
-                            stapPending = 0;
-                            stapPayloadSize = 0;
-                            stapHeaderExtensionSize = 0;
-                            newStapSize = sizeof(ARSTREAM2_RTP_Header_t) + nalu.metadataSize + 1 + 2 + nalu.naluSize;
-                        }
-                    }
-
-                    if ((stapPayloadSize + stapHeaderExtensionSize + newStapSize >= (unsigned int)maxPacketSize)
-                            || (stapPayloadSize + stapHeaderExtensionSize + newStapSize > (unsigned int)targetPacketSize))
-                    {
-                        /* Single NAL unit */
-                        ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_FifoPopFreeItem(&sender->packetFifo);
-                        if (item)
-                        {
-                            unsigned int offsetInBuffer = 0;
-                            uint8_t *payload = NULL, *headerExtension = NULL;
-                            unsigned int payloadSize = 0, headerExtensionSize = 0;
-
-                            if ((sender->useRtpHeaderExtensions) && (nalu.metadata) && (nalu.metadataSize > 4))
-                            {
-                                uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.metadata + 1)) * 4 + 4;
-                                if (headerExtensionSize != nalu.metadataSize)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu.metadataSize, headerExtensionSize);
-                                }
-                                else
-                                {
-                                    if (nalu.metadataSize <= (unsigned int)maxPacketSize)
-                                    {
-                                        memcpy(item->packet.buffer + offsetInBuffer, nalu.metadata, nalu.metadataSize);
-                                        headerExtension = item->packet.buffer + offsetInBuffer;
-                                        headerExtensionSize = nalu.metadataSize;
-                                        offsetInBuffer += nalu.metadataSize;
-                                    }
-                                    else
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Header extension size exceeds max packet size (%d)", maxPacketSize);
-                                    }
-                                }
-                            }
-                            if (offsetInBuffer + nalu.naluSize <= (unsigned int)maxPacketSize)
-                            {
-                                memcpy(item->packet.buffer + offsetInBuffer, nalu.nalu, nalu.naluSize);
-                                payload = item->packet.buffer + offsetInBuffer;
-                                payloadSize = nalu.naluSize;
-                                offsetInBuffer += nalu.naluSize;
-                            }
-                            else
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Payload size exceeds max packet size (%d)", maxPacketSize);
-                            }
-
-                            sender->seqNum += nalu.seqNumForcedDiscontinuity;
-                            ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &item->packet,
-                                                                      payload, payloadSize,
-                                                                      (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
-                                                                      nalu.ntpTimestamp, nalu.timeoutTimestamp,
-                                                                      sender->seqNum, nalu.isLastInAu);
-
-                            ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                            sender->rtcpSenderContext.packetCount += nalu.seqNumForcedDiscontinuity + 1;
-                            sender->rtcpSenderContext.byteCount += payloadSize;
-                            ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                            sender->seqNum++;
-
-                            if (ret == 0)
-                            {
-                                ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, item);
-                                if (ret != 0)
-                                {
-                                    ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, item);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        /* Aggregation (STAP-A) */
-                        if (!stapPending)
-                        {
-                            stapItem = ARSTREAM2_RTP_FifoPopFreeItem(&sender->packetFifo);
-                            if (stapItem)
-                            {
-                                stapMaxNri = 0;
-                                stapOffsetInBuffer = 0;
-                                stapHeaderExtension = NULL;
-                                stapHeaderExtensionSize = 0;
-                                stapPayload = NULL;
-                                stapPayloadSize = 0;
-                                stapSeqNumForcedDiscontinuity = nalu.seqNumForcedDiscontinuity;
-                                stapNtpTimestamp = nalu.ntpTimestamp;
-                                stapTimeoutTimestamp = nalu.timeoutTimestamp;
-                                if ((sender->useRtpHeaderExtensions) && (nalu.metadata) && (nalu.metadataSize > 4))
-                                {
-                                    uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.metadata + 1)) * 4 + 4;
-                                    if (headerExtensionSize != nalu.metadataSize)
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu.metadataSize, headerExtensionSize);
-                                    }
-                                    else
-                                    {
-                                        if (nalu.metadataSize <= (unsigned int)maxPacketSize)
-                                        {
-                                            memcpy(stapItem->packet.buffer + stapOffsetInBuffer, nalu.metadata, nalu.metadataSize);
-                                            stapHeaderExtension = stapItem->packet.buffer + stapOffsetInBuffer;
-                                            stapHeaderExtensionSize = nalu.metadataSize;
-                                            stapOffsetInBuffer += nalu.metadataSize;
-                                        }
-                                        else
-                                        {
-                                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Header extension size exceeds max packet size (%d)", maxPacketSize);
-                                        }
-                                    }
-                                }
-                                if (stapOffsetInBuffer + 1 <= (unsigned int)maxPacketSize)
-                                {
-                                    stapPayload = stapItem->packet.buffer + stapOffsetInBuffer;
-                                    stapPayloadSize = 1;
-                                    stapOffsetInBuffer++;
-                                    stapPending = 1;
-                                }
-                                else
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Payload size exceeds max packet size (%d)", maxPacketSize);
-                                }
-                            }
-                        }
-                        if (stapPending)
-                        {
-                            if (stapOffsetInBuffer + 2 + nalu.naluSize <= (unsigned int)maxPacketSize)
-                            {
-                                uint8_t nri = ((uint8_t)(*(nalu.nalu)) >> 5) & 0x3;
-                                if (nri > stapMaxNri) stapMaxNri = nri;
-                                *(stapItem->packet.buffer + stapOffsetInBuffer) = ((nalu.naluSize >> 8) & 0xFF);
-                                *(stapItem->packet.buffer + stapOffsetInBuffer + 1) = (nalu.naluSize & 0xFF);
-                                stapPayloadSize += 2;
-                                stapOffsetInBuffer += 2;
-                                memcpy(stapItem->packet.buffer + stapOffsetInBuffer, nalu.nalu, nalu.naluSize);
-                                stapPayloadSize += nalu.naluSize;
-                                stapOffsetInBuffer += nalu.naluSize;
-                            }
-                            else
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Payload size exceeds max packet size (%d)", maxPacketSize);
-                            }
-
-                            if (nalu.isLastInAu)
-                            {
-                                uint8_t stapHeader = ARSTREAM2_RTPH264_NALU_TYPE_STAPA | ((stapMaxNri & 3) << 5);
-                                *(stapPayload) = stapHeader;
-                                sender->seqNum += stapSeqNumForcedDiscontinuity;
-                                ret = ARSTREAM2_RTP_Sender_GeneratePacket(&sender->rtpSenderContext, &stapItem->packet,
-                                                                          stapPayload, stapPayloadSize,
-                                                                          (stapHeaderExtensionSize > 0) ? stapHeaderExtension : NULL, stapHeaderExtensionSize,
-                                                                          stapNtpTimestamp, stapTimeoutTimestamp,
-                                                                          sender->seqNum, 1);
-
-                                ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                                sender->rtcpSenderContext.packetCount += stapSeqNumForcedDiscontinuity + 1;
-                                sender->rtcpSenderContext.byteCount += stapPayloadSize;
-                                ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-                                sender->seqNum++;
-
-                                if (ret == 0)
-                                {
-                                    ret = ARSTREAM2_RTP_FifoEnqueueItem(&sender->packetFifo, stapItem);
-                                    if (ret != 0)
-                                    {
-                                        ARSTREAM2_RTP_FifoPushFreeItem(&sender->packetFifo, stapItem);
-                                    }
-                                }
-                                stapPending = 0;
-                                stapPayloadSize = 0;
-                                stapHeaderExtensionSize = 0;
-                            }
-                        }
-                    }
-                }
-
-                /* call the naluCallback */
-                if (sender->naluCallback != NULL)
-                {
-                    sender->naluCallback(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.naluUserPtr, sender->naluCallbackUserPtr);
-                }
-            }
-            else
-            {
-                uint32_t rtpTimestamp = (uint32_t)((((nalu.ntpTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF);
-
-                /* increment the sequence number to let the receiver know that we dropped something */
-                sender->seqNum += nalu.seqNumForcedDiscontinuity + 1;
-                ARSAL_Mutex_Lock(&(sender->rtcpMutex));
-                sender->rtcpSenderContext.packetCount += nalu.seqNumForcedDiscontinuity + 1;
-                sender->rtcpSenderContext.byteCount += nalu.naluSize;
-                ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
-
-                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, nalu.ntpTimestamp, rtpTimestamp, sender->seqNum - 1, nalu.isLastInAu, 0, nalu.naluSize);
-                if (latencyDrop)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped NALU (latency %.1fms > %.1fms) (seqNum = %d)",
-                                nalu.ntpTimestamp, (float)(curTime - nalu.ntpTimestamp) / 1000., (float)sender->maxLatencyUs / 1000., sender->seqNum - 1);
-                }
-
-                /* call the naluCallback */
-                if (sender->naluCallback != NULL)
-                {
-                    sender->naluCallback(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, sender->naluCallbackUserPtr);
-                }
-            }
-
-            /* last NALU in the Access Unit: call the auCallback */
-            if ((sender->auCallback != NULL) && (nalu.isLastInAu))
-            {
-                ARSAL_Mutex_Lock(&(sender->streamMutex));
-                if (nalu.ntpTimestamp != sender->lastAuTimestamp)
-                {
-                    sender->lastAuTimestamp = nalu.ntpTimestamp;
-                    ARSAL_Mutex_Unlock(&(sender->streamMutex));
-
-                    /* call the auCallback */
-                    sender->auCallback(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.auUserPtr, sender->auCallbackUserPtr);
-                }
-                else
-                {
-                    ARSAL_Mutex_Unlock(&(sender->streamMutex));
-                }
-            }
-
-            previousTimestamp = nalu.ntpTimestamp;
-            previousAuUserPtr = nalu.auUserPtr;
-
-            fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(&sender->naluFifo, &nalu);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
         }
-        /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Processed %d NALUs (packet FIFO count: %d)",
-                    naluCount, sender->packetFifo.count);*/ //TODO: debug
 
         ret = ARSTREAM2_RTP_Sender_FifoFillMsgVec(&sender->packetFifo);
         if (ret < 0)
@@ -1924,7 +1433,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
         shouldStop = sender->threadsShouldStop;
         ARSAL_Mutex_Unlock(&(sender->streamMutex));
         
-        if ((fifoRes != 0) && (shouldStop == 0))
+        if (!shouldStop)
         {
             /* Wake up when a new NALU is in the FIFO or when we need to exit */
             ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
@@ -1938,20 +1447,14 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
     ARSAL_Mutex_Unlock(&(sender->streamMutex));
 
     /* cancel the last Access Unit */
-    if (sender->auCallback != NULL)
+    if (sender->rtpSenderContext.auCallback != NULL)
     {
-        ARSAL_Mutex_Lock(&(sender->streamMutex));
-        if (previousTimestamp != sender->lastAuTimestamp)
+        if (sender->rtpSenderContext.previousTimestamp != sender->rtpSenderContext.lastAuCallbackTimestamp)
         {
-            sender->lastAuTimestamp = previousTimestamp;
-            ARSAL_Mutex_Unlock(&(sender->streamMutex));
+            sender->rtpSenderContext.lastAuCallbackTimestamp = sender->rtpSenderContext.previousTimestamp;
 
             /* call the auCallback */
-            sender->auCallback(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, previousAuUserPtr, sender->auCallbackUserPtr);
-        }
-        else
-        {
-            ARSAL_Mutex_Unlock(&(sender->streamMutex));
+            ((ARSTREAM2_RtpSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, sender->rtpSenderContext.previousAuUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
         }
     }
 
@@ -1968,7 +1471,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 {
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t *)ARSTREAM2_RtpSender_t_Param;
     uint8_t *msgBuffer = NULL;
-    int msgBufferSize = sender->maxPacketSize;
+    int msgBufferSize = sender->rtpSenderContext.maxPacketSize; //TODO
     ARSTREAM2_RTCP_SenderReport_t *senderReport = NULL;
     ssize_t bytes;
     int shouldStop, ret;
@@ -2092,7 +1595,8 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 
             ARSAL_Mutex_Lock(&(sender->rtcpMutex));
             ret = ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
-                                                               ARSTREAM2_RTP_SENDER_CNAME, &sender->rtcpSenderContext, &size);
+                                                               ARSTREAM2_RTP_SENDER_CNAME, sender->rtpSenderContext.packetCount,
+                                                               sender->rtpSenderContext.byteCount, &sender->rtcpSenderContext, &size);
             ARSAL_Mutex_Unlock(&(sender->rtcpMutex));
 
             if ((ret == 0) && (size > 0))
@@ -2133,7 +1637,7 @@ void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
     void *ret = NULL;
     if (sender != NULL)
     {
-        ret = sender->auCallbackUserPtr;
+        ret = sender->rtpSenderContext.auCallbackUserPtr;
     }
     return ret;
 }
@@ -2144,7 +1648,7 @@ void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
     void *ret = NULL;
     if (sender != NULL)
     {
-        ret = sender->naluCallbackUserPtr;
+        ret = sender->rtpSenderContext.naluCallbackUserPtr;
     }
     return ret;
 }

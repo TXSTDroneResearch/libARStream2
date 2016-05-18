@@ -86,4 +86,9 @@ int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTRE
 
 int ARSTREAM2_RTPH264_FifoDequeueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_Nalu_t *nalus, int maxNaluCount, int *naluCount);
 
+int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t *context,
+                                                  ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
+                                                  ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                  uint64_t curTime);
+
 #endif /* _ARSTREAM2_RTPH264_H_ */

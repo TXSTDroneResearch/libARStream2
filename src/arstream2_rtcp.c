@@ -155,7 +155,7 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverRep
 
 
 int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
-                                               uint64_t sendTimestamp,
+                                               uint64_t sendTimestamp, uint32_t packetCount, uint32_t byteCount,
                                                ARSTREAM2_RTCP_SenderContext_t *context)
 {
     if ((!senderReport) || (!context))
@@ -174,8 +174,8 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
     senderReport->ntpTimestampH = htonl((uint32_t)(sendTimestamp / 1000000));
     senderReport->ntpTimestampL = htonl((uint32_t)(ntpTimestampL & 0xFFFFFFFF));
     senderReport->rtpTimestamp = htonl(rtpTimestamp);
-    senderReport->senderPacketCount = htonl(context->packetCount);
-    senderReport->senderByteCount = htonl(context->byteCount);
+    senderReport->senderPacketCount = htonl(packetCount);
+    senderReport->senderByteCount = htonl(byteCount);
 
     // Packet and byte rates
     if (context->lastSrTimestamp)
@@ -183,8 +183,8 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
         context->lastSrInterval = (uint32_t)(sendTimestamp - context->lastSrTimestamp);
         if (context->lastSrInterval > 0)
         {
-            context->srIntervalPacketCount = context->packetCount - context->prevSrPacketCount;
-            context->srIntervalByteCount = context->byteCount - context->prevSrByteCount;
+            context->srIntervalPacketCount = packetCount - context->prevSrPacketCount;
+            context->srIntervalByteCount = byteCount - context->prevSrByteCount;
         }
         else
         {
@@ -192,8 +192,8 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
         }
 
         // Update values
-        context->prevSrPacketCount = context->packetCount;
-        context->prevSrByteCount = context->byteCount;
+        context->prevSrPacketCount = packetCount;
+        context->prevSrByteCount = byteCount;
     }
 
     context->lastSrTimestamp = sendTimestamp;
@@ -559,7 +559,8 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
 int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                  uint64_t sendTimestamp, int generateSenderReport,
                                                  int generateSourceDescription, int generateApplicationClockDelta,
-                                                 const char *cname, ARSTREAM2_RTCP_SenderContext_t *context,
+                                                 const char *cname, uint32_t packetCount, uint32_t byteCount,
+                                                 ARSTREAM2_RTCP_SenderContext_t *context,
                                                  unsigned int *size)
 {
     int ret = 0;
@@ -579,7 +580,8 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
 
     if ((ret == 0) && (generateSenderReport) && (totalSize + sizeof(ARSTREAM2_RTCP_SenderReport_t) <= maxPacketSize))
     {
-        ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport((ARSTREAM2_RTCP_SenderReport_t*)(packet + totalSize), sendTimestamp, context);
+        ret = ARSTREAM2_RTCP_Sender_GenerateSenderReport((ARSTREAM2_RTCP_SenderReport_t*)(packet + totalSize),
+                                                         sendTimestamp, packetCount, byteCount, context);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate sender report (%d)", ret);

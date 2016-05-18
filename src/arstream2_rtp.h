@@ -94,6 +94,31 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
     uint32_t rtpClockRate;
     uint32_t rtpTimestampOffset;
     uint32_t maxPacketSize;
+    uint32_t targetPacketSize;
+    uint16_t seqNum;
+    uint32_t packetCount;
+    uint32_t byteCount;
+    int useRtpHeaderExtensions;
+
+    uint64_t previousTimestamp;
+    void *previousAuUserPtr;
+    int stapPending;
+    ARSTREAM2_RTP_PacketFifoItem_t *stapItem;
+    uint64_t stapNtpTimestamp;
+    uint64_t stapTimeoutTimestamp;
+    int stapSeqNumForcedDiscontinuity;
+    uint8_t stapMaxNri;
+    unsigned int stapOffsetInBuffer;
+    uint8_t *stapPayload;
+    uint8_t *stapHeaderExtension;
+    unsigned int stapPayloadSize;
+    unsigned int stapHeaderExtensionSize;
+
+    void *auCallback;
+    void *auCallbackUserPtr;
+    void *naluCallback;
+    void *naluCallbackUserPtr;
+    uint64_t lastAuCallbackTimestamp;
 } ARSTREAM2_RTP_SenderContext_t;
 
 
