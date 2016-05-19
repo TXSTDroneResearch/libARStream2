@@ -86,6 +86,10 @@ typedef struct ARSTREAM2_RTP_PacketFifo_s {
     struct mmsghdr *msgVec;
 } ARSTREAM2_RTP_PacketFifo_t;
 
+typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t outputTimestamp, uint64_t ntpTimestamp, uint32_t rtpTimestamp,
+                                                         uint16_t seqNum, uint16_t markerBit,
+                                                         uint32_t bytesSent, uint32_t bytesDropped, void *userPtr);
+
 /**
  * @brief RTP sender context
  */
@@ -116,9 +120,11 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
 
     void *auCallback;
     void *auCallbackUserPtr;
+    uint64_t lastAuCallbackTimestamp;
     void *naluCallback;
     void *naluCallbackUserPtr;
-    uint64_t lastAuCallbackTimestamp;
+    ARSTREAM2_RTP_SenderMonitoringCallback_t monitoringCallback;
+    void *monitoringCallbackUserPtr;
 } ARSTREAM2_RTP_SenderContext_t;
 
 
@@ -148,9 +154,11 @@ int ARSTREAM2_RTP_FifoDequeuePackets(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2
 
 int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount);
+int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *context,
+                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime);
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
+int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
+                                              ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
 
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,

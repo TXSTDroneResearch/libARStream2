@@ -422,7 +422,8 @@ int ARSTREAM2_RTP_Sender_FifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo)
 }
 
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount)
+int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *context,
+                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime)
 {
     ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
     unsigned int i;
@@ -451,6 +452,13 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, u
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Sent size (%d) does not match message iov total size (%d)", fifo->msgVec[i].msg_len, len);
         }
 
+        /* call the monitoringCallback */
+        if (context->monitoringCallback != NULL)
+        {
+            context->monitoringCallback(curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp,
+                                        cur->packet.seqNum, cur->packet.markerBit, cur->packet.payloadSize, 0, context->monitoringCallbackUserPtr);
+        }
+
         if (cur->next)
         {
             cur->next->prev = NULL;
@@ -476,7 +484,8 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, u
 }
 
 
-int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime)
+int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
+                                              ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime)
 {
     ARSTREAM2_RTP_PacketFifoItem_t *cur = NULL, *next = NULL;
     int count;
@@ -503,6 +512,13 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_PacketFifo_t *fifo, 
     {
         if ((cur->packet.timeoutTimestamp != 0) && (cur->packet.timeoutTimestamp <= curTime))
         {
+            /* call the monitoringCallback */
+            if (context->monitoringCallback != NULL)
+            {
+                context->monitoringCallback(curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
+                                            cur->packet.markerBit, 0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
+            }
+
             if (cur->next)
             {
                 cur->next->prev = cur->prev;

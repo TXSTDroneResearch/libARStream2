@@ -594,6 +594,43 @@ static int ARSTREAM2_RtpSender_FlushNaluFifo(ARSTREAM2_RtpSender_t *sender)
 }
 
 
+static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t outputTimestamp, uint64_t ntpTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytesSent, uint32_t bytesDropped, void *userPtr)
+{
+    ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)userPtr;
+
+    if (!sender)
+    {
+        return;
+    }
+
+    ARSAL_Mutex_Lock(&(sender->monitoringMutex));
+
+    if (sender->monitoringCount < ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS)
+    {
+        sender->monitoringCount++;
+    }
+    sender->monitoringIndex = (sender->monitoringIndex + 1) % ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS;
+    sender->monitoringPoint[sender->monitoringIndex].outputTimestamp = outputTimestamp;
+    sender->monitoringPoint[sender->monitoringIndex].ntpTimestamp = ntpTimestamp;
+    sender->monitoringPoint[sender->monitoringIndex].rtpTimestamp = rtpTimestamp;
+    sender->monitoringPoint[sender->monitoringIndex].seqNum = seqNum;
+    sender->monitoringPoint[sender->monitoringIndex].markerBit = markerBit;
+    sender->monitoringPoint[sender->monitoringIndex].bytesSent = bytesSent;
+    sender->monitoringPoint[sender->monitoringIndex].bytesDropped = bytesDropped;
+
+    ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
+
+#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
+    if (sender->fMonitorOut)
+    {
+        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)outputTimestamp);
+        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)ntpTimestamp);
+        fprintf(sender->fMonitorOut, "%lu %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
+    }
+#endif
+}
+
+
 ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpSender_t *retSender = NULL;
@@ -660,6 +697,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.auCallbackUserPtr = config->auCallbackUserPtr;
         retSender->rtpSenderContext.naluCallback = config->naluCallback;
         retSender->rtpSenderContext.naluCallbackUserPtr = config->naluCallbackUserPtr;
+        retSender->rtpSenderContext.monitoringCallback = ARSTREAM2_RtpSender_UpdateMonitoring;
+        retSender->rtpSenderContext.monitoringCallbackUserPtr = retSender;
         retSender->receiverReportCallback = config->receiverReportCallback;
         retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
@@ -1200,36 +1239,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 }
 
 
-static void ARSTREAM2_RtpSender_UpdateMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t outputTimestamp, uint64_t ntpTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytesSent, uint32_t bytesDropped)
-{
-    ARSAL_Mutex_Lock(&(sender->monitoringMutex));
-
-    if (sender->monitoringCount < ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS)
-    {
-        sender->monitoringCount++;
-    }
-    sender->monitoringIndex = (sender->monitoringIndex + 1) % ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS;
-    sender->monitoringPoint[sender->monitoringIndex].outputTimestamp = outputTimestamp;
-    sender->monitoringPoint[sender->monitoringIndex].ntpTimestamp = ntpTimestamp;
-    sender->monitoringPoint[sender->monitoringIndex].rtpTimestamp = rtpTimestamp;
-    sender->monitoringPoint[sender->monitoringIndex].seqNum = seqNum;
-    sender->monitoringPoint[sender->monitoringIndex].markerBit = markerBit;
-    sender->monitoringPoint[sender->monitoringIndex].bytesSent = bytesSent;
-    sender->monitoringPoint[sender->monitoringIndex].bytesDropped = bytesDropped;
-
-    ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
-
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
-    if (sender->fMonitorOut)
-    {
-        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)outputTimestamp);
-        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)ntpTimestamp);
-        fprintf(sender->fMonitorOut, "%lu %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
-    }
-#endif
-}
-
-
 static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *sendBuffer, uint32_t sendSize, uint64_t ntpTimestamp, uint64_t timeoutTimestamp, int isLastInAu, int hasHeaderExtension, int seqNumForcedDiscontinuity, int payloadSize)
 {
     int ret = 0, latencyDrop = 0;
@@ -1300,7 +1309,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                     if (pollRet == 0)
                     {
                         /* failed: poll timeout */
-                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                        //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (polling timed out: timeout = %dms) (seqNum = %d)",
                                     ntpTimestamp, pollTimeMs, 0 /*sender->seqNum - 1*/);
                         ret = -2;
@@ -1308,7 +1317,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                     else if (pollRet < 0)
                     {
                         /* failed: poll error */
-                        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                        //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Poll error: error=%d (%s)", errno, strerror(errno));
                         ret = -1;
                     }
@@ -1332,13 +1341,13 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                             if (bytes > -1)
                             {
                                 /* socket send successful */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
+                                //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
                                 ret = 0;
                             }
                             else if (errno == EAGAIN)
                             {
                                 /* failed: socket buffer full */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                                //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (socket buffer full #2) (seqNum = %d)",
                                             ntpTimestamp, 0 /*sender->seqNum - 1*/);
                                 ret = -2;
@@ -1346,7 +1355,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                             else
                             {
                                 /* failed: socket error */
-                                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                                //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error #2 error=%d (%s)", errno, strerror(errno));
                                 ret = -1;
                             }
@@ -1354,7 +1363,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                         else
                         {
                             /* packet dropped: too late */
-                            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                            //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                             if (latencyDrop)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (after poll latency %.1fms > %.1fms) (seqNum = %d)",
@@ -1367,7 +1376,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
                 else
                 {
                     /* packet dropped: poll timeout too short */
-                    ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                    //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                     ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (poll timeout too short: timeout = %dms) (seqNum = %d)",
                                 ntpTimestamp, pollTimeMs, 0 /*sender->seqNum - 1*/);
                     ret = -2;
@@ -1376,7 +1385,7 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
             }
             default:
                 /* failed: socket error */
-                ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+                //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
                 ret = -1;
                 break;
@@ -1385,13 +1394,13 @@ static int ARSTREAM2_RtpSender_SendData(ARSTREAM2_RtpSender_t *sender, uint8_t *
         else
         {
             /* socket send successful */
-            ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
+            //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, (uint32_t)bytes, 0);
         }
     }
     else
     {
         /* packet dropped: too late */
-        ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
+        //ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, ntpTimestamp, rtpTimestamp, 0 /*sender->seqNum - 1*/, isLastInAu, 0, sendSize);
         if (latencyDrop)
         {
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Time %llu: dropped packet (latency %.1fms > %.1fms) (seqNum = %d)",
@@ -1519,7 +1528,7 @@ void* ARSTREAM2_RtpSender_RunThread (void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTP packet FIFO cleanup (packets on timeout) */
-        ret = ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(&sender->packetFifo, curTime);
+        ret = ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, curTime);
         if (ret < 0)
         {
             if (ret != -2)
@@ -1584,7 +1593,7 @@ void* ARSTREAM2_RtpSender_RunThread (void *ARSTREAM2_RtpSender_t_Param)
                     //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug
                 }
 
-                ret = ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(&sender->packetFifo, msgVecSentCount);
+                ret = ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo, msgVecSentCount, curTime);
                 if (ret < 0)
                 {
                     if (ret != -2)

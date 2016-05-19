@@ -786,17 +786,22 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
         }
         else
         {
-            //TODO
-            uint32_t rtpTimestamp = (uint32_t)((((nalu.ntpTimestamp * 90) + 500) / 1000) & 0xFFFFFFFF);
-
-            /* increment the sequence number to let the receiver know that we dropped something */
-            context->seqNum += nalu.seqNumForcedDiscontinuity + 1;
-            context->packetCount += nalu.seqNumForcedDiscontinuity + 1;
-            context->byteCount += nalu.naluSize;
-
-            //TODO  ARSTREAM2_RtpSender_UpdateMonitoring(sender, curTime, nalu.ntpTimestamp, rtpTimestamp, sender->seqNum - 1, nalu.isLastInAu, 0, nalu.naluSize);
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Time %llu: dropped NALU (%.1fms late) (seqNum = %d)",
-                        nalu.ntpTimestamp, (float)(curTime - nalu.timeoutTimestamp) / 1000., context->seqNum - 1); //TODO: debug
+                        nalu.ntpTimestamp, (float)(curTime - nalu.timeoutTimestamp) / 1000., context->seqNum - 1);
+
+            /* call the monitoringCallback */
+            if (context->monitoringCallback != NULL)
+            {
+                uint32_t rtpTimestamp = (nalu.ntpTimestamp * context->rtpClockRate + (uint64_t)context->rtpTimestampOffset + 500000) / 1000000;
+
+                /* increment the sequence number to let the receiver know that we dropped something */
+                context->seqNum += nalu.seqNumForcedDiscontinuity + 1;
+                context->packetCount += nalu.seqNumForcedDiscontinuity + 1;
+                context->byteCount += nalu.naluSize;
+
+                context->monitoringCallback(curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
+                                            nalu.isLastInAu, 0, nalu.naluSize, context->monitoringCallbackUserPtr);
+            }
 
             /* call the naluCallback */
             if (context->naluCallback != NULL)
