@@ -2569,7 +2569,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete(ARSTREAM2_RtpReceiver_
 }
 
 
-void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread (void *ARSTREAM2_RtpReceiver_RtpResender_t_Param)
+void* ARSTREAM2_RtpReceiver_RtpResender_RunThread (void *ARSTREAM2_RtpReceiver_RtpResender_t_Param)
 {
     ARSTREAM2_RtpReceiver_RtpResender_t *resender = (ARSTREAM2_RtpReceiver_RtpResender_t *)ARSTREAM2_RtpReceiver_RtpResender_t_Param;
 
@@ -2578,18 +2578,5 @@ void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread (void *ARSTREAM2_RtpRece
         return (void *)0;
     }
 
-    return ARSTREAM2_RtpSender_RunStreamThread((void *)resender->sender);
-}
-
-
-void* ARSTREAM2_RtpReceiver_RtpResender_RunControlThread (void *ARSTREAM2_RtpReceiver_RtpResender_t_Param)
-{
-    ARSTREAM2_RtpReceiver_RtpResender_t *resender = (ARSTREAM2_RtpReceiver_RtpResender_t *)ARSTREAM2_RtpReceiver_RtpResender_t_Param;
-
-    if (resender == NULL)
-    {
-        return (void *)0;
-    }
-
-    return ARSTREAM2_RtpSender_RunControlThread((void *)resender->sender);
+    return ARSTREAM2_RtpSender_RunThread((void *)resender->sender);
 }

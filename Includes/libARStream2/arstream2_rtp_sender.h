@@ -236,23 +236,13 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 
 
 /**
- * @brief Runs the stream loop of the RtpSender
+ * @brief Runs the main loop of the RtpSender
  * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
  * @post Stop the Sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpSender_RunStreamThread(void *ARSTREAM2_RtpSender_t_Param);
-
-
-/**
- * @brief Runs the control loop of the RtpSender
- * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
- *
- * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
- */
-void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param);
+void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
 
 
 /**

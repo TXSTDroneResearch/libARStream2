@@ -302,23 +302,13 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete(ARSTREAM2_RtpReceiver_
 
 
 /**
- * @brief Runs the stream loop of the RtpReceiver RtpResender
+ * @brief Runs the main loop of the RtpReceiver RtpResender
  * @warning This function never returns until ARSTREAM2_RtpReceiver_RtpResender_Stop() is called. Thus, it should be called on its own thread.
  * @post Stop the resender by calling ARSTREAM2_RtpReceiver_RtpResender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpReceiver_RtpResender_t_Param A valid (ARSTREAM2_RtpReceiver_RtpResender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
-
-
-/**
- * @brief Runs the control loop of the RtpReceiver RtpResender
- * @warning This function never returns until ARSTREAM2_RtpReceiver_RtpResender_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the resender by calling ARSTREAM2_RtpReceiver_RtpResender_Stop() before joining the thread calling this function.
- *
- * @param[in] ARSTREAM2_RtpReceiver_RtpResender_t_Param A valid (ARSTREAM2_RtpReceiver_RtpResender_t *) casted as a (void *)
- */
-void* ARSTREAM2_RtpReceiver_RtpResender_RunControlThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
+void* ARSTREAM2_RtpReceiver_RtpResender_RunThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
 
 
 #ifdef __cplusplus

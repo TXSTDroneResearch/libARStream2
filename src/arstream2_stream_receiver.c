@@ -370,15 +370,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle)
+void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle)
 {
-    return ARSTREAM2_RtpReceiver_RtpResender_RunStreamThread(resenderHandle);
-}
-
-
-void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle)
-{
-    return ARSTREAM2_RtpReceiver_RtpResender_RunControlThread(resenderHandle);
+    return ARSTREAM2_RtpReceiver_RtpResender_RunThread(resenderHandle);
 }
 
 

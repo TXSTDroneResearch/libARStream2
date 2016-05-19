@@ -294,7 +294,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 
 
 /**
- * @brief Run a resender stream thread.
+ * @brief Run a resender thread.
  *
  * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
  * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
@@ -303,20 +303,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
  *
  * @return NULL in all cases.
  */
-void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle);
-
-
-/**
- * @brief Run a resender control thread.
- *
- * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
- * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
- *
- * @param resenderHandle Resender handle casted as (void*).
- *
- * @return NULL in all cases.
- */
-void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
+void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle);
 
 
 /**
