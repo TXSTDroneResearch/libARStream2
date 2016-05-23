@@ -93,6 +93,7 @@ typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
 struct ARSTREAM2_RtpReceiver_RtpResender_t {
     ARSTREAM2_RtpReceiver_t *receiver;
     ARSTREAM2_RtpSender_t *sender;
+    int useRtpHeaderExtensions;
     int senderRunning;
 };
 
@@ -308,7 +309,8 @@ static ARSTREAM2_RtpReceiver_NaluBuffer_t* ARSTREAM2_RtpReceiver_RtpResender_Get
 }
 
 
-static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *naluBuffer, uint32_t naluSize, uint64_t auTimestamp, int isLastNaluInAu, int missingPacketsBefore)
+static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *naluBuffer, uint32_t naluSize, uint64_t auTimestamp,
+                                            uint8_t *naluMetadata, int naluMetadataSize, int isLastNaluInAu, int missingPacketsBefore)
 {
     int ret = 0, i;
     ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = NULL;
@@ -357,6 +359,16 @@ static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, u
 
         if ((resender) && (resender->senderRunning))
         {
+            if (resender->useRtpHeaderExtensions)
+            {
+                nalu.auMetadata = naluMetadata;
+                nalu.auMetadataSize = naluMetadataSize;
+            }
+            else
+            {
+                nalu.auMetadata = NULL;
+                nalu.auMetadataSize = 0;
+            }
             err = ARSTREAM2_RtpSender_SendNewNalu(resender->sender, &nalu);
             if (err == ARSTREAM2_OK)
             {
@@ -1143,7 +1155,8 @@ static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, 
 
     if (receiver->resenderCount > 0)
     {
-        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, timestampScaled, isLastNaluInAu, missingPacketsBefore);
+        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, timestampScaled,
+                                         (receiver->naluMetadataSize > 0) ? receiver->naluMetadata : NULL, receiver->naluMetadataSize, isLastNaluInAu, missingPacketsBefore);
     }
 
     receiver->currentNaluBuffer = receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE, receiver->currentNaluBuffer, receiver->currentNaluSize,
@@ -2389,6 +2402,8 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTR
         senderConfig.maxBitrate = receiver->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
         senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+        senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
+        retResender->useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &error2);
         if (error2 != ARSTREAM2_OK)
         {
