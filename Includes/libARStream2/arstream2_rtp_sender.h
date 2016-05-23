@@ -92,6 +92,7 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_RtpSender_Config_t;
 

@@ -339,6 +339,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_
     resenderConfig.targetPacketSize = config->targetPacketSize;
     resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+    resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
 
     retResender = ARSTREAM2_RtpReceiver_RtpResender_New(streamReceiver->receiver, &resenderConfig, &ret);
     if (ret != ARSTREAM2_OK)

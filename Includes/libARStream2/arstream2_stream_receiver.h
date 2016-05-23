@@ -115,6 +115,7 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
     int targetPacketSize;                           /**< Target network packet size in bytes */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_StreamReceiver_ResenderConfig_t;
 
