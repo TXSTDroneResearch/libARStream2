@@ -1415,28 +1415,6 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 }
 
 
-void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
-{
-    void *ret = NULL;
-    if (sender != NULL)
-    {
-        ret = sender->rtpSenderContext.auCallbackUserPtr;
-    }
-    return ret;
-}
-
-
-void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
-{
-    void *ret = NULL;
-    if (sender != NULL)
-    {
-        ret = sender->rtpSenderContext.naluCallbackUserPtr;
-    }
-    return ret;
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
                                                    ARSTREAM2_RtpSender_MonitoringData_t *monitoringData)
 {

@@ -274,25 +274,6 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
 
 
 /**
- * @brief Get the user pointer associated with the sender access unit callback function
- *
- * @param[in] sender The sender instance
- *
- * @return The user pointer associated with the AU callback, or NULL if sender does not point to a valid sender
- */
-void* ARSTREAM2_RtpSender_GetAuCallbackUserPtr(ARSTREAM2_RtpSender_t *sender);
-
-
-/**
- * @brief Get the user pointer associated with the sender NAL unit callback function
- *
- * @param[in] sender The sender instance
- * @return The user pointer associated with the NALU callback, or NULL if sender does not point to a valid sender
- */
-void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender);
-
-
-/**
  * @brief Get the stream monitoring
  * The monitoring data is computed form the time startTime and back timeIntervalUs microseconds at most.
  * If startTime is 0 the start time is the current time.
