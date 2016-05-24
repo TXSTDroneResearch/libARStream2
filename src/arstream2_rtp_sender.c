@@ -111,6 +111,7 @@ struct ARSTREAM2_RtpSender_t {
     int naluFifoSize;
     int maxBitrate;
     uint32_t maxLatencyUs;
+    uint32_t maxNetworkLatencyUs;
     uint8_t *rtcpMsgBuffer;
 
     ARSTREAM2_RTP_SenderContext_t rtpSenderContext;
@@ -601,10 +602,21 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
         retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-        int totalBufSize = (config->maxLatencyMs > 0) ? retSender->maxBitrate * config->maxLatencyMs / 1000 / 8 : 0;
-        int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
-        retSender->streamSocketSendBufferSize = (totalBufSize / 6 > minStreamSocketSendBufferSize) ? totalBufSize / 6 : minStreamSocketSendBufferSize;
+        int totalBufSize = 0, minStreamSocketSendBufferSize = 0;
+        if (config->maxNetworkLatencyMs > 0)
+        {
+            totalBufSize = (config->maxNetworkLatencyMs > 0) ? retSender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8 : 0;
+            minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
+            retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
+        }
+        else
+        {
+            totalBufSize = (config->maxLatencyMs > 0) ? retSender->maxBitrate * config->maxLatencyMs / 1000 / 8 : 0;
+            minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
+            retSender->streamSocketSendBufferSize = (totalBufSize / 6 > minStreamSocketSendBufferSize) ? totalBufSize / 6 : minStreamSocketSendBufferSize;
+        }
         retSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
+        retSender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
         retSender->naluFifoBufferSize = totalBufSize - retSender->streamSocketSendBufferSize;
         retSender->rtpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtpSenderContext.rtpClockRate = 90000;
@@ -1002,7 +1014,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
         if (item)
         {
             item->nalu.inputTimestamp = inputTime;
-            item->nalu.timeoutTimestamp = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
+            uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
+            uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;
+            item->nalu.timeoutTimestamp = (timeoutTimestamp1 > timeoutTimestamp2) ? timeoutTimestamp1 : timeoutTimestamp2;
             item->nalu.ntpTimestamp = nalu->auTimestamp;
             item->nalu.isLastInAu = nalu->isLastNaluInAu;
             item->nalu.seqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
@@ -1079,7 +1093,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
             if (item)
             {
                 item->nalu.inputTimestamp = inputTime;
-                item->nalu.timeoutTimestamp = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
+                uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
+                uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;
+                item->nalu.timeoutTimestamp = (timeoutTimestamp1 > timeoutTimestamp2) ? timeoutTimestamp1 : timeoutTimestamp2;
                 item->nalu.ntpTimestamp = nalu[k].auTimestamp;
                 item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
                 item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
