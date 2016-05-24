@@ -1421,17 +1421,18 @@ void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender)
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *meanAcqToNetworkTime,
-                                                   uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
-                                                   uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
+                                                   ARSTREAM2_RtpSender_MonitoringData_t *monitoringData)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     uint64_t endTime, curTime, previousTime, acqToNetworkSum = 0, networkSum = 0, acqToNetworkVarSum = 0, networkVarSum = 0, packetSizeVarSum = 0;
-    uint32_t _bytesSent, _bytesDropped, bytesSentSum = 0, bytesDroppedSum = 0, _meanPacketSize = 0, acqToNetworkTime = 0, networkTime = 0;
-    uint32_t _acqToNetworkJitter = 0, _networkJitter = 0, _meanAcqToNetworkTime = 0, _meanNetworkTime = 0, _packetSizeStdDev = 0;
-    int points = 0, usefulPoints = 0, _packetsSent = 0, _naluDropped = 0, idx, i, firstUsefulIdx = -1;
+    uint32_t bytesSent, bytesDropped, bytesSentSum = 0, bytesDroppedSum = 0, meanPacketSize = 0, acqToNetworkTime = 0, networkTime = 0;
+    uint32_t acqToNetworkJitter = 0, networkJitter = 0, meanAcqToNetworkTime = 0, meanNetworkTime = 0, packetSizeStdDev = 0;
+    uint32_t minAcqToNetworkTime = (uint32_t)(-1), minNetworkTime = (uint32_t)(-1), minPacketSize = (uint32_t)(-1);
+    uint32_t maxAcqToNetworkTime = 0, maxNetworkTime = 0, maxPacketSize = 0;
+    int points = 0, usefulPoints = 0, packetsSent = 0, packetsDropped = 0, idx, i, firstUsefulIdx = -1;
 
-    if ((sender == NULL) || (timeIntervalUs == 0))
+    if ((sender == NULL) || (timeIntervalUs == 0) || (monitoringData == NULL))
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
@@ -1468,21 +1469,27 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
             {
                 firstUsefulIdx = idx;
             }
-            _bytesSent = sender->monitoringPoint[idx].bytesSent;
-            bytesSentSum += _bytesSent;
-            if (_bytesSent)
+            bytesSent = sender->monitoringPoint[idx].bytesSent;
+            bytesSentSum += bytesSent;
+            if (bytesSent)
             {
-                _packetsSent++;
+                packetsSent++;
                 acqToNetworkTime = curTime - sender->monitoringPoint[idx].ntpTimestamp;
                 acqToNetworkSum += acqToNetworkTime;
-                networkTime = 0; //TODO curTime - sender->monitoringPoint[idx].inputTimestamp;
+                networkTime = curTime - sender->monitoringPoint[idx].inputTimestamp;
                 networkSum += networkTime;
+                if (acqToNetworkTime < minAcqToNetworkTime) minAcqToNetworkTime = acqToNetworkTime;
+                if (acqToNetworkTime > maxAcqToNetworkTime) maxAcqToNetworkTime = acqToNetworkTime;
+                if (networkTime < minNetworkTime) minNetworkTime = networkTime;
+                if (networkTime > maxNetworkTime) maxNetworkTime = networkTime;
+                if (bytesSent < minPacketSize) minPacketSize = bytesSent;
+                if (bytesSent > maxPacketSize) maxPacketSize = bytesSent;
             }
-            _bytesDropped = sender->monitoringPoint[idx].bytesDropped;
-            bytesDroppedSum += _bytesDropped;
-            if (_bytesDropped)
+            bytesDropped = sender->monitoringPoint[idx].bytesDropped;
+            bytesDroppedSum += bytesDropped;
+            if (bytesDropped)
             {
-                _naluDropped++;
+                packetsDropped++;
             }
             previousTime = curTime;
             usefulPoints++;
@@ -1491,78 +1498,48 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
         }
 
         endTime = previousTime;
-        _meanPacketSize = (_packetsSent > 0) ? (bytesSentSum / _packetsSent) : 0;
-        _meanAcqToNetworkTime = (_packetsSent > 0) ? (uint32_t)(acqToNetworkSum / _packetsSent) : 0;
-        _meanNetworkTime = (_packetsSent > 0) ? (uint32_t)(networkSum / _packetsSent) : 0;
+        meanPacketSize = (packetsSent > 0) ? (bytesSentSum / packetsSent) : 0;
+        meanAcqToNetworkTime = (packetsSent > 0) ? (uint32_t)(acqToNetworkSum / packetsSent) : 0;
+        meanNetworkTime = (packetsSent > 0) ? (uint32_t)(networkSum / packetsSent) : 0;
 
-        if ((acqToNetworkJitter) || (networkJitter) || (packetSizeStdDev))
+        for (i = 0, idx = firstUsefulIdx; i < usefulPoints; i++)
         {
-            for (i = 0, idx = firstUsefulIdx; i < usefulPoints; i++)
+            idx = (idx - 1 >= 0) ? idx - 1 : ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS - 1;
+            curTime = sender->monitoringPoint[idx].outputTimestamp;
+            bytesSent = sender->monitoringPoint[idx].bytesSent;
+            if (bytesSent)
             {
-                idx = (idx - 1 >= 0) ? idx - 1 : ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS - 1;
-                curTime = sender->monitoringPoint[idx].outputTimestamp;
-                _bytesSent = sender->monitoringPoint[idx].bytesSent;
-                if (_bytesSent)
-                {
-                    acqToNetworkTime = curTime - sender->monitoringPoint[idx].ntpTimestamp;
-                    networkTime = 0; //TODO curTime - sender->monitoringPoint[idx].inputTimestamp;
-                    packetSizeVarSum += ((_bytesSent - _meanPacketSize) * (_bytesSent - _meanPacketSize));
-                    acqToNetworkVarSum += ((acqToNetworkTime - _meanAcqToNetworkTime) * (acqToNetworkTime - _meanAcqToNetworkTime));
-                    networkVarSum += ((networkTime - _meanNetworkTime) * (networkTime - _meanNetworkTime));
-                }
+                acqToNetworkTime = curTime - sender->monitoringPoint[idx].ntpTimestamp;
+                networkTime = curTime - sender->monitoringPoint[idx].inputTimestamp;
+                packetSizeVarSum += ((bytesSent - meanPacketSize) * (bytesSent - meanPacketSize));
+                acqToNetworkVarSum += ((acqToNetworkTime - meanAcqToNetworkTime) * (acqToNetworkTime - meanAcqToNetworkTime));
+                networkVarSum += ((networkTime - meanNetworkTime) * (networkTime - meanNetworkTime));
             }
-            _acqToNetworkJitter = (_packetsSent > 0) ? (uint32_t)(sqrt((double)acqToNetworkVarSum / _packetsSent)) : 0;
-            _networkJitter = (_packetsSent > 0) ? (uint32_t)(sqrt((double)networkVarSum / _packetsSent)) : 0;
-            _packetSizeStdDev = (_packetsSent > 0) ? (uint32_t)(sqrt((double)packetSizeVarSum / _packetsSent)) : 0;
         }
+        acqToNetworkJitter = (packetsSent > 0) ? (uint32_t)(sqrt((double)acqToNetworkVarSum / packetsSent)) : 0;
+        networkJitter = (packetsSent > 0) ? (uint32_t)(sqrt((double)networkVarSum / packetsSent)) : 0;
+        packetSizeStdDev = (packetsSent > 0) ? (uint32_t)(sqrt((double)packetSizeVarSum / packetsSent)) : 0;
     }
 
     ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
 
-    if (realTimeIntervalUs)
-    {
-        *realTimeIntervalUs = (startTime - endTime);
-    }
-    if (meanAcqToNetworkTime)
-    {
-        *meanAcqToNetworkTime = _meanAcqToNetworkTime;
-    }
-    if (acqToNetworkJitter)
-    {
-        *acqToNetworkJitter = _acqToNetworkJitter;
-    }
-    if (meanNetworkTime)
-    {
-        *meanNetworkTime = _meanNetworkTime;
-    }
-    if (networkJitter)
-    {
-        *networkJitter = _networkJitter;
-    }
-    if (bytesSent)
-    {
-        *bytesSent = bytesSentSum;
-    }
-    if (meanPacketSize)
-    {
-        *meanPacketSize = _meanPacketSize;
-    }
-    if (packetSizeStdDev)
-    {
-        *packetSizeStdDev = _packetSizeStdDev;
-    }
-    if (packetsSent)
-    {
-        *packetsSent = _packetsSent;
-    }
-    if (bytesDropped)
-    {
-        *bytesDropped = bytesDroppedSum;
-    }
-    if (naluDropped)
-    {
-        *naluDropped = _naluDropped;
-    }
+    monitoringData->realTimeIntervalUs = (startTime - endTime);
+    monitoringData->acqToNetworkTimeMin = minAcqToNetworkTime;
+    monitoringData->acqToNetworkTimeMax = maxAcqToNetworkTime;
+    monitoringData->acqToNetworkTimeMean = meanAcqToNetworkTime;
+    monitoringData->acqToNetworkTimeJitter = acqToNetworkJitter;
+    monitoringData->networkTimeMin = minNetworkTime;
+    monitoringData->networkTimeMax = maxNetworkTime;
+    monitoringData->networkTimeMean = meanNetworkTime;
+    monitoringData->networkTimeJitter = networkJitter;
+    monitoringData->bytesSent = bytesSentSum;
+    monitoringData->packetSizeMin = minPacketSize;
+    monitoringData->packetSizeMax = maxPacketSize;
+    monitoringData->packetSizeMean = meanPacketSize;
+    monitoringData->packetSizeStdDev = packetSizeStdDev;
+    monitoringData->packetsSent = packetsSent;
+    monitoringData->bytesDropped = bytesDroppedSum;
+    monitoringData->packetsDropped = packetsDropped;
 
     return ret;
 }

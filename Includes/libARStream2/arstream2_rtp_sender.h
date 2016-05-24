@@ -45,6 +45,32 @@ typedef enum {
 
 
 /**
+ * @brief Sender monitoring data
+ */
+typedef struct ARSTREAM2_RtpSender_MonitoringData_t
+{
+    uint32_t realTimeIntervalUs;            /**< Real monitoring time interval in microseconds */
+    uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeJitter;        /**< Acquisition to network time jitter during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMin;                /**< Minimum network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMax;                /**< Maximum network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMean;               /**< Mean network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeJitter;             /**< Network time jitter during realTimeIntervalUs in microseconds */
+    uint32_t bytesSent;                     /**< Bytes sent during realTimeIntervalUs */
+    uint32_t packetsSent;                   /**< Packets sent during realTimeIntervalUs */
+    uint32_t packetSizeMin;                 /**< Minimum packet size during realTimeIntervalUs */
+    uint32_t packetSizeMax;                 /**< Maximum packet size during realTimeIntervalUs */
+    uint32_t packetSizeMean;                /**< Mean packet size during realTimeIntervalUs */
+    uint32_t packetSizeStdDev;              /**< Packet size standard deviation during realTimeIntervalUs */
+    uint32_t bytesDropped;                  /**< Bytes dropped during realTimeIntervalUs */
+    uint32_t packetsDropped;                /**< Packets dropped during realTimeIntervalUs */
+
+} ARSTREAM2_RtpSender_MonitoringData_t;
+
+
+/**
  * @brief RTCP receiver report data
  */
 typedef struct ARSTREAM2_RtpSender_ReceiverReportData_t
@@ -276,24 +302,13 @@ void* ARSTREAM2_RtpSender_GetNaluCallbackUserPtr(ARSTREAM2_RtpSender_t *sender);
  * @param[in] sender The sender instance
  * @param[in] startTime Monitoring start time in microseconds (0 means current time)
  * @param[in] timeIntervalUs Monitoring time interval (back from startTime) in microseconds
- * @param[out] realTimeIntervalUs Real monitoring time interval in microseconds (optional, can be NULL)
- * @param[out] meanAcqToNetworkTime Mean acquisition to network time during realTimeIntervalUs in microseconds (optional, can be NULL)
- * @param[out] acqToNetworkJitter Acquisition to network time jitter during realTimeIntervalUs in microseconds (optional, can be NULL)
- * @param[out] meanNetworkTime Mean network time during realTimeIntervalUs in microseconds (optional, can be NULL)
- * @param[out] networkJitter Network time jitter during realTimeIntervalUs in microseconds (optional, can be NULL)
- * @param[out] bytesSent Bytes sent during realTimeIntervalUs (optional, can be NULL)
- * @param[out] meanPacketSize Mean packet size during realTimeIntervalUs (optional, can be NULL)
- * @param[out] packetSizeStdDev Packet size standard deviation during realTimeIntervalUs (optional, can be NULL)
- * @param[out] packetsSent Packets sent during realTimeIntervalUs (optional, can be NULL)
- * @param[out] bytesDropped Bytes dropped during realTimeIntervalUs (optional, can be NULL)
- * @param[out] naluDropped NAL units dropped during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] monitoringData Pointer to a monitoring data structure to fill
  *
  * @return ARSTREAM2_OK if no error occured.
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender is invalid or if timeIntervalUs is 0.
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *meanAcqToNetworkTime,
-                                                   uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
-                                                   uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
+                                                   ARSTREAM2_RtpSender_MonitoringData_t *monitoringData);
 
 
 #ifdef __cplusplus
