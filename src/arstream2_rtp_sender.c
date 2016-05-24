@@ -142,6 +142,7 @@ struct ARSTREAM2_RtpSender_t {
     int maxBitrate;
     int maxLatencyMs;
     int maxNetworkLatencyMs;
+    int useRtpHeaderExtensions;
 
     uint64_t lastAuTimestamp;
     uint16_t seqNum;
@@ -565,6 +566,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
         retSender->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
         retSender->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
+        retSender->useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         int totalBufSize = retSender->maxBitrate * retSender->maxNetworkLatencyMs / 1000 / 8;
         int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
         retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
@@ -1610,7 +1612,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                             {
                                 headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
                                 hasHeaderExtension = 0;
-                                if ((offset == 1) && (nalu.auMetadata) && (nalu.auMetadataSize) && (nalu.auMetadataSize < (uint32_t)packetSize))
+                                if ((sender->useRtpHeaderExtensions) && (offset == 1) && (nalu.auMetadata) && (nalu.auMetadataSize) && (nalu.auMetadataSize < (uint32_t)packetSize))
                                 {
                                     uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                                     if (headerExtensionSize == nalu.auMetadataSize)
@@ -1671,7 +1673,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         /* Single NAL unit */
                         headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
                         hasHeaderExtension = 0;
-                        if ((nalu.auMetadata) && (nalu.auMetadataSize))
+                        if ((sender->useRtpHeaderExtensions) && (nalu.auMetadata) && (nalu.auMetadataSize))
                         {
                             uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                             if (headerExtensionSize == nalu.auMetadataSize)
@@ -1698,7 +1700,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
                         {
                             headersOffset = sizeof(ARSTREAM2_RTP_Header_t);
                             hasHeaderExtension = 0;
-                            if ((nalu.auMetadata) && (nalu.auMetadataSize))
+                            if ((sender->useRtpHeaderExtensions) && (nalu.auMetadata) && (nalu.auMetadataSize))
                             {
                                 uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu.auMetadata + 1)) * 4 + 4;
                                 if (headerExtensionSize == nalu.auMetadataSize)

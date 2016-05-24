@@ -94,6 +94,7 @@ typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
 struct ARSTREAM2_RtpReceiver_RtpResender_t {
     ARSTREAM2_RtpReceiver_t *receiver;
     ARSTREAM2_RtpSender_t *sender;
+    int useRtpHeaderExtensions;
     int senderRunning;
 };
 
@@ -192,7 +193,6 @@ struct ARSTREAM2_RtpReceiver_t {
 
     /* Thread status */
     ARSAL_Mutex_t streamMutex;
-    ARSAL_Cond_t streamCond;
     ARSAL_Mutex_t rtcpMutex;
     int threadsShouldStop;
     int streamThreadStarted;
@@ -313,7 +313,8 @@ static ARSTREAM2_RtpReceiver_NaluBuffer_t* ARSTREAM2_RtpReceiver_RtpResender_Get
 }
 
 
-static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *naluBuffer, uint32_t naluSize, uint64_t auTimestamp, int isLastNaluInAu, int missingPacketsBefore)
+static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *naluBuffer, uint32_t naluSize, uint64_t auTimestamp,
+                                            uint8_t *naluMetadata, int naluMetadataSize, int isLastNaluInAu, int missingPacketsBefore)
 {
     int ret = 0, i;
     ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = NULL;
@@ -362,6 +363,16 @@ static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, u
 
         if ((resender) && (resender->senderRunning))
         {
+            if (resender->useRtpHeaderExtensions)
+            {
+                nalu.auMetadata = naluMetadata;
+                nalu.auMetadataSize = naluMetadataSize;
+            }
+            else
+            {
+                nalu.auMetadata = NULL;
+                nalu.auMetadataSize = 0;
+            }
             err = ARSTREAM2_RtpSender_SendNewNalu(resender->sender, &nalu);
             if (err == ARSTREAM2_OK)
             {
@@ -1135,7 +1146,8 @@ static void ARSTREAM2_RtpReceiver_OutputNalu(ARSTREAM2_RtpReceiver_t *receiver, 
 {
     if (receiver->resenderCount > 0)
     {
-        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, rtpTimestampScaled, isLastNaluInAu, missingPacketsBefore);
+        ARSTREAM2_RtpReceiver_ResendNalu(receiver, receiver->currentNaluBuffer, receiver->currentNaluSize, rtpTimestampScaled,
+                                         (receiver->naluMetadataSize > 0) ? receiver->naluMetadata : NULL, receiver->naluMetadataSize, isLastNaluInAu, missingPacketsBefore);
     }
 
     receiver->currentNaluBuffer = receiver->naluCallback(ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE, receiver->currentNaluBuffer, receiver->currentNaluSize,
@@ -1498,7 +1510,6 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Stopping receiver...");
         ARSAL_Mutex_Lock(&(receiver->streamMutex));
         receiver->threadsShouldStop = 1;
-        ARSAL_Cond_Signal(&(receiver->streamCond));
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
 
         if (receiver->useMux) {
@@ -1538,7 +1549,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
                                                    eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpReceiver_t *retReceiver = NULL;
-    int streamMutexWasInit = 0, streamCondWasInit = 0;
+    int streamMutexWasInit = 0;
     int rtcpMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
     int resenderMutexWasInit = 0;
@@ -1701,18 +1712,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     }
     if (internalError == ARSTREAM2_OK)
     {
-        int condInitRet = ARSAL_Cond_Init(&(retReceiver->streamCond));
-        if (condInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            streamCondWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
         int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->rtcpMutex));
         if (mutexInitRet != 0)
         {
@@ -1845,10 +1844,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             ARSAL_Mutex_Destroy(&(retReceiver->streamMutex));
         }
-        if (streamCondWasInit == 1)
-        {
-            ARSAL_Cond_Destroy(&(retReceiver->streamCond));
-        }
         if (rtcpMutexWasInit == 1)
         {
             ARSAL_Mutex_Destroy(&(retReceiver->rtcpMutex));
@@ -1913,7 +1908,6 @@ void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(ARSTREAM2_RtpReceiver_t *receive
         if (receiver->streamThreadStarted)
         {
             receiver->scheduleNaluBufferChange = 1;
-            ARSAL_Cond_Wait(&(receiver->streamCond), &(receiver->streamMutex));
         }
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "NALU buffer invalidated");
@@ -1989,7 +1983,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 #endif
 
             ARSAL_Mutex_Destroy(&((*receiver)->streamMutex));
-            ARSAL_Cond_Destroy(&((*receiver)->streamCond));
             ARSAL_Mutex_Destroy(&((*receiver)->rtcpMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
@@ -2112,7 +2105,6 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
             receiver->currentNaluBuffer = NULL;
             receiver->currentNaluBufferSize = 0;
             receiver->scheduleNaluBufferChange = 0;
-            ARSAL_Cond_Signal(&(receiver->streamCond));
         }
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
     }
@@ -2455,6 +2447,8 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTR
         senderConfig.maxBitrate = receiver->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
         senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+        senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
+        retResender->useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &error2);
         if (error2 != ARSTREAM2_OK)
         {
