@@ -86,6 +86,7 @@
 
 
 typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
+    uint64_t inputTimestamp;
     uint64_t outputTimestamp;
     uint64_t ntpTimestamp;
     uint32_t rtpTimestamp;
@@ -485,7 +486,9 @@ static int ARSTREAM2_RtpSender_FlushNaluFifo(ARSTREAM2_RtpSender_t *sender)
 }
 
 
-static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t outputTimestamp, uint64_t ntpTimestamp, uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit, uint32_t bytesSent, uint32_t bytesDropped, void *userPtr)
+static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64_t outputTimestamp, uint64_t ntpTimestamp,
+                                                 uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit,
+                                                 uint32_t bytesSent, uint32_t bytesDropped, void *userPtr)
 {
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)userPtr;
 
@@ -501,6 +504,7 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t outputTimestamp, uint6
         sender->monitoringCount++;
     }
     sender->monitoringIndex = (sender->monitoringIndex + 1) % ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS;
+    sender->monitoringPoint[sender->monitoringIndex].inputTimestamp = inputTimestamp;
     sender->monitoringPoint[sender->monitoringIndex].outputTimestamp = outputTimestamp;
     sender->monitoringPoint[sender->monitoringIndex].ntpTimestamp = ntpTimestamp;
     sender->monitoringPoint[sender->monitoringIndex].rtpTimestamp = rtpTimestamp;
@@ -514,8 +518,9 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t outputTimestamp, uint6
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     if (sender->fMonitorOut)
     {
-        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)outputTimestamp);
         fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)ntpTimestamp);
+        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)inputTimestamp);
+        fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)outputTimestamp);
         fprintf(sender->fMonitorOut, "%lu %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
     }
 #endif
@@ -788,7 +793,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
 
         if (retSender->fMonitorOut)
         {
-            fprintf(retSender->fMonitorOut, "sendTimestamp inputTimestamp auTimestamp rtpTimestamp rtpSeqNum rtpMarkerBit bytesSent bytesDropped\n");
+            fprintf(retSender->fMonitorOut, "ntpTimestamp inputTimestamp outputTimestamp rtpTimestamp rtpSeqNum rtpMarkerBit bytesSent bytesDropped\n");
         }
     }
 #endif //#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
@@ -961,7 +966,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, uint64_t inputTime)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int res;
@@ -996,6 +1001,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
         ARSTREAM2_RTPH264_NaluFifoItem_t *item = ARSTREAM2_RTPH264_FifoPopFreeItem(&sender->naluFifo);
         if (item)
         {
+            item->nalu.inputTimestamp = inputTime;
             item->nalu.timeoutTimestamp = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
             item->nalu.ntpTimestamp = nalu->auTimestamp;
             item->nalu.isLastInAu = nalu->isLastNaluInAu;
@@ -1031,7 +1037,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int k, res;
@@ -1072,6 +1078,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
             ARSTREAM2_RTPH264_NaluFifoItem_t *item = ARSTREAM2_RTPH264_FifoPopFreeItem(&sender->naluFifo);
             if (item)
             {
+                item->nalu.inputTimestamp = inputTime;
                 item->nalu.timeoutTimestamp = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
                 item->nalu.ntpTimestamp = nalu[k].auTimestamp;
                 item->nalu.isLastInAu = nalu[k].isLastNaluInAu;

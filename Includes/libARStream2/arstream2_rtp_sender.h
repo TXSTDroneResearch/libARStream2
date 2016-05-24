@@ -201,12 +201,13 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender);
  *
  * @param[in] sender The sender instance
  * @param[in] nalu Pointer to a NAL unit descriptor
+ * @param[in] inputTime Optional input timestamp in microseconds
  *
  * @return ARSTREAM2_OK if no error happened
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, uint64_t inputTime);
 
 
 /**
@@ -216,12 +217,13 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
  * @param[in] sender The sender instance
  * @param[in] nalu Pointer to a NAL unit descriptor array
  * @param[in] naluCount Number of NAL units in the array
+ * @param[in] inputTime Optional input timestamp in microseconds
  *
  * @return ARSTREAM2_OK if no error happened
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if a naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime);
 
 
 /**

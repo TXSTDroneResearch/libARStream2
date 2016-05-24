@@ -48,6 +48,7 @@ typedef struct {
  * @brief RTP packet data
  */
 typedef struct ARSTREAM2_RTP_Packet_s {
+    uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
     uint32_t rtpTimestamp;
@@ -86,7 +87,8 @@ typedef struct ARSTREAM2_RTP_PacketFifo_s {
     struct mmsghdr *msgVec;
 } ARSTREAM2_RTP_PacketFifo_t;
 
-typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t outputTimestamp, uint64_t ntpTimestamp, uint32_t rtpTimestamp,
+typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t inputTimestamp, uint64_t outputTimestamp,
+                                                         uint64_t ntpTimestamp, uint32_t rtpTimestamp,
                                                          uint16_t seqNum, uint16_t markerBit,
                                                          uint32_t bytesSent, uint32_t bytesDropped, void *userPtr);
 
@@ -109,6 +111,7 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
     int stapPending;
     ARSTREAM2_RTP_PacketFifoItem_t *stapItem;
     uint64_t stapNtpTimestamp;
+    uint64_t stapInputTimestamp;
     uint64_t stapTimeoutTimestamp;
     int stapSeqNumForcedDiscontinuity;
     uint8_t stapMaxNri;
@@ -163,7 +166,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *con
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,
-                                        uint64_t ntpTimestamp, uint64_t timeoutTimestamp,
-                                        uint16_t seqNum, int markerBit);
+                                        uint64_t ntpTimestamp, uint64_t inputTimestamp,
+                                        uint64_t timeoutTimestamp, uint16_t seqNum, int markerBit);
 
 #endif /* _ARSTREAM2_RTP_H_ */

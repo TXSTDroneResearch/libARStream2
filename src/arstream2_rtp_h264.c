@@ -402,7 +402,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
         ret = ARSTREAM2_RTP_Sender_GeneratePacket(context, &item->packet,
                                                   payload, payloadSize,
                                                   (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
-                                                  nalu->ntpTimestamp, nalu->timeoutTimestamp,
+                                                  nalu->ntpTimestamp, nalu->inputTimestamp, nalu->timeoutTimestamp,
                                                   context->seqNum, nalu->isLastInAu);
 
         context->packetCount += nalu->seqNumForcedDiscontinuity + 1;
@@ -501,7 +501,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                     ret = ARSTREAM2_RTP_Sender_GeneratePacket(context, &item->packet,
                                                               payload, payloadSize,
                                                               (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
-                                                              nalu->ntpTimestamp, nalu->timeoutTimestamp,
+                                                              nalu->ntpTimestamp, nalu->inputTimestamp, nalu->timeoutTimestamp,
                                                               context->seqNum, ((nalu->isLastInAu) && (endBit)) ? 1 : 0);
 
                     context->packetCount += nalu->seqNumForcedDiscontinuity + 1;
@@ -550,6 +550,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
         context->stapPayloadSize = 0;
         context->stapSeqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
         context->stapNtpTimestamp = nalu->ntpTimestamp;
+        context->stapInputTimestamp = nalu->inputTimestamp;
         context->stapTimeoutTimestamp = nalu->timeoutTimestamp;
         if ((context->useRtpHeaderExtensions) && (nalu->metadata) && (nalu->metadataSize > 4))
         {
@@ -628,7 +629,7 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
     ret = ARSTREAM2_RTP_Sender_GeneratePacket(context, &context->stapItem->packet,
                                               context->stapPayload, context->stapPayloadSize,
                                               (context->stapHeaderExtensionSize > 0) ? context->stapHeaderExtension : NULL, context->stapHeaderExtensionSize,
-                                              context->stapNtpTimestamp, context->stapTimeoutTimestamp,
+                                              context->stapNtpTimestamp, context->stapInputTimestamp, context->stapTimeoutTimestamp,
                                               context->seqNum, markerBit);
 
     context->packetCount += context->stapSeqNumForcedDiscontinuity + 1;
@@ -799,7 +800,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                 context->packetCount += nalu.seqNumForcedDiscontinuity + 1;
                 context->byteCount += nalu.naluSize;
 
-                context->monitoringCallback(curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
+                context->monitoringCallback(nalu.inputTimestamp, curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
                                             nalu.isLastInAu, 0, nalu.naluSize, context->monitoringCallbackUserPtr);
             }
 

@@ -27,6 +27,7 @@
  * @brief NAL unit data
  */
 typedef struct ARSTREAM2_RTPH264_Nalu_s {
+    uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
     int isLastInAu;

@@ -373,7 +373,7 @@ static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, u
                 nalu.auMetadata = NULL;
                 nalu.auMetadataSize = 0;
             }
-            err = ARSTREAM2_RtpSender_SendNewNalu(resender->sender, &nalu);
+            err = ARSTREAM2_RtpSender_SendNewNalu(resender->sender, &nalu, 0); //TODO: input timestamp
             if (err == ARSTREAM2_OK)
             {
                 ARSAL_Mutex_Lock(&(receiver->naluBufferMutex));

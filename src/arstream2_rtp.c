@@ -455,7 +455,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *cont
         /* call the monitoringCallback */
         if (context->monitoringCallback != NULL)
         {
-            context->monitoringCallback(curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp,
+            context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp,
                                         cur->packet.seqNum, cur->packet.markerBit, cur->packet.payloadSize, 0, context->monitoringCallbackUserPtr);
         }
 
@@ -515,7 +515,7 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *con
             /* call the monitoringCallback */
             if (context->monitoringCallback != NULL)
             {
-                context->monitoringCallback(curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
+                context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
                                             cur->packet.markerBit, 0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
             }
 
@@ -560,8 +560,8 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *con
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,
-                                        uint64_t ntpTimestamp, uint64_t timeoutTimestamp,
-                                        uint16_t seqNum, int markerBit)
+                                        uint64_t ntpTimestamp, uint64_t inputTimestamp,
+                                        uint64_t timeoutTimestamp, uint16_t seqNum, int markerBit)
 {
     uint16_t flags;
 
@@ -578,6 +578,7 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
     }
 
     /* Timestamps and sequence number */
+    packet->inputTimestamp = inputTimestamp;
     packet->timeoutTimestamp = timeoutTimestamp;
     packet->ntpTimestamp = ntpTimestamp;
     packet->rtpTimestamp = (ntpTimestamp * context->rtpClockRate + (uint64_t)context->rtpTimestampOffset + 500000) / 1000000;
