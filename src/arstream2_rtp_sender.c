@@ -15,8 +15,8 @@
 #undef __USE_GNU
 #define ARSTREAM2_HAS_SENDMMSG //TODO
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <math.h>
 
 #include <libARStream2/arstream2_rtp_sender.h>
@@ -26,7 +26,6 @@
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
-#include <libARSAL/ARSAL_Socket.h>
 
 
 /**
@@ -155,7 +154,7 @@ static int ARSTREAM2_RtpSender_SetSocketSendBufferSize(ARSTREAM2_RtpSender_t *se
     socklen_t size2 = sizeof(size2);
 
     size /= 2;
-    err = ARSAL_Socket_Setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, sizeof(size));
+    err = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, sizeof(size));
     if (err != 0)
     {
         ret = -1;
@@ -163,7 +162,7 @@ static int ARSTREAM2_RtpSender_SetSocketSendBufferSize(ARSTREAM2_RtpSender_t *se
     }
 
     size = -1;
-    err = ARSAL_Socket_Getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, &size2);
+    err = getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, &size2);
     if (err != 0)
     {
         ret = -1;
@@ -185,7 +184,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     struct sockaddr_in sourceSin;
 
     /* create socket */
-    sender->streamSocket = ARSAL_Socket_Create(AF_INET, SOCK_DGRAM, 0);
+    sender->streamSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (sender->streamSocket < 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to create stream socket");
@@ -198,7 +197,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         /* remove SIGPIPE */
         int set = 1;
-        err = ARSAL_Socket_Setsockopt(sender->streamSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
+        err = setsockopt(sender->streamSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
@@ -272,7 +271,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* bind the socket */
-        err = ARSAL_Socket_Bind(sender->streamSocket, (struct sockaddr*)&sourceSin, sizeof(sourceSin));
+        err = bind(sender->streamSocket, (struct sockaddr*)&sourceSin, sizeof(sourceSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on stream socket bind: error=%d (%s)", errno, strerror(errno));
@@ -283,7 +282,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if ((ret == 0) && (!sender->isMulticast))
     {
         /* connect the socket */
-        err = ARSAL_Socket_Connect(sender->streamSocket, (struct sockaddr*)&sender->streamSendSin, sizeof(sender->streamSendSin));
+        err = connect(sender->streamSocket, (struct sockaddr*)&sender->streamSendSin, sizeof(sender->streamSendSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on stream socket connect to addr='%s' port=%d: error=%d (%s)", sender->clientAddr, sender->clientStreamPort, errno, strerror(errno));
@@ -309,7 +308,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->streamSocket >= 0)
         {
-            ARSAL_Socket_Close(sender->streamSocket);
+            close(sender->streamSocket);
         }
         sender->streamSocket = -1;
     }
@@ -328,7 +327,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* create socket */
-        sender->controlSocket = ARSAL_Socket_Create(AF_INET, SOCK_DGRAM, 0);
+        sender->controlSocket = socket(AF_INET, SOCK_DGRAM, 0);
         if (sender->controlSocket < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to create control socket");
@@ -341,7 +340,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         /* remove SIGPIPE */
         int set = 1;
-        err = ARSAL_Socket_Setsockopt(sender->controlSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
+        err = setsockopt(sender->controlSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
@@ -366,7 +365,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         /* allow multiple sockets to use the same port */
         unsigned int yes = 1;
-        err = ARSAL_Socket_Setsockopt(sender->controlSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+        err = setsockopt(sender->controlSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set socket option SO_REUSEADDR: error=%d (%s)", errno, strerror(errno));
@@ -377,7 +376,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* bind the socket */
-        err = ARSAL_Socket_Bind(sender->controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
+        err = bind(sender->controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on control socket bind port=%d: error=%d (%s)", sender->clientControlPort, errno, strerror(errno));
@@ -402,7 +401,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* connect the socket */
-        err = ARSAL_Socket_Connect(sender->controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
+        err = connect(sender->controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on control socket connect to addr='%s' port=%d: error=%d (%s)", sender->clientAddr, sender->clientControlPort, errno, strerror(errno));
@@ -414,7 +413,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->controlSocket >= 0)
         {
-            ARSAL_Socket_Close(sender->controlSocket);
+            close(sender->controlSocket);
         }
         sender->controlSocket = -1;
     }
@@ -815,12 +814,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
     {
         if (retSender->streamSocket != -1)
         {
-            ARSAL_Socket_Close(retSender->streamSocket);
+            close(retSender->streamSocket);
             retSender->streamSocket = -1;
         }
         if (retSender->controlSocket != -1)
         {
-            ARSAL_Socket_Close(retSender->controlSocket);
+            close(retSender->controlSocket);
             retSender->controlSocket = -1;
         }
         if (retSender->naluFifoPipe[0] != -1)
@@ -934,12 +933,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             }
             if ((*sender)->streamSocket != -1)
             {
-                ARSAL_Socket_Close((*sender)->streamSocket);
+                close((*sender)->streamSocket);
                 (*sender)->streamSocket = -1;
             }
             if ((*sender)->controlSocket != -1)
             {
-                ARSAL_Socket_Close((*sender)->controlSocket);
+                close((*sender)->controlSocket);
                 (*sender)->controlSocket = -1;
             }
             if ((*sender)->rtcpMsgBuffer)
