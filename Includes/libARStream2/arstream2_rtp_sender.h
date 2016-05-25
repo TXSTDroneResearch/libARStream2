@@ -132,6 +132,8 @@ typedef void (*ARSTREAM2_RtpSender_ReceiverReportCallback_t) (ARSTREAM2_RtpSende
  */
 typedef struct ARSTREAM2_RtpSender_Config_t
 {
+    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
+    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */

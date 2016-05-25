@@ -1639,6 +1639,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->generateReceiverReports = (config->generateReceiverReports > 0) ? 1 : 0;
         retReceiver->receiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
         retReceiver->receiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
+        retReceiver->receiverContext.cname = ARSTREAM2_RTP_RECEIVER_CNAME;
+        retReceiver->receiverContext.name = NULL;
 
         if (net_config)
         {
@@ -2221,7 +2223,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
 
                 ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
-                                                                     ARSTREAM2_RTP_RECEIVER_CNAME, &receiver->receiverContext, &size);
+                                                                     &receiver->receiverContext, &size);
                 ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
                 if ((ret == 0) && (size > 0))

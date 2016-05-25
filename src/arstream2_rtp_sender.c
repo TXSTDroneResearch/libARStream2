@@ -98,6 +98,8 @@ typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
 
 struct ARSTREAM2_RtpSender_t {
     /* Configuration on New */
+    char *canonicalName;
+    char *friendlyName;
     char *clientAddr;
     char *mcastAddr;
     char *mcastIfaceAddr;
@@ -544,6 +546,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
     }
+    if ((config->canonicalName == NULL) || (!strlen(config->canonicalName)))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no canonical name provided");
+        SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
+        return retSender;
+    }
     if ((config->clientAddr == NULL) || (!strlen(config->clientAddr)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no client address provided");
@@ -573,6 +581,14 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->controlSocket = -1;
         retSender->naluFifoPipe[0] = -1;
         retSender->naluFifoPipe[1] = -1;
+        if (config->canonicalName)
+        {
+            retSender->canonicalName = strndup(config->canonicalName, 40);
+        }
+        if (config->friendlyName)
+        {
+            retSender->friendlyName = strndup(config->friendlyName, 40);
+        }
         if (config->clientAddr)
         {
             retSender->clientAddr = strndup(config->clientAddr, 16);
@@ -621,6 +637,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.rtpClockRate = 90000;
         retSender->rtpSenderContext.rtpTimestampOffset = 0;
         retSender->rtcpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
+        retSender->rtcpSenderContext.cname = retSender->canonicalName;
+        retSender->rtcpSenderContext.name = retSender->friendlyName;
         retSender->rtcpSenderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->rtcpSenderContext.rtpClockRate = 90000;
         retSender->rtcpSenderContext.rtpTimestampOffset = 0;
@@ -856,6 +874,14 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         {
             free(retSender->rtcpMsgBuffer);
         }
+        if (retSender->canonicalName)
+        {
+            free(retSender->canonicalName);
+        }
+        if (retSender->friendlyName)
+        {
+            free(retSender->friendlyName);
+        }
         if (retSender->clientAddr)
         {
             free(retSender->clientAddr);
@@ -944,6 +970,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             if ((*sender)->rtcpMsgBuffer)
             {
                 free((*sender)->rtcpMsgBuffer);
+            }
+            if ((*sender)->friendlyName)
+            {
+                free((*sender)->friendlyName);
             }
             if ((*sender)->clientAddr)
             {
@@ -1350,8 +1380,8 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             unsigned int size = 0;
 
             ret = ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, curTime, 1, 1, 1,
-                                                               ARSTREAM2_RTP_SENDER_CNAME, sender->rtpSenderContext.packetCount,
-                                                               sender->rtpSenderContext.byteCount, &sender->rtcpSenderContext, &size);
+                                                               sender->rtpSenderContext.packetCount, sender->rtpSenderContext.byteCount,
+                                                               &sender->rtcpSenderContext, &size);
 
             if ((ret == 0) && (size > 0))
             {

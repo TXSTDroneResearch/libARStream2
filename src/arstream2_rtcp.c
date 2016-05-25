@@ -343,32 +343,44 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 }
 
 
-int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc, const char *cname, unsigned int *size)
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc,
+                                             const char *cname, const char *name, unsigned int *size)
 {
     if ((!sdes) || (!cname))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
     }
-    unsigned int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname) + 1 + 3) & ~0x3;
+    unsigned int cname_len = strlen(cname);
+    unsigned int name_len = (name && strlen(name)) ? strlen(name) : 0;
+    unsigned int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + cname_len + ((name_len > 0) ? 2 + name_len : 0) + 1 + 3) & ~0x3;
     if (maxSize < _size)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
         return -1;
     }
+    memset(sdes, 0, _size);
 
     uint32_t *ssrc_1 = (uint32_t*)((uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t));
     uint8_t *cnameItem = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4;
+    uint8_t *nameItem = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + cname_len;
 
     int sourceCount = 1;
     sdes->flags = (2 << 6) | (sourceCount & 0x1F);
     sdes->packetType = ARSTREAM2_RTCP_SDES_PACKET_TYPE;
-    sdes->length = htons((4 + 2 + strlen(cname) + 1 + 3) / 4 * sourceCount);
+    sdes->length = htons((4 + 2 + cname_len + ((name_len > 0) ? 2 + name_len : 0) + 1 + 3) / 4 * sourceCount);
     *ssrc_1 = htonl(ssrc);
+
     *cnameItem = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
     *(cnameItem + 1) = strlen(cname);
     memcpy(cnameItem + 2, cname, strlen(cname));
-    memset(cnameItem + 2 + strlen(cname), 0, _size - (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + strlen(cname)));
+
+    if (name_len > 0)
+    {
+        *nameItem = ARSTREAM2_RTCP_SDES_NAME_ITEM;
+        *(nameItem + 1) = strlen(name);
+        memcpy(nameItem + 2, name, strlen(name));
+    }
 
     if (size)
         *size = _size;
@@ -559,7 +571,7 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
 int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                  uint64_t sendTimestamp, int generateSenderReport,
                                                  int generateSourceDescription, int generateApplicationClockDelta,
-                                                 const char *cname, uint32_t packetCount, uint32_t byteCount,
+                                                 uint32_t packetCount, uint32_t byteCount,
                                                  ARSTREAM2_RTCP_SenderContext_t *context,
                                                  unsigned int *size)
 {
@@ -592,11 +604,11 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
         }
     }
 
-    if ((ret == 0) && (generateSourceDescription) && (cname))
+    if ((ret == 0) && (generateSourceDescription) && (context->cname))
     {
         unsigned int sdesSize = 0;
         ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
-                                                       context->senderSsrc, cname, &sdesSize);
+                                                       context->senderSsrc, context->cname, context->name, &sdesSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
@@ -631,7 +643,7 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
 int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                    uint64_t sendTimestamp, int generateReceiverReport,
                                                    int generateSourceDescription, int generateApplicationClockDelta,
-                                                   const char *cname, ARSTREAM2_RTCP_ReceiverContext_t *context,
+                                                   ARSTREAM2_RTCP_ReceiverContext_t *context,
                                                    unsigned int *size)
 {
     int ret = 0;
@@ -664,11 +676,11 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
         }
     }
 
-    if ((ret == 0) && (generateSourceDescription) && (cname))
+    if ((ret == 0) && (generateSourceDescription) && (context->cname))
     {
         unsigned int sdesSize = 0;
         ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
-                                                       context->receiverSsrc, cname, &sdesSize);
+                                                       context->receiverSsrc, context->cname, context->name, &sdesSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
