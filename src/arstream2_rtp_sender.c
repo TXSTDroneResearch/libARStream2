@@ -451,43 +451,6 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
 #endif
 
 
-static int ARSTREAM2_RtpSender_FlushNaluFifo(ARSTREAM2_RtpSender_t *sender)
-{
-    if (!sender)
-    {
-        return -1;
-    }
-
-    int fifoRes;
-    ARSTREAM2_RTPH264_Nalu_t nalu;
-
-    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(&sender->naluFifo, &nalu)) == 0)
-    {
-        //TODO: prune the NALUs and remove them in the thread to avoid calling the AU callback multiple times due to lastAuTimestamp concurrent access
-
-        /* call the naluCallback */
-        if (sender->rtpSenderContext.naluCallback != NULL)
-        {
-            ((ARSTREAM2_RtpSender_NaluCallback_t)sender->rtpSenderContext.naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, sender->rtpSenderContext.naluCallbackUserPtr);
-        }
-
-        /* last NALU in the Access Unit: call the auCallback */
-        if ((sender->rtpSenderContext.auCallback != NULL) && (nalu.isLastInAu))
-        {
-            if (nalu.ntpTimestamp != sender->rtpSenderContext.lastAuCallbackTimestamp)
-            {
-                sender->rtpSenderContext.lastAuCallbackTimestamp = nalu.ntpTimestamp;
-
-                /* call the auCallback */
-                ((ARSTREAM2_RtpSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.auUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
-            }
-        }
-    }
-
-    return 0;
-}
-
-
 static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64_t outputTimestamp, uint64_t ntpTimestamp,
                                                  uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit,
                                                  uint32_t bytesSent, uint32_t bytesDropped, void *userPtr)
@@ -1165,6 +1128,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sender)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    struct timespec t1;
+    uint64_t curTime;
 
     // Args check
     if (sender == NULL)
@@ -1172,7 +1137,13 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
         retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    int ret = ARSTREAM2_RtpSender_FlushNaluFifo(sender);
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+    ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
+    int ret = ARSTREAM2_RTPH264_Sender_FlushNaluFifo(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+    ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
+
     if (ret != 0)
     {
         retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
@@ -1436,7 +1407,11 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     }
 
     /* flush the NALU FIFO */
-    ARSTREAM2_RtpSender_FlushNaluFifo(sender);
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
+    ARSTREAM2_RTPH264_Sender_FlushNaluFifo(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+    ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
 

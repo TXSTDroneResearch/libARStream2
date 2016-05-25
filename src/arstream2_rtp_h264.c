@@ -660,9 +660,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
     ARSTREAM2_RTPH264_Nalu_t nalu;
     int ret = 0, fifoRes, naluCount = 0;
 
-    fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu);
-
-    while (fifoRes == 0)
+    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0)
     {
         naluCount++;
         if ((context->previousTimestamp != 0) && (nalu.ntpTimestamp != context->previousTimestamp))
@@ -825,12 +823,60 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
 
         context->previousTimestamp = nalu.ntpTimestamp;
         context->previousAuUserPtr = nalu.auUserPtr;
-
-        fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu);
     }
 
-    /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Processed %d NALUs (packet FIFO count: %d)",
+    /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Processed %d NALUs (packet FIFO count: %d)",
                 naluCount, sender->packetFifo.count);*/ //TODO: debug
+
+    return ret;
+}
+
+
+int ARSTREAM2_RTPH264_Sender_FlushNaluFifo(ARSTREAM2_RTP_SenderContext_t *context,
+                                           ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
+                                           uint64_t curTime)
+{
+    ARSTREAM2_RTPH264_Nalu_t nalu;
+    int ret = 0, fifoRes, naluCount = 0;
+
+    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0)
+    {
+        naluCount++;
+
+        /* call the monitoringCallback */
+        if (context->monitoringCallback != NULL)
+        {
+            uint32_t rtpTimestamp = (nalu.ntpTimestamp * context->rtpClockRate + (uint64_t)context->rtpTimestampOffset + 500000) / 1000000;
+
+            /* increment the sequence number to let the receiver know that we dropped something */
+            context->seqNum += nalu.seqNumForcedDiscontinuity + 1;
+            context->packetCount += nalu.seqNumForcedDiscontinuity + 1;
+            context->byteCount += nalu.naluSize;
+
+            context->monitoringCallback(nalu.inputTimestamp, curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
+                                        nalu.isLastInAu, 0, nalu.naluSize, context->monitoringCallbackUserPtr);
+        }
+
+        /* call the naluCallback */
+        if (context->naluCallback != NULL)
+        {
+            ((ARSTREAM2_RtpSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, context->naluCallbackUserPtr);
+        }
+
+        /* last NALU in the Access Unit: call the auCallback */
+        if ((context->auCallback != NULL) && (nalu.isLastInAu))
+        {
+            if (nalu.ntpTimestamp != context->lastAuCallbackTimestamp)
+            {
+                context->lastAuCallbackTimestamp = nalu.ntpTimestamp;
+
+                /* call the auCallback */
+                ((ARSTREAM2_RtpSender_AuCallback_t)context->auCallback)(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.auUserPtr, context->auCallbackUserPtr);
+            }
+        }
+    }
+
+    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Flushed %d NALUs from FIFO", naluCount); //TODO: debug
 
     return ret;
 }
