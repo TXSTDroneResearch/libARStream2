@@ -92,8 +92,8 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   uint64_t curTime);
 
-int ARSTREAM2_RTPH264_Sender_FlushNaluFifo(ARSTREAM2_RTP_SenderContext_t *context,
-                                           ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
-                                           uint64_t curTime);
+int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
+                                       ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
+                                       uint64_t curTime);
 
 #endif /* _ARSTREAM2_RTPH264_H_ */

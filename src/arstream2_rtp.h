@@ -163,6 +163,9 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *cont
 int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
                                               ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
 
+int ARSTREAM2_RTP_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
+                                   ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
+
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,

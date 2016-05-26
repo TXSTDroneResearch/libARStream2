@@ -1151,7 +1151,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
     ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-    int ret = ARSTREAM2_RTPH264_Sender_FlushNaluFifo(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+    int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
     ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
 
     if (ret != 0)
@@ -1416,12 +1416,13 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
     }
 
-    /* flush the NALU FIFO */
+    /* flush the NALU FIFO and packet FIFO */
     ARSAL_Time_GetTime(&t1);
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
     ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-    ARSTREAM2_RTPH264_Sender_FlushNaluFifo(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+    ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
     ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
+    ARSTREAM2_RTP_Sender_FifoFlush(&sender->rtpSenderContext, &sender->packetFifo, curTime);
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
 

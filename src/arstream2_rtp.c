@@ -557,6 +557,72 @@ int ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *con
 }
 
 
+int ARSTREAM2_RTP_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
+                                   ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t *cur = NULL, *next = NULL;
+    int count;
+
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (!curTime)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid current time");
+        return -1;
+    }
+
+    if ((!fifo->head) || (!fifo->count))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Packet FIFO is empty");
+        return -2;
+    }
+
+    for (cur = fifo->head, count = 0; cur != NULL; cur = next)
+    {
+        /* call the monitoringCallback */
+        if (context->monitoringCallback != NULL)
+        {
+            context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
+                                        cur->packet.markerBit, 0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
+        }
+
+        if (cur->next)
+        {
+            cur->next->prev = cur->prev;
+        }
+        else
+        {
+            fifo->tail = cur->prev;
+        }
+        if (cur->prev)
+        {
+            cur->prev->next = cur->next;
+        }
+        else
+        {
+            fifo->head = cur->next;
+        }
+        fifo->count--;
+        count++;
+
+        next = cur->next;
+
+        int ret = ARSTREAM2_RTP_FifoPushFreeItem(fifo, cur);
+        if (ret < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Failed to push free FIFO item");
+            return -1;
+        }
+    }
+
+    return count;
+}
+
+
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,
