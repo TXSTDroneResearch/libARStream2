@@ -53,6 +53,12 @@
 
 
 /**
+ * Default minimum packet FIFO size
+ */
+#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE (100)
+
+
+/**
  * Sets *PTR to VAL if PTR is not null
  */
 #define SET_WITH_CHECK(PTR,VAL)                 \
@@ -650,7 +656,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
     /* Setup the NAL unit FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int naluFifoRet = ARSTREAM2_RTPH264_FifoInit(&retSender->naluFifo, config->naluFifoSize);
+        int naluFifoRet = ARSTREAM2_RTPH264_FifoInit(&retSender->naluFifo, retSender->naluFifoSize);
         if (naluFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
@@ -676,7 +682,11 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
     /* Setup the packet FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retSender->packetFifo, config->naluFifoSize, retSender->rtpSenderContext.maxPacketSize); //TODO: size?
+        int packetFifoSize = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs > 0))
+                ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
+                : retSender->naluFifoSize;
+        if (packetFifoSize < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE) packetFifoSize = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE;
+        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retSender->packetFifo, packetFifoSize, retSender->rtpSenderContext.maxPacketSize);
         if (packetFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
