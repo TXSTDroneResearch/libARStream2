@@ -1384,6 +1384,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 }
             }
 
+            srDelay = 0;
             nextSrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / sender->rtcpSenderContext.rtcpByteRate;
             if (nextSrDelay < ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL) nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
         }
@@ -1407,7 +1408,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             FD_ZERO(&writeSet);
             if (packetsPending) FD_SET(sender->streamSocket, &writeSet);
             tv.tv_sec = 0;
-            tv.tv_usec = ARSTREAM2_RTP_SENDER_TIMEOUT_US;
+            tv.tv_usec = (nextSrDelay - srDelay < ARSTREAM2_RTP_SENDER_TIMEOUT_US) ? nextSrDelay - srDelay : ARSTREAM2_RTP_SENDER_TIMEOUT_US;
         }
     }
 
