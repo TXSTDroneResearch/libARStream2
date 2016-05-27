@@ -403,7 +403,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
                                                   payload, payloadSize,
                                                   (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
                                                   nalu->ntpTimestamp, nalu->inputTimestamp, nalu->timeoutTimestamp,
-                                                  context->seqNum, nalu->isLastInAu);
+                                                  context->seqNum, nalu->isLastInAu, nalu->importance, nalu->priority);
 
         context->packetCount += nalu->seqNumForcedDiscontinuity + 1;
         context->byteCount += payloadSize;
@@ -507,7 +507,8 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                                                               payload, payloadSize,
                                                               (headerExtensionSize > 0) ? headerExtension : NULL, headerExtensionSize,
                                                               nalu->ntpTimestamp, nalu->inputTimestamp, nalu->timeoutTimestamp,
-                                                              context->seqNum, ((nalu->isLastInAu) && (endBit)) ? 1 : 0);
+                                                              context->seqNum, ((nalu->isLastInAu) && (endBit)) ? 1 : 0,
+                                                              nalu->importance, nalu->priority);
 
                     context->packetCount += nalu->seqNumForcedDiscontinuity + 1;
                     context->byteCount += payloadSize;
@@ -553,6 +554,8 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     if (context->stapItem)
     {
         context->stapMaxNri = 0;
+        context->stapImportance = 0;
+        context->stapPriority = 0;
         context->stapOffsetInBuffer = 0;
         context->stapHeaderExtension = NULL;
         context->stapHeaderExtensionSize = 0;
@@ -615,6 +618,22 @@ static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderCont
     {
         uint8_t nri = ((uint8_t)(*(nalu->nalu)) >> 5) & 0x3;
         if (nri > context->stapMaxNri) context->stapMaxNri = nri;
+        if (context->stapImportance == 0)
+        {
+            context->stapImportance = nalu->importance;
+        }
+        else
+        {
+            if ((nalu->importance != 0) && (nalu->importance < context->stapImportance)) context->stapImportance = nalu->importance;
+        }
+        if (context->stapPriority == 0)
+        {
+            context->stapPriority = nalu->priority;
+        }
+        else
+        {
+            if ((nalu->priority != 0) && (nalu->priority < context->stapPriority)) context->stapPriority = nalu->priority;
+        }
         *(context->stapItem->packet.buffer + context->stapOffsetInBuffer) = ((nalu->naluSize >> 8) & 0xFF);
         *(context->stapItem->packet.buffer + context->stapOffsetInBuffer + 1) = (nalu->naluSize & 0xFF);
         context->stapPayloadSize += 2;
@@ -645,7 +664,7 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
                                               context->stapPayload, context->stapPayloadSize,
                                               (context->stapHeaderExtensionSize > 0) ? context->stapHeaderExtension : NULL, context->stapHeaderExtensionSize,
                                               context->stapNtpTimestamp, context->stapInputTimestamp, context->stapTimeoutTimestamp,
-                                              context->seqNum, markerBit);
+                                              context->seqNum, markerBit, context->stapImportance, context->stapPriority);
 
     context->packetCount += context->stapSeqNumForcedDiscontinuity + 1;
     context->byteCount += context->stapPayloadSize;

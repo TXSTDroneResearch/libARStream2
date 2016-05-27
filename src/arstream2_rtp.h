@@ -53,12 +53,14 @@ typedef struct ARSTREAM2_RTP_Packet_s {
     uint64_t ntpTimestamp;
     uint32_t rtpTimestamp;
     uint16_t seqNum;
-    int markerBit;
+    uint32_t markerBit;
     ARSTREAM2_RTP_Header_t header;
     uint8_t *headerExtension;
     unsigned int headerExtensionSize;
     uint8_t *payload;
     unsigned int payloadSize;
+    uint32_t importance;
+    uint32_t priority;
     struct iovec msgIov[3];
     size_t msgIovLength;
     uint8_t *buffer;
@@ -115,6 +117,8 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
     uint64_t stapTimeoutTimestamp;
     int stapSeqNumForcedDiscontinuity;
     uint8_t stapMaxNri;
+    uint32_t stapImportance;
+    uint32_t stapPriority;
     unsigned int stapOffsetInBuffer;
     uint8_t *stapPayload;
     uint8_t *stapHeaderExtension;
@@ -170,6 +174,7 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,
                                         uint64_t ntpTimestamp, uint64_t inputTimestamp,
-                                        uint64_t timeoutTimestamp, uint16_t seqNum, int markerBit);
+                                        uint64_t timeoutTimestamp, uint16_t seqNum, uint32_t markerBit,
+                                        uint32_t importance, uint32_t priority);
 
 #endif /* _ARSTREAM2_RTP_H_ */

@@ -1027,6 +1027,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
             item->nalu.ntpTimestamp = nalu->auTimestamp;
             item->nalu.isLastInAu = nalu->isLastNaluInAu;
             item->nalu.seqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
+            item->nalu.importance = nalu->importance;
+            item->nalu.priority = nalu->priority;
             item->nalu.metadata = nalu->auMetadata;
             item->nalu.metadataSize = nalu->auMetadataSize;
             item->nalu.nalu = nalu->naluBuffer;
@@ -1106,6 +1108,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
                 item->nalu.ntpTimestamp = nalu[k].auTimestamp;
                 item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
                 item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
+                item->nalu.importance = nalu[k].importance;
+                item->nalu.priority = nalu[k].priority;
                 item->nalu.metadata = nalu[k].auMetadata;
                 item->nalu.metadataSize = nalu[k].auMetadataSize;
                 item->nalu.nalu = nalu[k].naluBuffer;

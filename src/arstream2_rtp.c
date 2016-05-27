@@ -627,7 +627,8 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
                                         uint8_t *payload, unsigned int payloadSize,
                                         uint8_t *headerExtension, unsigned int headerExtensionSize,
                                         uint64_t ntpTimestamp, uint64_t inputTimestamp,
-                                        uint64_t timeoutTimestamp, uint16_t seqNum, int markerBit)
+                                        uint64_t timeoutTimestamp, uint16_t seqNum, uint32_t markerBit,
+                                        uint32_t importance, uint32_t priority)
 {
     uint16_t flags;
 
@@ -650,6 +651,8 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
     packet->rtpTimestamp = (ntpTimestamp * context->rtpClockRate + (uint64_t)context->rtpTimestampOffset + 500000) / 1000000;
     packet->seqNum = seqNum;
     packet->markerBit = markerBit;
+    packet->importance = importance;
+    packet->priority = priority;
 
     /* Data */
     if ((headerExtension) && (headerExtensionSize > 0))

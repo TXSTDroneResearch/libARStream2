@@ -30,8 +30,10 @@ typedef struct ARSTREAM2_RTPH264_Nalu_s {
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
-    int isLastInAu;
-    int seqNumForcedDiscontinuity;
+    uint32_t isLastInAu;
+    uint32_t seqNumForcedDiscontinuity;
+    uint32_t importance;
+    uint32_t priority;
     uint8_t *metadata;
     unsigned int metadataSize;
     uint8_t *nalu;
