@@ -115,6 +115,8 @@ struct ARSTREAM2_RtpSender_t {
     int clientControlPort;
     ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;
     void *receiverReportCallbackUserPtr;
+    ARSTREAM2_RtpSender_DisconnectionCallback_t disconnectionCallback;
+    void *disconnectionCallbackUserPtr;
     int naluFifoSize;
     int maxBitrate;
     uint32_t maxLatencyUs;
@@ -582,6 +584,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.monitoringCallbackUserPtr = retSender;
         retSender->receiverReportCallback = config->receiverReportCallback;
         retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
+        retSender->disconnectionCallback = config->disconnectionCallback;
+        retSender->disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
         retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
@@ -1168,7 +1172,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 {
     /* Local declarations */
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
-    int shouldStop, ret, selectRet, packetsPending = 0;
+    int shouldStop, ret, selectRet, packetsPending = 0, previouslySending = 0;
     struct timespec t1;
     uint64_t curTime;
     uint32_t nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
@@ -1266,7 +1270,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     report.peerClockDelta = sender->rtcpSenderContext.clockDelta.clockDeltaAvg;
                     report.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDelta.rtDelay;
 
-                    // Call the receiver report callback function
+                    /* Call the receiver report callback function */
                     sender->receiverReportCallback(&report, sender->receiverReportCallbackUserPtr);
                 }
 
@@ -1335,10 +1339,16 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     else
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Stream socket - sendmmsg error (%d): %s", errno, strerror(errno));
+                        if ((sender->disconnectionCallback) && (previouslySending) && (errno == ECONNREFUSED))
+                        {
+                            /* Call the disconnection callback */
+                            sender->disconnectionCallback(sender->disconnectionCallbackUserPtr);
+                        }
                     }
                 }
                 else
                 {
+                    previouslySending = 1;
                     msgVecSentCount = ret;
                     packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
                     //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug

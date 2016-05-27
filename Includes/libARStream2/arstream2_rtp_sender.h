@@ -98,7 +98,6 @@ typedef struct ARSTREAM2_RtpSender_ReceiverReportData_t
  * @param[in] status Why the call is made
  * @param[in] auUserPtr Access unit user pointer associated with the NAL units submitted to the sender
  * @param[in] userPtr Global access unit callback user pointer
- * @see eARSTREAM2_RTP_SENDER_STATUS
  */
 typedef void (*ARSTREAM2_RtpSender_AuCallback_t) (eARSTREAM2_RTP_SENDER_STATUS status, void *auUserPtr, void *userPtr);
 
@@ -111,7 +110,6 @@ typedef void (*ARSTREAM2_RtpSender_AuCallback_t) (eARSTREAM2_RTP_SENDER_STATUS s
  * @param[in] status Why the call is made
  * @param[in] naluUserPtr NAL unit user pointer associated with the NAL unit submitted to the sender
  * @param[in] userPtr Global NAL unit callback user pointer
- * @see eARSTREAM2_RTP_SENDER_STATUS
  */
 typedef void (*ARSTREAM2_RtpSender_NaluCallback_t) (eARSTREAM2_RTP_SENDER_STATUS status, void *naluUserPtr, void *userPtr);
 
@@ -122,9 +120,20 @@ typedef void (*ARSTREAM2_RtpSender_NaluCallback_t) (eARSTREAM2_RTP_SENDER_STATUS
  *
  * @param[in] report RTCP receiver report data
  * @param[in] userPtr Global receiver report callback user pointer
- * @see eARSTREAM2_RTP_SENDER_STATUS
  */
 typedef void (*ARSTREAM2_RtpSender_ReceiverReportCallback_t) (ARSTREAM2_RtpSender_ReceiverReportData_t *report, void *userPtr);
+
+
+/**
+ * @brief Callback function for disconnection
+ * This callback function is called when the stream socket is no longer connected.
+ * The sender thread continues running and the callback function may be called multiple times.
+ *
+ * @note It is the application's responsibility to stop a sender using ARSTREAM2_RtpSender_Stop() and ARSTREAM2_RtpSender_Delete()
+ *
+ * @param[in] userPtr Global receiver report callback user pointer
+ */
+typedef void (*ARSTREAM2_RtpSender_DisconnectionCallback_t) (void *userPtr);
 
 
 /**
@@ -147,6 +156,8 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;   /**< NAL unit callback function (optional, can be NULL) */
     void *receiverReportCallbackUserPtr;            /**< NAL unit callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_RtpSender_DisconnectionCallback_t disconnectionCallback;   /**< Disconnection callback function (optional, can be NULL) */
+    void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
