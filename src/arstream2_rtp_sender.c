@@ -1548,7 +1548,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
 
     ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
 
-    monitoringData->realTimeIntervalUs = (startTime - endTime);
+    monitoringData->startTimestamp = endTime;
+    monitoringData->timeInterval = (startTime - endTime);
     monitoringData->acqToNetworkTimeMin = minAcqToNetworkTime;
     monitoringData->acqToNetworkTimeMax = maxAcqToNetworkTime;
     monitoringData->acqToNetworkTimeMean = meanAcqToNetworkTime;

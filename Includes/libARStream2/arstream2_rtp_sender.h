@@ -49,7 +49,8 @@ typedef enum {
  */
 typedef struct ARSTREAM2_RtpSender_MonitoringData_t
 {
-    uint32_t realTimeIntervalUs;            /**< Real monitoring time interval in microseconds */
+    uint64_t startTimestamp;                /**< Monitoring start timestamp in microseconds */
+    uint32_t timeInterval;                  /**< Monitoring time interval in microseconds */
     uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during realTimeIntervalUs in microseconds */
     uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during realTimeIntervalUs in microseconds */
     uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during realTimeIntervalUs in microseconds */
