@@ -1809,22 +1809,7 @@ void* ARSTREAM2_RtpSender_RunStreamThread (void *ARSTREAM2_RtpSender_t_Param)
 void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 {
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t *)ARSTREAM2_RtpSender_t_Param;
-    uint8_t *msgBuffer;
-    int msgBufferSize = sizeof(ARSTREAM2_RTP_ClockFrame_t);
-    ARSTREAM2_RTP_ClockFrame_t *clockFrame;
-    uint64_t originateTimestamp = 0;
-    uint64_t receiveTimestamp = 0;
-    uint64_t transmitTimestamp = 0;
-    //uint64_t receiveTimestamp2 = 0;
-    //int64_t clockDelta = 0;
-    //int64_t rtDelay = 0;
-    uint32_t tsH, tsL;
-    ssize_t bytes;
-    struct timespec t1;
-    struct pollfd p;
-    struct sockaddr_in src_addr;
-    socklen_t addrlen = sizeof(src_addr);
-    int shouldStop, ret, pollRet;
+    int shouldStop, ret;
 
     /* Parameters check */
     if (sender == NULL)
@@ -1833,21 +1818,11 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
         return (void *)0;
     }
 
-    /* Alloc and check */
-    msgBuffer = malloc(msgBufferSize);
-    if (msgBuffer == NULL)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error while starting %s, cannot allocate memory", __FUNCTION__);
-        return (void *)0;
-    }
-    clockFrame = (ARSTREAM2_RTP_ClockFrame_t*)msgBuffer;
-
     /* Socket setup */
     ret = ARSTREAM2_RtpSender_ControlSocketSetup(sender);
     if (ret != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to setup the control socket (error %d) - aborting - aborting", ret);
-        free(msgBuffer);
         return (void*)0;
     }
 
@@ -1859,73 +1834,7 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
 
     while (shouldStop == 0)
     {
-        /* poll */
-        p.fd = sender->controlSocket;
-        p.events = POLLIN;
-        p.revents = 0;
-        pollRet = poll(&p, 1, ARSTREAM2_RTP_SENDER_CLOCKSYNC_DATAREAD_TIMEOUT_MS);
-        if (pollRet == 0)
-        {
-            /* failed: poll timeout */
-            //ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Polling timed out");
-        }
-        else if (pollRet < 0)
-        {
-            /* failed: poll error */
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Poll error: error=%d (%s)", errno, strerror(errno));
-        }
-        else if (p.revents & POLLIN)
-        {
-            bytes = ARSAL_Socket_Recvfrom(sender->controlSocket, msgBuffer, msgBufferSize, 0, (struct sockaddr*)&src_addr, &addrlen);
-            if (bytes >= 0)
-            {
-                /* success */
-                ARSAL_Time_GetTime(&t1);
-                receiveTimestamp = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-                originateTimestamp = ((uint64_t)ntohl(clockFrame->transmitTimestampH) << 32) + (uint64_t)ntohl(clockFrame->transmitTimestampL);
-                /*ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Clock message received - originateTimestamp: %llu", (long long unsigned int)originateTimestamp);*/ //TODO: debug
-
-                memset(clockFrame, 0, sizeof(ARSTREAM2_RTP_ClockFrame_t));
-
-                tsH = (uint32_t)(receiveTimestamp >> 32);
-                tsL = (uint32_t)(receiveTimestamp & 0xFFFFFFFF);
-                clockFrame->receiveTimestampH = htonl(tsH);
-                clockFrame->receiveTimestampL = htonl(tsL);
-
-                tsH = (uint32_t)(originateTimestamp >> 32);
-                tsL = (uint32_t)(originateTimestamp & 0xFFFFFFFF);
-                clockFrame->originateTimestampH = htonl(tsH);
-                clockFrame->originateTimestampL = htonl(tsL);
-
-                ARSAL_Time_GetTime(&t1);
-                transmitTimestamp = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-                tsH = (uint32_t)(transmitTimestamp >> 32);
-                tsL = (uint32_t)(transmitTimestamp & 0xFFFFFFFF);
-                clockFrame->transmitTimestampH = htonl(tsH);
-                clockFrame->transmitTimestampL = htonl(tsL);
-
-                bytes = ARSAL_Socket_Sendto(sender->controlSocket, msgBuffer, msgBufferSize, 0, (struct sockaddr*)&src_addr, addrlen);
-                if (bytes < 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket send error: error=%d (%s)", errno, strerror(errno));
-                }
-            }
-            else
-            {
-                /* failed: socket error */
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Socket receive error %d ('%s')", errno, strerror(errno));
-            }
-        }
-        else
-        {
-            /* no poll error, no timeout, but socket is not ready */
-            int error = 0;
-            socklen_t errlen = sizeof(error);
-            ARSAL_Socket_Getsockopt(sender->controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
-        }
+        usleep(ARSTREAM2_RTP_SENDER_CLOCKSYNC_DATAREAD_TIMEOUT_MS * 1000);
 
         ARSAL_Mutex_Lock(&(sender->streamMutex));
         shouldStop = sender->threadsShouldStop;
@@ -1936,12 +1845,6 @@ void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
     ARSAL_Mutex_Lock(&(sender->streamMutex));
     sender->controlThreadStarted = 0;
     ARSAL_Mutex_Unlock(&(sender->streamMutex));
-
-    if (msgBuffer)
-    {
-        free(msgBuffer);
-        msgBuffer = NULL;
-    }
 
     return (void *)0;
 }

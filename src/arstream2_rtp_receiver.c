@@ -2086,21 +2086,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
 void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param)
 {
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
-    uint8_t *msgBuffer;
-    int msgBufferSize = sizeof(ARSTREAM2_RTP_ClockFrame_t);
-    ARSTREAM2_RTP_ClockFrame_t *clockFrame;
-    uint64_t originateTimestamp = 0;
-    uint64_t receiveTimestamp = 0;
-    uint64_t transmitTimestamp = 0;
-    uint64_t receiveTimestamp2 = 0;
-    uint64_t originateTimestamp2 = 0;
-    uint64_t loopStartTime = 0;
-    int64_t clockDelta = 0;
-    int64_t rtDelay = 0;
-    uint32_t tsH, tsL;
-    int bytes;
-    struct timespec t1;
-    int shouldStop, ret, timeElapsed, sleepDuration;
+    int shouldStop, ret;
 
     /* Parameters check */
     if (receiver == NULL)
@@ -2109,21 +2095,11 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         return (void *)0;
     }
 
-    /* Alloc and check */
-    msgBuffer = malloc(msgBufferSize);
-    if (msgBuffer == NULL)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error while starting %s, cannot allocate memory", __FUNCTION__);
-        return (void *)0;
-    }
-    clockFrame = (ARSTREAM2_RTP_ClockFrame_t*)msgBuffer;
-
     /* Channel setup */
     ret = receiver->ops.controlChannelSetup(receiver);
     if (ret != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to setup the control channel (error %d) - aborting", ret);
-        free(msgBuffer);
         return (void*)0;
     }
 
@@ -2135,64 +2111,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
 
     while (shouldStop == 0)
     {
-        ARSAL_Time_GetTime(&t1);
-        loopStartTime = transmitTimestamp = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-        memset(clockFrame, 0, sizeof(ARSTREAM2_RTP_ClockFrame_t));
-
-        tsH = (uint32_t)(transmitTimestamp >> 32);
-        tsL = (uint32_t)(transmitTimestamp & 0xFFFFFFFF);
-        clockFrame->transmitTimestampH = htonl(tsH);
-        clockFrame->transmitTimestampL = htonl(tsL);
-
-        bytes = receiver->ops.controlChannelSend(receiver, msgBuffer, msgBufferSize);
-        if (bytes < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Channel send error: error=%d (%s)", errno, strerror(errno));
-        }
-        else
-        {
-            originateTimestamp2 = transmitTimestamp;
-
-            bytes = receiver->ops.controlChannelRead(receiver, msgBuffer, msgBufferSize, 1);
-
-            if (bytes == -EPIPE && receiver->useMux == 1)
-            {
-                /* For the mux case, EPIPE means that the channel should not be used again */
-                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for control channel, stopping thread");
-                shouldStop = 1;
-            }
-            else if (bytes > 0)
-            {
-
-                do
-                {
-                    ARSAL_Time_GetTime(&t1);
-                    receiveTimestamp2 = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-                    originateTimestamp = ((uint64_t)ntohl(clockFrame->originateTimestampH) << 32) + (uint64_t)ntohl(clockFrame->originateTimestampL);
-                    receiveTimestamp = ((uint64_t)ntohl(clockFrame->receiveTimestampH) << 32) + (uint64_t)ntohl(clockFrame->receiveTimestampL);
-                    transmitTimestamp = ((uint64_t)ntohl(clockFrame->transmitTimestampH) << 32) + (uint64_t)ntohl(clockFrame->transmitTimestampL);
-
-                    if (originateTimestamp == originateTimestamp2)
-                    {
-                        clockDelta = (int64_t)(receiveTimestamp + transmitTimestamp) / 2 - (int64_t)(originateTimestamp + receiveTimestamp2) / 2;
-                        receiver->clockDelta = clockDelta;
-                        rtDelay = (receiveTimestamp2 - originateTimestamp) - (transmitTimestamp - receiveTimestamp);
-                    }
-                    bytes = receiver->ops.controlChannelRead(receiver, msgBuffer, msgBufferSize, 0);
-                }
-                while (bytes > 0);
-            }
-        }
-
-        ARSAL_Time_GetTime(&t1);
-        timeElapsed = (int)((uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000 - loopStartTime);
-
-        sleepDuration = ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_PERIOD_MS * 1000 - timeElapsed;
-        if (sleepDuration > 0)
-        {
-            usleep(sleepDuration);
-        }
+        usleep(ARSTREAM2_RTP_RECEIVER_CLOCKSYNC_PERIOD_MS * 1000);
 
         if (shouldStop == 0)
         {
@@ -2212,12 +2131,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     ARSAL_Mutex_Lock(&(receiver->streamMutex));
     receiver->controlThreadStarted = 0;
     ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-    if (msgBuffer)
-    {
-        free(msgBuffer);
-        msgBuffer = NULL;
-    }
 
     return (void *)0;
 }
