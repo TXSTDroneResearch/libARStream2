@@ -160,14 +160,14 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete receiver: %s", ARSTREAM2_Error_ToString(ret));
     }
 
-    if (ret == ARSTREAM2_OK)
+    ret = ARSTREAM2_H264Filter_Free(&streamReceiver->filter);
+    if (ret != ARSTREAM2_OK)
     {
-        ret = ARSTREAM2_H264Filter_Free(&streamReceiver->filter);
-        if (ret != ARSTREAM2_OK)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete H264Filter: %s", ARSTREAM2_Error_ToString(ret));
-        }
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete H264Filter: %s", ARSTREAM2_Error_ToString(ret));
     }
+
+    free(streamReceiver);
+    *streamReceiverHandle = NULL;
 
     return ret;
 }
