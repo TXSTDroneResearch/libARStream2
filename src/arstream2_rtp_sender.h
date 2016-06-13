@@ -49,6 +49,7 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int serverControlPort;                          /**< Server control port, @see ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
     ARSTREAM2_StreamSender_AuCallback_t auCallback;       /**< Access unit callback function (optional, can be NULL) */
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */

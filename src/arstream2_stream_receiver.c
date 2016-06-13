@@ -297,6 +297,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             receiver_net_config.serverControlPort = net_config->serverControlPort;
             receiver_net_config.clientStreamPort = net_config->clientStreamPort;
             receiver_net_config.clientControlPort = net_config->clientControlPort;
+            receiver_net_config.classSelector = net_config->classSelector;
             streamReceiver->receiver = ARSTREAM2_RtpReceiver_New(&receiverConfig, &receiver_net_config, NULL, &ret);
         }
 

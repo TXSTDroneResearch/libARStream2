@@ -15,6 +15,7 @@
 #undef __USE_GNU
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/ip.h>
 #include <fcntl.h>
 #include <math.h>
 
@@ -125,6 +126,7 @@ struct ARSTREAM2_RtpSender_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
+    int classSelector;
     ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;
     void *receiverReportCallbackUserPtr;
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;
@@ -228,6 +230,16 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 #endif
+
+    if (ret == 0)
+    {
+        int tos = sender->classSelector;
+        err = setsockopt(sender->streamSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
 
     if (ret == 0)
     {
@@ -371,6 +383,16 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 #endif
+
+    if (ret == 0)
+    {
+        int tos = sender->classSelector;
+        err = setsockopt(sender->controlSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
 
     if (ret == 0)
     {
@@ -605,6 +627,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->serverControlPort = (config->serverControlPort > 0) ? config->serverControlPort : ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT;
         retSender->clientStreamPort = config->clientStreamPort;
         retSender->clientControlPort = config->clientControlPort;
+        retSender->classSelector = config->classSelector;
         retSender->rtpSenderContext.auCallback = config->auCallback;
         retSender->rtpSenderContext.auCallbackUserPtr = config->auCallbackUserPtr;
         retSender->rtpSenderContext.naluCallback = config->naluCallback;

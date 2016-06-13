@@ -70,6 +70,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.serverControlPort = config->serverControlPort;
         senderConfig.clientStreamPort = config->clientStreamPort;
         senderConfig.clientControlPort = config->clientControlPort;
+        senderConfig.classSelector = config->classSelector;
         senderConfig.auCallback = config->auCallback;
         senderConfig.auCallbackUserPtr = config->auCallbackUserPtr;
         senderConfig.naluCallback = config->naluCallback;

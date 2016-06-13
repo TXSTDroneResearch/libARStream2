@@ -91,6 +91,7 @@ typedef struct ARSTREAM2_RtpReceiver_NetConfig_t
     int serverControlPort;                          /**< Server control port, @see ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
 } ARSTREAM2_RtpReceiver_NetConfig_t;
 
 // Forward declaration of the mux_ctx structure
@@ -193,6 +194,7 @@ struct ARSTREAM2_RtpReceiver_NetInfos_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
+    int classSelector;
 
     /* Sockets */
     int isMulticast;

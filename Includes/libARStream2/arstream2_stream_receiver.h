@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
+#include <libARSAL/ARSAL_Socket.h>
 
 
 /**
@@ -169,6 +170,7 @@ typedef struct
     int serverControlPort;                                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
     int clientStreamPort;                                           /**< Client stream port */
     int clientControlPort;                                          /**< Client control port */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;                     /**< Type of Service class selector */
 
 } ARSTREAM2_StreamReceiver_NetConfig_t;
 

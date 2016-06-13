@@ -35,7 +35,7 @@ static JavaVM *g_vm = NULL;
 
 JNIEXPORT jlong JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
-    jint clientStreamPort, jint clientControlPort, jstring canonicalName, jstring friendlyName, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
+    jint clientStreamPort, jint clientControlPort, jstring canonicalName, jstring friendlyName, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency, jint classSelector)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Manager_nativeInit");
     ARSTREAM2_StreamReceiver_Config_t config;
@@ -54,6 +54,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     net_config.serverControlPort = serverControlPort;
     net_config.clientStreamPort = clientStreamPort;
     net_config.clientControlPort = clientControlPort;
+    net_config.classSelector = classSelector;
     config.canonicalName = c_canonicalName;
     config.friendlyName = c_friendlyName;
     config.maxPacketSize = maxPacketSize;
