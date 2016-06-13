@@ -1,5 +1,7 @@
 package com.parrot.arsdk.arstream2;
 
+import com.parrot.arsdk.arsal.ARSAL_SOCKET_CLASS_SELECTOR_ENUM;
+
 import com.parrot.mux.Mux;
 import android.os.Process;
 import android.util.Log;
@@ -47,10 +49,10 @@ public class ARStream2Manager
     }
 
     public ARStream2Manager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
-                         int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
+                         int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, ARSAL_SOCKET_CLASS_SELECTOR_ENUM classSelector)
     {
         this.nativeRef = nativeNetInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
-                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
+                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, classSelector.getValue());
         this.streamThread = new Thread(new Runnable()
         {
             @Override
@@ -131,7 +133,7 @@ public class ARStream2Manager
     private native long nativeNetInit(String serverAddress, int serverStreamPort, int serverControlPort,
                                       int clientStreamPort, int clientControlPort,
                                       int maxPacketSize, int maxBitrate, int maxLatency,
-                                      int maxNetworkLatency);
+                                      int maxNetworkLatency, int classSelector);
 
     private native long nativeMuxInit(long mux, int maxPacketSize, int maxBitrate, int maxLatency,
                                       int maxNetworkLatency);

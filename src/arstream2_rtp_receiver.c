@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <math.h>
@@ -115,6 +116,7 @@ struct ARSTREAM2_RtpReceiver_NetInfos_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
+    int classSelector;
 
     /* Sockets */
     int isMulticast;
@@ -488,6 +490,16 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
 
     if (ret == 0)
     {
+        int tos = receiver->net.classSelector;
+        err = ARSAL_Socket_Setsockopt(receiver->net.streamSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
+
+    if (ret == 0)
+    {
         /* set to non-blocking */
         int flags = fcntl(receiver->net.streamSocket, F_GETFL, 0);
         fcntl(receiver->net.streamSocket, F_SETFL, flags | O_NONBLOCK);
@@ -704,6 +716,16 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
         }
     }
 #endif
+
+    if (ret == 0)
+    {
+        int tos = receiver->net.classSelector;
+        err = ARSAL_Socket_Setsockopt(receiver->net.controlSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
 
     if (ret == 0)
     {
@@ -1637,6 +1659,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->net.serverControlPort = net_config->serverControlPort;
             retReceiver->net.clientStreamPort = (net_config->clientStreamPort > 0) ? net_config->clientStreamPort : ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_STREAM_PORT;
             retReceiver->net.clientControlPort = (net_config->clientControlPort > 0) ? net_config->clientControlPort : ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT;
+            retReceiver->net.classSelector = net_config->classSelector;
 
             retReceiver->useMux = 0;
 

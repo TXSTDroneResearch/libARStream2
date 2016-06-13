@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
+#include <libARSAL/ARSAL_Socket.h>
 
 
 /**
@@ -86,6 +87,7 @@ typedef struct ARSTREAM2_RtpReceiver_NetConfig_t
     int serverControlPort;                          /**< Server control port, @see ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
 } ARSTREAM2_RtpReceiver_NetConfig_t;
 
 // Forward declaration of the mux_ctx structure
