@@ -2169,7 +2169,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     if (ret != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to setup the control channel (error %d) - aborting", ret);
-        free(msgBuffer);
         return (void*)0;
     }
 
@@ -2259,12 +2258,6 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
     ARSAL_Mutex_Lock(&(receiver->streamMutex));
     receiver->controlThreadStarted = 0;
     ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-    if (msgBuffer)
-    {
-        free(msgBuffer);
-        msgBuffer = NULL;
-    }
 
     return (void *)0;
 }
