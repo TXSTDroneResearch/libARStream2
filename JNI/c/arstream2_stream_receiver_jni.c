@@ -457,17 +457,9 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeFree(JNIEnv *env, jobjec
 }
 
 JNIEXPORT void JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunStreamThread(JNIEnv *env, jobject thizz, jlong cResender)
+Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunThread(JNIEnv *env, jobject thizz, jlong cResender)
 {
-    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunStreamThread %d", cResender);
+    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunThread %d", cResender);
     ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
-    ARSTREAM2_StreamReceiver_RunResenderStreamThread((void*)resenderHandle);
-}
-
-JNIEXPORT void JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunControlThread(JNIEnv *env, jobject thizz, jlong cResender)
-{
-    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunControlThread %d", cResender);
-    ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
-    ARSTREAM2_StreamReceiver_RunResenderControlThread((void*)resenderHandle);
+    ARSTREAM2_StreamReceiver_RunResenderThread((void*)resenderHandle);
 }
