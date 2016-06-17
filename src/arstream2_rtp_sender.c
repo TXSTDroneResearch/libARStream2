@@ -13,7 +13,7 @@
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#define ARSTREAM2_HAS_SENDMMSG //TODO
+#define ARSTREAM2_HAS_MMSG //TODO
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -432,10 +432,16 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
 }
 
 
-#ifndef ARSTREAM2_HAS_SENDMMSG
+#ifndef ARSTREAM2_HAS_MMSG
+struct mmsghdr {
+    struct msghdr msg_hdr;  /* Message header */
+    unsigned int  msg_len;  /* Number of received bytes for header */
+};
+
+
 static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsigned int flags)
 {
-    unsigned int i;
+    unsigned int i, count;
     ssize_t ret;
 
     if (!msgvec)
@@ -443,18 +449,28 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
         return -1;
     }
 
-    for (i = 0; i < vlen; i++)
+    for (i = 0, count = 0; i < vlen; i++)
     {
         ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags);
         if (ret < 0)
         {
-            return ret;
+            if (count == 0)
+            {
+                return ret;
+            }
+            else
+            {
+                break;
+            }
         }
         else
         {
+            count++;
             msgvec[i].msg_len = (unsigned int)ret;
         }
     }
+
+    return count;
 }
 #endif
 

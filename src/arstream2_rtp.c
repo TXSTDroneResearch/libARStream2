@@ -19,6 +19,13 @@
 #define ARSTREAM2_RTP_TAG "ARSTREAM2_Rtp"
 
 
+#ifndef ARSTREAM2_HAS_MMSG
+struct mmsghdr {
+    struct msghdr msg_hdr;  /* Message header */
+    unsigned int  msg_len;  /* Number of received bytes for header */
+};
+#endif
+
 
 int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize)
 {
