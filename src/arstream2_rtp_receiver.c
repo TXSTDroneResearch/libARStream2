@@ -12,7 +12,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#define __USE_GNU
+#include <sys/socket.h>
+#undef __USE_GNU
+#define ARSTREAM2_HAS_MMSG //TODO
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <math.h>
@@ -26,7 +31,6 @@
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
-#include <libARSAL/ARSAL_Socket.h>
 
 #if BUILD_LIBMUX
 #include <libmux.h>
@@ -402,7 +406,7 @@ static int ARSTREAM2_RtpReceiver_SetSocketReceiveBufferSize(ARSTREAM2_RtpReceive
     socklen_t size2 = sizeof(size2);
 
     size /= 2;
-    err = ARSAL_Socket_Setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void*)&size, sizeof(size));
+    err = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void*)&size, sizeof(size));
     if (err != 0)
     {
         ret = -1;
@@ -410,7 +414,7 @@ static int ARSTREAM2_RtpReceiver_SetSocketReceiveBufferSize(ARSTREAM2_RtpReceive
     }
 
     size = -1;
-    err = ARSAL_Socket_Getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void*)&size, &size2);
+    err = getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void*)&size, &size2);
     if (err != 0)
     {
         ret = -1;
@@ -470,7 +474,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     int err;
 
     /* create socket */
-    receiver->net.streamSocket = ARSAL_Socket_Create(AF_INET, SOCK_DGRAM, 0);
+    receiver->net.streamSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (receiver->net.streamSocket < 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to create stream socket");
@@ -482,7 +486,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     {
         /* remove SIGPIPE */
         int set = 1;
-        err = ARSAL_Socket_Setsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
+        err = setsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
@@ -536,7 +540,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
                 if (ret == 0)
                 {
                     /* join the multicast group */
-                    err = ARSAL_Socket_Setsockopt(receiver->net.streamSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+                    err = setsockopt(receiver->net.streamSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
                     if (err != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to join multacast group: error=%d (%s)", errno, strerror(errno));
@@ -558,7 +562,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     {
         /* allow multiple sockets to use the same port */
         unsigned int yes = 1;
-        err = ARSAL_Socket_Setsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+        err = setsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set socket option SO_REUSEADDR: error=%d (%s)", errno, strerror(errno));
@@ -569,7 +573,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     if (ret == 0)
     {
         /* bind the socket */
-        err = ARSAL_Socket_Bind(receiver->net.streamSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
+        err = bind(receiver->net.streamSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on stream socket bind port=%d: error=%d (%s)", receiver->net.clientStreamPort, errno, strerror(errno));
@@ -595,7 +599,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     {
         if (receiver->net.streamSocket >= 0)
         {
-            ARSAL_Socket_Close(receiver->net.streamSocket);
+            close(receiver->net.streamSocket);
         }
         receiver->net.streamSocket = -1;
     }
@@ -631,7 +635,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketTeardown(ARSTREAM2_RtpReceiver_t *r
 
     if (receiver->net.streamSocket != -1)
     {
-        ARSAL_Socket_Close(receiver->net.streamSocket);
+        close(receiver->net.streamSocket);
         receiver->net.streamSocket = -1;
     }
 
@@ -688,7 +692,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     if (ret == 0)
     {
         /* create socket */
-        receiver->net.controlSocket = ARSAL_Socket_Create(AF_INET, SOCK_DGRAM, 0);
+        receiver->net.controlSocket = socket(AF_INET, SOCK_DGRAM, 0);
         if (receiver->net.controlSocket < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to create control socket");
@@ -701,7 +705,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     {
         /* remove SIGPIPE */
         int set = 1;
-        err = ARSAL_Socket_Setsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
+        err = setsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
@@ -726,7 +730,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     {
         /* allow multiple sockets to use the same port */
         unsigned int yes = 1;
-        err = ARSAL_Socket_Setsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+        err = setsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set socket option SO_REUSEADDR: error=%d (%s)", errno, strerror(errno));
@@ -737,7 +741,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     if (ret == 0)
     {
         /* bind the socket */
-        err = ARSAL_Socket_Bind(receiver->net.controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
+        err = bind(receiver->net.controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on control socket bind port=%d: error=%d (%s)", receiver->net.clientControlPort, errno, strerror(errno));
@@ -762,7 +766,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     if (ret == 0)
     {
         /* connect the socket */
-        err = ARSAL_Socket_Connect(receiver->net.controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
+        err = connect(receiver->net.controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on control socket connect to addr='%s' port=%d: error=%d (%s)", receiver->net.serverAddr, receiver->net.serverControlPort, errno, strerror(errno));
@@ -774,7 +778,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     {
         if (receiver->net.controlSocket >= 0)
         {
-            ARSAL_Socket_Close(receiver->net.controlSocket);
+            close(receiver->net.controlSocket);
         }
         receiver->net.controlSocket = -1;
     }
@@ -810,7 +814,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketTeardown(ARSTREAM2_RtpReceiver_t *
 
     if (receiver->net.controlSocket != -1)
     {
-        ARSAL_Socket_Close(receiver->net.controlSocket);
+        close(receiver->net.controlSocket);
         receiver->net.controlSocket = -1;
     }
 
@@ -901,7 +905,7 @@ static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, 
         return -1;
     }
 
-    bytes = ARSAL_Socket_Recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
+    bytes = recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
     if (bytes < 0)
     {
         /* socket receive failed */
@@ -929,7 +933,7 @@ static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, 
             }
             else if (p.revents & POLLIN)
             {
-                bytes = ARSAL_Socket_Recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
+                bytes = recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
                 if (bytes >= 0)
                 {
                     /* success: save the number of bytes read */
@@ -955,7 +959,7 @@ static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, 
                 /* no poll error, no timeout, but socket is not ready */
                 int error = 0;
                 socklen_t errlen = sizeof(error);
-                ARSAL_Socket_Getsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+                getsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
                 ret = -EIO;
                 *recvSize = 0;
@@ -1015,7 +1019,7 @@ static int ARSTREAM2_RtpReceiver_MuxSendControlData(ARSTREAM2_RtpReceiver_t *rec
 
 static int ARSTREAM2_RtpReceiver_NetSendControlData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *buffer, int size)
 {
-    int ret = ARSAL_Socket_Send(receiver->net.controlSocket, buffer, size, 0);
+    int ret = send(receiver->net.controlSocket, buffer, size, 0);
     if (ret < 0)
         ret = -errno;
     return ret;
@@ -1100,19 +1104,19 @@ static int ARSTREAM2_RtpReceiver_NetReadControlData(ARSTREAM2_RtpReceiver_t *rec
         }
         else if (p.revents & POLLIN)
         {
-            bytes = ARSAL_Socket_Recv(receiver->net.controlSocket, buffer, size, 0);
+            bytes = recv(receiver->net.controlSocket, buffer, size, 0);
         }
         else
         {
             /* no poll error, no timeout, but socket is not ready */
             int error = 0;
             socklen_t errlen = sizeof(error);
-            ARSAL_Socket_Getsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+            getsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
             bytes = -EIO;
         }
     } else {
-        bytes = ARSAL_Socket_Recv(receiver->net.controlSocket, buffer, size, 0);
+        bytes = recv(receiver->net.controlSocket, buffer, size, 0);
     }
     return bytes;
 }
