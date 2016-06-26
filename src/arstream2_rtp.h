@@ -14,6 +14,8 @@
 #undef __USE_GNU
 #define ARSTREAM2_HAS_MMSG //TODO
 
+#include "arstream2_rtcp.h"
+
 
 /*
  * Macros
@@ -52,8 +54,10 @@ typedef struct ARSTREAM2_RTP_Packet_s {
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;
     uint16_t seqNum;
+    uint32_t extSeqNum;
     uint32_t markerBit;
     ARSTREAM2_RTP_Header_t header;
     uint8_t *headerExtension;
@@ -136,6 +140,21 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
 } ARSTREAM2_RTP_SenderContext_t;
 
 
+/**
+ * @brief RTP sender context
+ */
+typedef struct ARSTREAM2_RTP_ReceiverContext_s {
+    uint32_t rtpClockRate;
+    uint32_t maxPacketSize;
+    uint32_t nominalDelay;
+    uint64_t extHighestRtpTimestamp;
+    uint32_t extHighestSeqNum;
+    int32_t previousExtSeqNum;
+    uint64_t previousExtRtpTimestamp;
+    uint64_t previousRecvRtpTimestamp;
+} ARSTREAM2_RTP_ReceiverContext_t;
+
+
 /*
  * Functions
  */
@@ -149,6 +168,8 @@ ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoPopFreeItem(ARSTREAM2_RTP_Pack
 int ARSTREAM2_RTP_FifoPushFreeItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
 int ARSTREAM2_RTP_FifoEnqueueItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
+
+int ARSTREAM2_RTP_FifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
 ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoDequeueItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
@@ -177,5 +198,15 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
                                         uint64_t ntpTimestamp, uint64_t inputTimestamp,
                                         uint64_t timeoutTimestamp, uint16_t seqNum, uint32_t markerBit,
                                         uint32_t importance, uint32_t priority);
+
+/* WARNING: the call sequence ARSTREAM2_RTP_Receiver_FifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec
+   must not be broken (no change made to the free items list) */
+int ARSTREAM2_RTP_Receiver_FifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context, ARSTREAM2_RTP_PacketFifo_t *fifo);
+
+/* WARNING: the call sequence ARSTREAM2_RTP_Receiver_FifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec
+   must not be broken (no change made to the free items list) */
+int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context,
+                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime,
+                                             ARSTREAM2_RTCP_ReceiverContext_t *rtcpReceiverContext);
 
 #endif /* _ARSTREAM2_RTP_H_ */

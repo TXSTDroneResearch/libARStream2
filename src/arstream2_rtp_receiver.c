@@ -44,6 +44,16 @@
 #define ARSTREAM2_RTP_RECEIVER_STREAM_DATAREAD_TIMEOUT_MS (500)
 #define ARSTREAM2_RTP_RECEIVER_CONTROL_DATAREAD_TIMEOUT_MS (500)
 
+/**
+ * Default packet FIFO size
+ */
+#define ARSTREAM2_RTP_RECEIVER_DEFAULT_PACKET_FIFO_SIZE (500)
+
+/**
+ * @brief Default H.264 NAL unit FIFO size
+ */
+#define ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE (500)
+
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_COUNT (4)
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_NALU_BUFFER_COUNT (1024) //TODO: tune this value
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_NALU_BUFFER_MALLOC_CHUNK_SIZE (4096)
@@ -177,11 +187,11 @@ struct ARSTREAM2_RtpReceiver_t {
 
     /* Process context */
     struct ARSTREAM2_RtpReceiver_ProcessContext_t process;
-    ARSTREAM2_RTCP_ReceiverContext_t receiverContext;
+    ARSTREAM2_RTP_ReceiverContext_t rtpReceiverContext;
+    ARSTREAM2_RTCP_ReceiverContext_t rtcpReceiverContext;
 
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;
     void *naluCallbackUserPtr;
-    int maxPacketSize;
     int maxBitrate;
     int maxLatencyMs;
     int maxNetworkLatencyMs;
@@ -202,6 +212,12 @@ struct ARSTREAM2_RtpReceiver_t {
     int threadsShouldStop;
     int streamThreadStarted;
     int controlThreadStarted;
+
+    /* Packet FIFO */
+    ARSTREAM2_RTP_PacketFifo_t packetFifo;
+
+    /* NAL unit FIFO */
+    ARSTREAM2_RTPH264_NaluFifo_t naluFifo;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;
@@ -892,6 +908,41 @@ unref_buffer:
 #endif
 }
 
+static int ARSTREAM2_RtpReceiver_NetReadStreamPackets(ARSTREAM2_RtpReceiver_t *receiver, uint64_t curTime)
+{
+    int ret = 0;
+
+    ret = ARSTREAM2_RTP_Receiver_FifoFillMsgVec(&receiver->rtpReceiverContext, &receiver->packetFifo);
+    if (ret < 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_FifoFillMsgVec() failed (%d)", ret);
+        ret = -1;
+    }
+    else if (ret > 0)
+    {
+        unsigned int msgCount = (unsigned  int)ret;
+        ret = recvmmsg(receiver->net.streamSocket, receiver->packetFifo.msgVec, msgCount, 0, NULL);
+        if (ret < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Stream socket - recvmmsg error (%d): %s", errno, strerror(errno));
+            ret = -1;
+        }
+        else
+        {
+            unsigned int recvMsgCount = (unsigned  int)ret;
+            ret = ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(&receiver->rtpReceiverContext, &receiver->packetFifo,
+                                                           recvMsgCount, curTime, &receiver->rtcpReceiverContext);
+            if (ret < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec() failed (%d)", ret);
+                ret = -1;
+            }
+        }
+    }
+
+    return ret;
+}
+
 static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *recvBuffer, int recvBufferSize, int *recvSize)
 {
     int ret = 0, pollRet;
@@ -1206,32 +1257,32 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
     rtpTimestampScaled = ((((uint64_t)rtpTimestamp * 1000) + 45) / 90); /* 90000 Hz clock to microseconds */
     //TODO: handle the timestamp 32 bits loopback
-    ntpTimestampLocal = (receiver->receiverContext.clockDelta.clockDeltaAvg != 0) ? (rtpTimestampScaled - receiver->receiverContext.clockDelta.clockDeltaAvg) : 0;
-    ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->receiverContext, rtpTimestamp);
+    ntpTimestampLocal = (receiver->rtcpReceiverContext.clockDelta.clockDeltaAvg != 0) ? (rtpTimestampScaled - receiver->rtcpReceiverContext.clockDelta.clockDeltaAvg) : 0;
+    ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(&receiver->rtcpReceiverContext, rtpTimestamp);
     if (receiver->process.previousSeqNum != -1)
     {
-        receiver->receiverContext.extHighestSeqNum = (receiver->receiverContext.extHighestSeqNum & 0xFFFF0000) | ((uint32_t)currentSeqNum & 0xFFFF);
+        receiver->rtcpReceiverContext.extHighestSeqNum = (receiver->rtcpReceiverContext.extHighestSeqNum & 0xFFFF0000) | ((uint32_t)currentSeqNum & 0xFFFF);
         seqNumDelta = currentSeqNum - receiver->process.previousSeqNum;
         if (seqNumDelta < -32768)
         {
             seqNumDelta += 65536; /* handle seqNum 16 bits loopback */
-            receiver->receiverContext.extHighestSeqNum += 65536;
+            receiver->rtcpReceiverContext.extHighestSeqNum += 65536;
         }
         if (seqNumDelta > 0)
         {
             receiver->process.gapsInSeqNum += seqNumDelta - 1;
             receiver->process.gapsInSeqNumAu += seqNumDelta - 1;
-            receiver->receiverContext.packetsLost += seqNumDelta - 1;
+            receiver->rtcpReceiverContext.packetsLost += seqNumDelta - 1;
         }
     }
     else
     {
         seqNumDelta = 1;
-        receiver->receiverContext.senderSsrc = ssrc;
-        receiver->receiverContext.firstSeqNum = currentSeqNum;
-        receiver->receiverContext.extHighestSeqNum = currentSeqNum;
-        receiver->receiverContext.packetsReceived = 0;
-        receiver->receiverContext.packetsLost = 0;
+        receiver->rtcpReceiverContext.senderSsrc = ssrc;
+        receiver->rtcpReceiverContext.firstSeqNum = currentSeqNum;
+        receiver->rtcpReceiverContext.extHighestSeqNum = currentSeqNum;
+        receiver->rtcpReceiverContext.packetsReceived = 0;
+        receiver->rtcpReceiverContext.packetsLost = 0;
     }
     //WARNING: the mutex unlock is in the if/else below
 
@@ -1242,10 +1293,10 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         d = ((int64_t)receiver->process.previousRecvRtpTimestamp - (int64_t)receiver->process.previousRtpTimestamp)
             - ((int64_t)recvRtpTimestamp - (int64_t)rtpTimestamp);
         if (d < 0) d = -d;
-        receiver->receiverContext.interarrivalJitter = (uint32_t)((int64_t)receiver->receiverContext.interarrivalJitter
-                                                        + (d - (int64_t)receiver->receiverContext.interarrivalJitter) / 16);
+        receiver->rtcpReceiverContext.interarrivalJitter = (uint32_t)((int64_t)receiver->rtcpReceiverContext.interarrivalJitter
+                                                        + (d - (int64_t)receiver->rtcpReceiverContext.interarrivalJitter) / 16);
 
-        receiver->receiverContext.packetsReceived++;
+        receiver->rtcpReceiverContext.packetsReceived++;
         ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
         if ((receiver->process.previousRtpTimestamp != 0) && (rtpTimestamp != receiver->process.previousRtpTimestamp))
@@ -1502,7 +1553,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
     {
         /* out of order packet */
         //TODO
-        receiver->receiverContext.packetsLost++;
+        receiver->rtcpReceiverContext.packetsLost++;
         ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Out of order sequence number (currentSeqNum=%d, previousSeqNum=%d, seqNumDelta=%d)", currentSeqNum, receiver->process.previousSeqNum, seqNumDelta); //TODO: debug
     }
@@ -1563,6 +1614,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     int monitoringMutexWasInit = 0;
     int resenderMutexWasInit = 0;
     int naluBufferMutexWasInit = 0;
+    int packetFifoWasCreated = 0;
+    int naluFifoWasCreated = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -1640,16 +1693,19 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         memset(retReceiver, 0, sizeof(ARSTREAM2_RtpReceiver_t));
         retReceiver->naluCallback = config->naluCallback;
         retReceiver->naluCallbackUserPtr = config->naluCallbackUserPtr;
-        retReceiver->maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
+        retReceiver->rtpReceiverContext.maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retReceiver->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
         retReceiver->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
         retReceiver->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
         retReceiver->insertStartCodes = (config->insertStartCodes > 0) ? 1 : 0;
         retReceiver->generateReceiverReports = (config->generateReceiverReports > 0) ? 1 : 0;
-        retReceiver->receiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
-        retReceiver->receiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
-        retReceiver->receiverContext.cname = ARSTREAM2_RTP_RECEIVER_CNAME;
-        retReceiver->receiverContext.name = NULL;
+        retReceiver->rtpReceiverContext.rtpClockRate = 90000;
+        retReceiver->rtpReceiverContext.nominalDelay = 0; //TODO
+        retReceiver->rtpReceiverContext.previousExtSeqNum = -1;
+        retReceiver->rtcpReceiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
+        retReceiver->rtcpReceiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
+        retReceiver->rtcpReceiverContext.cname = ARSTREAM2_RTP_RECEIVER_CNAME;
+        retReceiver->rtcpReceiverContext.name = NULL;
 
         if (net_config)
         {
@@ -1778,6 +1834,35 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
     }
 
+    /* Setup the NAL unit FIFO */
+    if (internalError == ARSTREAM2_OK)
+    {
+        int naluFifoRet = ARSTREAM2_RTPH264_FifoInit(&retReceiver->naluFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE);
+        if (naluFifoRet != 0)
+        {
+            internalError = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            naluFifoWasCreated = 1;
+        }
+    }
+
+    /* Setup the packet FIFO */
+    if (internalError == ARSTREAM2_OK)
+    {
+        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retReceiver->packetFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_PACKET_FIFO_SIZE,
+                                                   retReceiver->rtpReceiverContext.maxPacketSize);
+        if (packetFifoRet != 0)
+        {
+            internalError = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            packetFifoWasCreated = 1;
+        }
+    }
+
 #ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
     if (internalError == ARSTREAM2_OK)
     {
@@ -1870,6 +1955,14 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         if (naluBufferMutexWasInit == 1)
         {
             ARSAL_Mutex_Destroy(&(retReceiver->naluBufferMutex));
+        }
+        if (packetFifoWasCreated == 1)
+        {
+            ARSTREAM2_RTP_FifoFree(&retReceiver->packetFifo);
+        }
+        if (naluFifoWasCreated == 1)
+        {
+            ARSTREAM2_RTPH264_FifoFree(&retReceiver->naluFifo);
         }
         if ((retReceiver) && (retReceiver->net.serverAddr))
         {
@@ -1998,6 +2091,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
+            ARSTREAM2_RTP_FifoFree(&(*receiver)->packetFifo);
+            ARSTREAM2_RTPH264_FifoFree(&(*receiver)->naluFifo);
             if ((*receiver)->net.serverAddr)
             {
                 free((*receiver)->net.serverAddr);
@@ -2051,7 +2146,7 @@ void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param)
         return (void *)0;
     }
 
-    recvBufferSize = receiver->maxPacketSize + sizeof(ARSTREAM2_RTP_Header_t);
+    recvBufferSize = receiver->rtpReceiverContext.maxPacketSize + sizeof(ARSTREAM2_RTP_Header_t);
 
     /* Alloc and check */
     recvBuffer = malloc(recvBufferSize);
@@ -2147,7 +2242,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
 {
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
     uint8_t *msgBuffer;
-    int msgBufferSize = receiver->maxPacketSize;
+    int msgBufferSize = receiver->rtpReceiverContext.maxPacketSize;
     int bytes;
     int shouldStop, ret;
     struct timespec t1;
@@ -2207,7 +2302,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                 ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
                 ret = ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(msgBuffer, (unsigned int)bytes,
                                                   curTime,
-                                                  &receiver->receiverContext);
+                                                  &receiver->rtcpReceiverContext);
                 ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
                 if (ret != 0)
@@ -2224,14 +2319,14 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
         {
             ARSAL_Time_GetTime(&t1);
             uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-            uint32_t rrDelay = (uint32_t)(curTime - receiver->receiverContext.lastRrTimestamp);
-            if ((rrDelay >= nextRrDelay) && (receiver->receiverContext.prevSrNtpTimestamp != 0))
+            uint32_t rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRrTimestamp);
+            if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
 
                 ARSAL_Mutex_Lock(&(receiver->rtcpMutex));
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(msgBuffer, (unsigned int)msgBufferSize, curTime, 1, 1, 1,
-                                                                     &receiver->receiverContext, &size);
+                                                                     &receiver->rtcpReceiverContext, &size);
                 ARSAL_Mutex_Unlock(&(receiver->rtcpMutex));
 
                 if ((ret == 0) && (size > 0))
@@ -2244,7 +2339,7 @@ void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param
                     }
                 }
 
-                nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->receiverContext.rtcpByteRate;
+                nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
                 if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
             }
         }

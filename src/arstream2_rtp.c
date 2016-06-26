@@ -6,6 +6,7 @@
  */
 
 #include "arstream2_rtp.h"
+#include "arstream2_rtcp.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -208,6 +209,75 @@ int ARSTREAM2_RTP_FifoEnqueueItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RT
     fifo->count++;
 
     return 0;
+}
+
+
+int ARSTREAM2_RTP_FifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
+    int outOfOrder = 0, duplicate = 0;
+
+    if ((!fifo) || (!item))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (fifo->count >= fifo->size)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Packet FIFO is full");
+        return -2;
+    }
+
+    for (cur = fifo->tail; cur; cur = cur->prev)
+    {
+        if (cur->packet.extSeqNum == item->packet.extSeqNum)
+        {
+            duplicate = 1;
+            break;
+        }
+        else if (cur->packet.extSeqNum < item->packet.extSeqNum)
+        {
+            break;
+        }
+        else
+        {
+            outOfOrder = 1;
+        }
+    }
+
+    if (duplicate)
+    {
+        return -3;
+    }
+
+    if (cur)
+    {
+        /* insert after cur */
+        item->next = cur->next;
+        if (item->next)
+        {
+            item->next->prev = item;
+        }
+        else
+        {
+            fifo->tail = item;
+        }
+        item->prev = cur;
+        cur->next = item;
+        fifo->count++;
+    }
+    else
+    {
+        /* insert at tail */
+        item->next = NULL;
+        item->prev = NULL;
+        fifo->tail = item;
+        fifo->head = item;
+        fifo->count++;
+    }
+
+    return (outOfOrder) ? 1 : 0;
 }
 
 
@@ -703,4 +773,232 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
     packet->msgIovLength++;
 
     return 0;
+}
+
+
+/* WARNING: the call sequence ARSTREAM2_RTP_Receiver_FifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec
+   must not be broken (no change made to the free items list) */
+int ARSTREAM2_RTP_Receiver_FifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context, ARSTREAM2_RTP_PacketFifo_t *fifo)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
+    int i;
+
+    if ((!context) || (!fifo))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (!fifo->free)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Packet FIFO is full");
+        return -2;
+    }
+
+    for (cur = fifo->free, i = 0; ((cur) && (i < fifo->size)); cur = cur->next, i++)
+    {
+        /* RTP header */
+        cur->packet.msgIov[0].iov_base = &cur->packet.header;
+        cur->packet.msgIov[0].iov_len = sizeof(ARSTREAM2_RTP_Header_t);
+
+        /* RTP payload */
+        cur->packet.msgIov[1].iov_base = &cur->packet.buffer;
+        cur->packet.msgIov[1].iov_len = context->maxPacketSize;
+
+        fifo->msgVec[i].msg_hdr.msg_name = NULL;
+        fifo->msgVec[i].msg_hdr.msg_namelen = 0;
+        fifo->msgVec[i].msg_hdr.msg_iov = cur->packet.msgIov;
+        fifo->msgVec[i].msg_hdr.msg_iovlen = 2;
+        fifo->msgVec[i].msg_hdr.msg_control = NULL;
+        fifo->msgVec[i].msg_hdr.msg_controllen = 0;
+        fifo->msgVec[i].msg_hdr.msg_flags = 0;
+        fifo->msgVec[i].msg_len = 0;
+    }
+
+    return i;
+}
+
+
+/* WARNING: the call sequence ARSTREAM2_RTP_Receiver_FifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec
+   must not be broken (no change made to the free items list) */
+int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context,
+                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime,
+                                             ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* item = NULL;
+    ARSTREAM2_RTP_PacketFifoItem_t* garbage = NULL;
+    int ret = 0;
+    unsigned int i;
+
+    if ((!context) || (!fifo))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (!msgVecCount)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Empty msgVec array");
+        return -2;
+    }
+
+    uint64_t recvRtpTimestamp = (curTime * context->rtpClockRate + 500000) / 1000000;
+
+    for (i = 0; i < msgVecCount; i++)
+    {
+        item = ARSTREAM2_RTP_FifoPopFreeItem(fifo);
+        if (item)
+        {
+            if (fifo->msgVec[i].msg_len > sizeof(ARSTREAM2_RTP_Header_t))
+            {
+                uint16_t flags;
+                int seqNumDelta = 0;
+
+                item->packet.inputTimestamp = curTime;
+                item->packet.rtpTimestamp = ntohl(item->packet.header.timestamp);
+                item->packet.ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(rtcpContext, item->packet.rtpTimestamp);
+                item->packet.timeoutTimestamp = curTime + context->nominalDelay; //TODO: compute the expected arrival time
+                item->packet.seqNum = ntohs(item->packet.header.seqNum);
+                if (context->previousExtSeqNum != -1)
+                {
+                    item->packet.extSeqNum = (context->extHighestSeqNum & 0xFFFF0000) | ((uint32_t)item->packet.seqNum & 0xFFFF);
+                    if ((int64_t)item->packet.extSeqNum - (int64_t)context->previousExtSeqNum < -32768)
+                    {
+                        item->packet.extSeqNum += 65536;
+                    }
+                    else if ((int64_t)item->packet.extSeqNum - (int64_t)context->previousExtSeqNum > 32768)
+                    {
+                        item->packet.extSeqNum -= 65536;
+                    }
+                    seqNumDelta = item->packet.extSeqNum - context->extHighestSeqNum;
+                    if (item->packet.extSeqNum > context->extHighestSeqNum)
+                    {
+                        context->extHighestSeqNum = item->packet.extSeqNum;
+                        rtcpContext->extHighestSeqNum = context->extHighestSeqNum;
+                    }
+                    item->packet.extRtpTimestamp = (context->extHighestRtpTimestamp & 0xFFFFFFFF00000000LL) | ((uint64_t)item->packet.rtpTimestamp & 0xFFFFFFFFLL);
+                    if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp < -2147483648)
+                    {
+                        item->packet.extSeqNum += 0x100000000LL;
+                    }
+                    else if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp > 2147483648)
+                    {
+                        item->packet.extSeqNum -= 0x100000000LL;
+                    }
+                    if (item->packet.extRtpTimestamp > context->extHighestRtpTimestamp)
+                    {
+                        context->extHighestRtpTimestamp = item->packet.extRtpTimestamp;
+                    }
+                }
+                else
+                {
+                    item->packet.extSeqNum = item->packet.seqNum;
+                    item->packet.extRtpTimestamp = item->packet.rtpTimestamp;
+                    context->extHighestSeqNum = item->packet.extSeqNum;
+                    context->extHighestRtpTimestamp = item->packet.extRtpTimestamp;
+                    context->previousRecvRtpTimestamp = recvRtpTimestamp;
+                    context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
+                    rtcpContext->senderSsrc = ntohl(item->packet.header.ssrc);
+                    rtcpContext->firstSeqNum = item->packet.seqNum;
+                    rtcpContext->extHighestSeqNum = context->extHighestSeqNum;
+                    rtcpContext->packetsReceived = 0;
+                    rtcpContext->packetsLost = 0;
+                }
+                context->previousExtSeqNum = (int32_t)item->packet.extSeqNum;
+                flags = ntohs(item->packet.header.flags);
+                if (flags & (1 << 7))
+                {
+                    /* the marker bit is set */
+                    item->packet.markerBit = 1;
+                }
+                if (flags & (1 << 12))
+                {
+                    /* the extention bit is set */
+                    item->packet.headerExtension = item->packet.buffer;
+                    uint16_t length = ntohs(*((uint16_t*)(item->packet.headerExtension + 2)));
+                    item->packet.headerExtensionSize = length * 4 + 4;
+                }
+                else
+                {
+                    item->packet.headerExtension = NULL;
+                    item->packet.headerExtensionSize = 0;
+                }
+                item->packet.payload = item->packet.buffer + item->packet.headerExtensionSize;
+                item->packet.payloadSize = fifo->msgVec[i].msg_len - sizeof(ARSTREAM2_RTP_Header_t) - item->packet.headerExtensionSize;
+
+                ret = ARSTREAM2_RTP_FifoEnqueueItemOrdered(fifo, item);
+                if (ret < 0)
+                {
+                    if (ret == -3)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Duplicate RTP packet received (seqNum %d, extSeqNum %d)",
+                                    item->packet.seqNum, item->packet.extSeqNum);
+                    }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_FifoEnqueueItem() failed (%d)", ret);
+                    }
+                    /* failed to enqueue, flag the item for garbage collection */
+                    if (!garbage)
+                    {
+                        garbage = item;
+                    }
+                    else
+                    {
+                        item->next = garbage;
+                        garbage->prev = item;
+                        garbage = item;
+                    }
+                }
+                else if (ret == 1)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Out of order RTP packet received (seqNum %d, extSeqNum %d, delta %d)",
+                                item->packet.seqNum, item->packet.extSeqNum, -seqNumDelta);
+                }
+                else
+                {
+                    /* interarrival jitter computation */
+                    int64_t d;
+                    d = ((int64_t)context->previousRecvRtpTimestamp - (int64_t)context->previousExtRtpTimestamp)
+                        - ((int64_t)recvRtpTimestamp - (int64_t)item->packet.extRtpTimestamp);
+                    if (d < 0) d = -d;
+                    rtcpContext->interarrivalJitter = (uint32_t)((int64_t)rtcpContext->interarrivalJitter
+                                                                    + (d - (int64_t)rtcpContext->interarrivalJitter) / 16);
+                    context->previousRecvRtpTimestamp = recvRtpTimestamp;
+                    context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
+                }
+            }
+            else
+            {
+                /* invalid payload, flag the item for garbage collection */
+                if (!garbage)
+                {
+                    garbage = item;
+                }
+                else
+                {
+                    item->next = garbage;
+                    garbage->prev = item;
+                    garbage = item;
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (garbage)
+    {
+        ARSTREAM2_RTP_PacketFifoItem_t* next = garbage->next;
+        int pushRet = ARSTREAM2_RTP_FifoPushFreeItem(fifo, garbage);
+        if (pushRet < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_FifoPushFreeItem() failed (%d)", pushRet);
+        }
+        garbage = next;
+    }
+
+    return ret;
 }
