@@ -1381,7 +1381,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHa
     }
 
     ARSAL_Mutex_Lock(&(filter->mutex));
-    if (filter->callbackInProgress)
+    while (filter->callbackInProgress)
     {
         ARSAL_Cond_Wait(&(filter->callbackCond), &(filter->mutex));
     }
