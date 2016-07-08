@@ -487,20 +487,23 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
 
     if (!cancelAuOutput)
     {
-        eARSTREAM2_ERROR cbRet;
+        eARSTREAM2_ERROR cbRet = ARSTREAM2_OK;
         uint64_t curTime;
         struct timespec t1;
         uint8_t *auBuffer = NULL;
         int auBufferSize = 0;
         void *auBufferUserPtr = NULL;
 
-        /* call the getAuBufferCallback */
         filter->callbackInProgress = 1;
-        ARSAL_Mutex_Unlock(&(filter->mutex));
+        if (filter->getAuBufferCallback)
+        {
+            /* call the getAuBufferCallback */
+            ARSAL_Mutex_Unlock(&(filter->mutex));
 
-        cbRet = filter->getAuBufferCallback(&auBuffer, &auBufferSize, &auBufferUserPtr, filter->getAuBufferCallbackUserPtr);
+            cbRet = filter->getAuBufferCallback(&auBuffer, &auBufferSize, &auBufferUserPtr, filter->getAuBufferCallbackUserPtr);
 
-        ARSAL_Mutex_Lock(&(filter->mutex));
+            ARSAL_Mutex_Lock(&(filter->mutex));
+        }
 
         if ((cbRet != ARSTREAM2_OK) || (!auBuffer) || (!auBufferSize))
         {
@@ -518,15 +521,18 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             ARSAL_Time_GetTime(&t1);
             curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-            /* call the auReadyCallback */
-            ARSAL_Mutex_Unlock(&(filter->mutex));
+            if (filter->auReadyCallback)
+            {
+                /* call the auReadyCallback */
+                ARSAL_Mutex_Unlock(&(filter->mutex));
 
-            cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
-                                            (filter->currentAuMetadataSize > 0) ? filter->currentAuMetadata : NULL, filter->currentAuMetadataSize,
-                                            (filter->currentAuUserDataSize > 0) ? filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
-                                            auBufferUserPtr, filter->auReadyCallbackUserPtr);
+                cbRet = filter->auReadyCallback(auBuffer, auSize, filter->currentAuTimestamp, filter->currentAuTimestampShifted, filter->currentAuSyncType,
+                                                (filter->currentAuMetadataSize > 0) ? filter->currentAuMetadata : NULL, filter->currentAuMetadataSize,
+                                                (filter->currentAuUserDataSize > 0) ? filter->currentAuUserData : NULL, filter->currentAuUserDataSize,
+                                                auBufferUserPtr, filter->auReadyCallbackUserPtr);
 
-            ARSAL_Mutex_Lock(&(filter->mutex));
+                ARSAL_Mutex_Lock(&(filter->mutex));
+            }
             filter->callbackInProgress = 0;
             ARSAL_Mutex_Unlock(&(filter->mutex));
             ARSAL_Cond_Signal(&(filter->callbackCond));
