@@ -422,6 +422,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
     {
         int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
+        ret = -1;
     }
 
     return ret;
@@ -442,7 +443,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
     fuHeader &= ~0xE0;
     unsigned int meanFragmentSize = (nalu->naluSize + ((context->useRtpHeaderExtensions) ? nalu->metadataSize : 0) + fragmentCount / 2) / fragmentCount;
 
-    for (i = 0, offset = 1; i < fragmentCount; i++)
+    for (i = 0, offset = 1; (i < fragmentCount) && (status == 0); i++)
     {
         unsigned int fragmentSize = (i == fragmentCount - 1) ? nalu->naluSize - offset : meanFragmentSize;
         unsigned int fragmentOffset = 0;
@@ -527,6 +528,8 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                 {
                     int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
+                    status = -1;
+                    break;
                 }
             }
             else
@@ -603,6 +606,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     {
         int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
+        ret = -1;
     }
 
     return ret;
