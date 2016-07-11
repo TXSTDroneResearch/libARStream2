@@ -112,6 +112,7 @@ typedef struct ARSTREAM2_H264_PpsContext_s
 
 typedef struct ARSTREAM2_H264_SliceContext_s
 {
+    unsigned int sliceHeaderLengthInBits;
     unsigned int nal_ref_idc;
     unsigned int nal_unit_type;
     unsigned int idrPicFlag;

@@ -15,6 +15,10 @@
 #include <libARStream2/arstream2_h264_writer.h>
 #include "arstream2_h264.h"
 
+#include <libARSAL/ARSAL_Print.h>
+
+#define ARSTREAM2_H264_WRITER_TAG "ARSTREAM2_H264Writer"
+
 
 #define log2(x) (log(x) / log(2)) //TODO
 
@@ -1348,6 +1352,263 @@ static int ARSTREAM2_H264Writer_WriteGrayISliceData(ARSTREAM2_H264Writer_t* writ
     }
 
     return bitsWritten;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_RewriteNonRefPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, void *sliceContext, const uint8_t *pbInputBuf, unsigned int inputSize, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize)
+{
+    ARSTREAM2_H264Writer_t *writer = (ARSTREAM2_H264Writer_t*)writerHandle;
+    int ret = 0, bitsWritten = 0;
+
+    if ((!writerHandle) || (!pbOutputBuf) || (outputBufSize == 0) || (!outputSize))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    if (!writer->isSpsPpsContextValid)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Invalid SPS/PPS context");
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+
+    // Slice context
+    if (sliceContext)
+    {
+        if (((ARSTREAM2_H264_SliceContext_t*)sliceContext)->adaptive_ref_pic_marking_mode_flag == 1)
+        {
+            // UNSUPPORTED
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Slice context: adaptive_ref_pic_marking_mode_flag==1 is not supported");
+            return ARSTREAM2_ERROR_UNSUPPORTED;
+        }
+        memcpy(&writer->sliceContext, sliceContext, sizeof(ARSTREAM2_H264_SliceContext_t));
+        writer->sliceContext.nal_ref_idc = 0;
+    }
+    else
+    {
+        // UNSUPPORTED
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Slice context is not provided");
+        return ARSTREAM2_ERROR_UNSUPPORTED;
+    }
+
+    writer->pNaluBuf = pbOutputBuf;
+    writer->naluBufSize = outputBufSize;
+    writer->naluSize = 0;
+
+    // Reset the bitstream cache
+    writer->cache = 0;
+    writer->cacheLength = 0;
+    writer->oldZeroCount = 0;
+
+    // NALU start code
+    if (writer->config.naluPrefix)
+    {
+        ret = writeBits(writer, 32, ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE, 0);
+        if (ret < 0)
+        {
+            return ARSTREAM2_ERROR_INVALID_STATE;
+        }
+        bitsWritten += ret;
+    }
+
+    // forbidden_zero_bit
+    // nal_ref_idc
+    // nal_unit_type
+    ret = writeBits(writer, 8, ((writer->sliceContext.nal_ref_idc & 3) << 5) | writer->sliceContext.nal_unit_type, 0);
+    if (ret < 0)
+    {
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+    bitsWritten += ret;
+
+    // slice_header
+    ret = ARSTREAM2_H264Writer_WriteSliceHeader(writer, &writer->sliceContext, &writer->spsContext, &writer->ppsContext);
+    if (ret < 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Error: ARSTREAM2_H264Writer_WriteSliceHeader() failed (%d)", ret);
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+    bitsWritten += ret;
+
+    if (ret != (int)writer->sliceContext.sliceHeaderLengthInBits - 1)
+    {
+        // UNSUPPORTED
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Unsupported slice header length (%d vs %d)", ret, writer->sliceContext.sliceHeaderLengthInBits);
+        return ARSTREAM2_ERROR_UNSUPPORTED;
+    }
+
+    // slice_data
+    int length = inputSize - 1 - writer->sliceContext.sliceHeaderLengthInBits / 8;
+    if (length < 1)
+    {
+        // UNSUPPORTED
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Unsupported length (%d)", length);
+        return ARSTREAM2_ERROR_UNSUPPORTED;
+    }
+
+    int dstBitOffset = bitsWritten & 7;
+    int dstOffset = bitsWritten / 8;
+    ret = bitstreamByteAlign(writer, 1);
+    if (ret < 0)
+    {
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+    uint8_t *pDst = (ret == 0) ? writer->pNaluBuf : writer->pNaluBuf - 1;
+    uint8_t dst;
+    bitsWritten = (bitsWritten / 8) * 8;
+
+    /* destination zero bytes count */
+    int dstNumZeros = 0;
+    if ((dstOffset > 0) && (*(pDst - 1) == 0x00))
+    {
+        dstNumZeros++;
+        if ((dstOffset > 1) && (*(pDst - 2) == 0x00))
+        {
+            dstNumZeros++;
+        }
+    }
+
+    int srcBitOffset = writer->sliceContext.sliceHeaderLengthInBits & 7;
+    int srcOffset = 1 + writer->sliceContext.sliceHeaderLengthInBits / 8;
+    const uint8_t *pSrc = pbInputBuf + srcOffset;
+    uint8_t src;
+
+    int shiftL = (srcBitOffset - dstBitOffset + 8) % 8;
+    int notshiftL = 8 - shiftL;
+    int mask = (1 << shiftL) - 1;
+
+    /* source zero bytes count */
+    int srcNumZeros = 0;
+    if ((srcOffset > 0) && (*(pSrc - 1) == 0x00))
+    {
+        srcNumZeros++;
+        if ((srcOffset > 1) && (*(pSrc - 2) == 0x00))
+        {
+            srcNumZeros++;
+        }
+    }
+
+    /* source init */
+    if (srcBitOffset)
+    {
+        src = *pSrc++;
+        length--;
+        if ((srcNumZeros == 2) && (src == 0x03))
+        {
+            if (length < 1)
+            {
+                // UNSUPPORTED
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_WRITER_TAG, "Unsupported length-2 (%d)", length);
+                return ARSTREAM2_ERROR_UNSUPPORTED;
+            }
+
+            /* remove the 0x03 byte */
+            srcNumZeros = 0;
+            src = *pSrc++;
+            length--;
+            if (src == 0x00)
+            {
+                srcNumZeros++;
+            }
+            else
+            {
+                srcNumZeros = 0;
+            }
+        }
+        else if (src == 0x00)
+        {
+            srcNumZeros++;
+        }
+        else
+        {
+            srcNumZeros = 0;
+        }
+        src &= ((1 << (8 - srcBitOffset)) - 1);
+    }
+    else
+    {
+        src = 0;
+    }
+
+    /* destination init */
+    if (dstBitOffset)
+    {
+        dst = *pDst;
+        if (dstBitOffset)
+        {
+            dst &= (((1 << dstBitOffset) - 1) << (8 - dstBitOffset));
+        }
+        dst |= (src << shiftL);
+    }
+    else
+    {
+        dst = 0;
+    }
+
+    /* main loop */
+    int i;
+    for (i = 0; i < length; i++)
+    {
+        src = *pSrc++;
+        if ((srcNumZeros == 2) && (src == 0x03))
+        {
+            /* remove the 0x03 byte */
+            srcNumZeros = 0;
+            src = *pSrc++;
+            length--;
+        }
+        if (src == 0x00)
+        {
+            srcNumZeros++;
+        }
+        else
+        {
+            srcNumZeros = 0;
+        }
+
+        dst |= ((src >> notshiftL) & mask);
+        if ((dstNumZeros == 2) && (dst <= 0x03))
+        {
+            /* 0x000000 or 0x000001 or 0x000002 or 0x000003 => insert 0x03 */
+            *(pDst++) = 0x03;
+            bitsWritten += 8;
+            dstNumZeros = 0;
+        }
+        if (dst == 0)
+        {
+            dstNumZeros++;
+        }
+        else
+        {
+            dstNumZeros = 0;
+        }
+        *(pDst++) = dst;
+        bitsWritten += 8;
+
+        dst = src << shiftL;
+    }
+
+    /* last byte */
+    if ((dstNumZeros == 2) && (dst <= 0x03))
+    {
+        /* 0x000000 or 0x000001 or 0x000002 or 0x000003 => insert 0x03 */
+        *(pDst++) = 0x03;
+        bitsWritten += 8;
+        dstNumZeros = 0;
+    }
+    if (dst == 0)
+    {
+        dstNumZeros++;
+    }
+    else
+    {
+        dstNumZeros = 0;
+    }
+    *(pDst++) = dst;
+    bitsWritten += 8;
+
+    *outputSize = bitsWritten / 8;
+
+    return ARSTREAM2_OK;
 }
 
 

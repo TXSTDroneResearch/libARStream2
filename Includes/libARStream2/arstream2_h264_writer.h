@@ -148,7 +148,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSeiNalu(ARSTREAM2_H264Writer_Handle w
  * @param[in] writerHandle Instance handle.
  * @param[in] firstMbInSlice Slice first macroblock index
  * @param[in] sliceMbCount Slice macroblock count
- * @param[in] sliceContext Optional slice context to use (from an H.264 parser)
+ * @param[in] sliceContext Slice context to use (from an H.264 parser)
  * @param[in] pbOutputBuf Bitstream output buffer
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
@@ -167,7 +167,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_H
  * @param[in] writerHandle Instance handle.
  * @param[in] firstMbInSlice Slice first macroblock index
  * @param[in] sliceMbCount Slice macroblock count
- * @param[in] sliceContext Optional slice context to use (from an H.264 parser)
+ * @param[in] sliceContext Slice context to use (from an H.264 parser)
  * @param[in] pbOutputBuf Bitstream output buffer
  * @param[in] outputBufSize Bitstream output buffer size
  * @param[out] outputSize Bitstream output size
@@ -176,6 +176,27 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteGrayISliceNalu(ARSTREAM2_H264Writer_H
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, unsigned int firstMbInSlice, unsigned int sliceMbCount, void *sliceContext, uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
+
+
+/**
+ * @brief Rewrite a non-ref P-slice NAL unit.
+ *
+ * The function rewrites a P-slice as a non reference P-slice NAL unit.
+ *
+ * @param[in] writerHandle Instance handle.
+ * @param[in] sliceContext Slice context to use (from an H.264 parser)
+ * @param[in] pbInputBuf Bitstream input buffer
+ * @param[in] inputBufSize Bitstream input size
+ * @param[in] pbOutputBuf Bitstream output buffer
+ * @param[in] outputBufSize Bitstream output buffer size
+ * @param[out] outputSize Bitstream output size
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Writer_RewriteNonRefPSliceNalu(ARSTREAM2_H264Writer_Handle writerHandle, void *sliceContext,
+                                                              const uint8_t *pbInputBuf, unsigned int inputSize,
+                                                              uint8_t *pbOutputBuf, unsigned int outputBufSize, unsigned int *outputSize);
 
 
 #ifdef __cplusplus

@@ -3187,6 +3187,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_group_change_cycle = %d", val);
     }
 
+    parser->sliceContext.sliceHeaderLengthInBits = _readBits;
 
     // rbsp_slice_trailing_bits
 
