@@ -1282,6 +1282,11 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                         }
                         receiver->process.naluStartSeqNum = currentSeqNum;
                     }
+                    else if (seqNumDelta > 1)
+                    {
+                        /* drop the FU-A if there is a seqNum discontinuity */
+                        receiver->process.fuPending = 0;
+                    }
                     if (receiver->process.fuPending)
                     {
                         outputSize += (startBit) ? startCodeLength + 1 : 0;
