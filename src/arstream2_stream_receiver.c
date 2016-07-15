@@ -382,3 +382,31 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_
 
     return ARSTREAM2_OK;
 }
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, const char *recordFileName)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_H264Filter_StartRecorder(streamReceiver->filter, recordFileName);
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_H264Filter_StopRecorder(streamReceiver->filter);
+}

@@ -136,6 +136,7 @@ struct ARSTREAM2_RtpReceiver_ProcessContext_t {
     uint16_t previousFlags;
     int auStartSeqNum;
     int naluStartSeqNum;
+    int gapsInSeqNum;
     int gapsInSeqNumAu;
     int fuPending;
     int currentAuSize;
@@ -1160,7 +1161,6 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
 {
     int payloadSize, headersOffset, extHeaderSize;
     int currentSeqNum, seqNumDelta;
-    int gapsInSeqNum = 0;
     int uncertainAuChange = 0;
     uint32_t startCode = 0;
     int startCodeLength = 0;
@@ -1215,9 +1215,9 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
         }
         if (seqNumDelta > 0)
         {
-            gapsInSeqNum += seqNumDelta - 1;
+            receiver->process.gapsInSeqNum += seqNumDelta - 1;
             receiver->process.gapsInSeqNumAu += seqNumDelta - 1;
-            receiver->receiverContext.packetsLost += gapsInSeqNum;
+            receiver->receiverContext.packetsLost += seqNumDelta - 1;
         }
     }
     else
@@ -1255,7 +1255,7 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                 /*ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Incomplete access unit before seqNum %d, size %d bytes (missing %d of %d packets)",
                   currentSeqNum, currentAuSize, gapsInSeqNumAu, currentSeqNum - auStartSeqNum + 1);*/
             }
-            if ((receiver->process.currentAuSize != 0) || (gapsInSeqNum != 0))
+            if ((receiver->process.currentAuSize != 0) || (receiver->process.gapsInSeqNum != 0))
             {
                 uncertainAuChange = 1;
             }
@@ -1304,6 +1304,11 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                         }
                         receiver->process.naluStartSeqNum = currentSeqNum;
                     }
+                    else if (seqNumDelta > 1)
+                    {
+                        /* drop the FU-A if there is a seqNum discontinuity */
+                        receiver->process.fuPending = 0;
+                    }
                     if (receiver->process.fuPending)
                     {
                         outputSize += (startBit) ? startCodeLength + 1 : 0;
@@ -1337,9 +1342,9 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                                     isLast = 1;
                                 }
                                 /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output FU-A NALU (seqNum %d->%d) isFirst=%d isLast=%d gapsInSeqNum=%d",
-                                  naluStartSeqNum, currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                                ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
-                                gapsInSeqNum = 0;
+                                  naluStartSeqNum, currentSeqNum, isFirst, isLast, receiver->process.gapsInSeqNum);*/ //TODO debug
+                                ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, receiver->process.gapsInSeqNum);
+                                receiver->process.gapsInSeqNum = 0;
                             }
                         }
                         else
@@ -1406,9 +1411,9 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                             receiver->currentNaluSize += naluSize;
                             receiver->process.currentAuSize += naluSize;
                             /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output STAP-A NALU (seqNum %d) isFirst=%d isLast=%d gapsInSeqNum=%d",
-                              currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                            ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
-                            gapsInSeqNum = 0;
+                              currentSeqNum, isFirst, isLast, receiver->process.gapsInSeqNum);*/ //TODO debug
+                            ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, receiver->process.gapsInSeqNum);
+                            receiver->process.gapsInSeqNum = 0;
                         }
                         else
                         {
@@ -1460,9 +1465,9 @@ static void ARSTREAM2_RtpReceiver_ProcessData(ARSTREAM2_RtpReceiver_t *receiver,
                     receiver->currentNaluSize += payloadSize;
                     receiver->process.currentAuSize += payloadSize;
                     /*ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Output single NALU (seqNum %d) isFirst=%d isLast=%d gapsInSeqNum=%d",
-                      currentSeqNum, isFirst, isLast, gapsInSeqNum);*/ //TODO debug
-                    ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, gapsInSeqNum);
-                    gapsInSeqNum = 0;
+                      currentSeqNum, isFirst, isLast, receiver->process.gapsInSeqNum);*/ //TODO debug
+                    ARSTREAM2_RtpReceiver_OutputNalu(receiver, rtpTimestamp, rtpTimestampScaled, ntpTimestamp, ntpTimestampLocal, isFirst, isLast, receiver->process.gapsInSeqNum);
+                    receiver->process.gapsInSeqNum = 0;
                 }
                 else
                 {

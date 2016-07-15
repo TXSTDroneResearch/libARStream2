@@ -191,6 +191,12 @@ static inline int readBits(ARSTREAM2_H264Parser_t* _parser, unsigned int _numBit
     {
         // Not enough bits in the cache
 
+        if (_parser->remNaluSize == 0)
+        {
+            // No more bytes to read
+            return -1;
+        }
+
         // Get the cache remaining bits
         _remBits -= _parser->cacheLength;
         _val = (_parser->cache >> (32 - _parser->cacheLength)) << _remBits;
@@ -254,6 +260,91 @@ static inline int readBits(ARSTREAM2_H264Parser_t* _parser, unsigned int _numBit
 }
 
 
+static inline int peekBits(ARSTREAM2_H264Parser_t* _parser, unsigned int _numBits, uint32_t *_value, int _emulationPrevention)
+{
+    unsigned int _count, _remBits = _numBits;
+    uint32_t _val = 0, _bitMask;
+    uint8_t _read8;
+    int _cacheLength = _parser->cacheLength;
+    int _remNaluSize = _parser->remNaluSize;
+    int _oldZeroCount = _parser->oldZeroCount;
+    int _offset = 0;
+    uint32_t _cache = _parser->cache;
+
+    while (_cacheLength < (int)_remBits)
+    {
+        // Not enough bits in the cache
+
+        if (_remNaluSize == 0)
+        {
+            // No more bytes to read
+            return -1;
+        }
+
+        // Get the cache remaining bits
+        _remBits -= _cacheLength;
+        _val = (_cache >> (32 - _cacheLength)) << _remBits;
+
+        // Read at most 4 bytes in the buffer
+        _cache = 0;
+        _cacheLength = 0;
+        _count = 0;
+        while ((_remNaluSize) && (_count < 4))
+        {
+            _read8 = *(_parser->pNaluBufCur + _offset);
+            _offset++;
+            _remNaluSize--;
+            _cache |= (_read8 << (24 - _cacheLength));
+            _cacheLength += 8;
+            _count++;
+        }
+
+        // Emulation prevention
+        if (_emulationPrevention)
+        {
+            int _zeroCount = _oldZeroCount;
+            int _bitPos = 24; //32 - _cacheLength;
+            uint8_t _byteVal;
+            uint32_t _cacheLeft, _cacheRight;
+
+            while (_bitPos >= 32 - _cacheLength)
+            {
+                _byteVal = ((_cache >> _bitPos) & 0xFF);
+                if ((_zeroCount == 2) && (_byteVal == 0x03))
+                {
+                    // Remove the 0x03 byte
+                    _cacheLeft = (_bitPos < 24) ? (_cache >> (_bitPos + 8)) << (_bitPos + 8) : 0;
+                    _cacheRight = (_bitPos > 0) ? (_cache << (32 - _bitPos)) >> (32 - _bitPos - 8) : 0;
+                    _cache = _cacheLeft | _cacheRight;
+                    _cacheLength -= 8;
+                    _zeroCount = 0;
+                }
+                else if (_byteVal == 0x00)
+                {
+                    _zeroCount++;
+                    _bitPos -= 8;
+                }
+                else
+                {
+                    _zeroCount = 0;
+                    _bitPos -= 8;
+                }
+            }
+            _oldZeroCount = _zeroCount;
+        }
+    }
+
+    // Get the bits from the cache and shift
+    _val |= _cache >> (32 - _remBits);
+    _cache <<= _remBits;
+    _cacheLength -= _remBits;
+
+    _bitMask = (uint32_t)-1 >> (32 - _numBits);
+    if (_value) *_value = _val & _bitMask;
+    return _numBits;
+}
+
+
 static inline int readBits_expGolomb_ue(ARSTREAM2_H264Parser_t* _parser, uint32_t *_value, int _emulationPrevention)
 {
     int _ret, _leadingZeroBits = -1;
@@ -302,35 +393,6 @@ static inline int readBits_expGolomb_se(ARSTREAM2_H264Parser_t* _parser, int32_t
 }
 
 
-static inline int seekToByte(ARSTREAM2_H264Parser_t* _parser, int _start, int _whence)
-{
-    int _pos;
-
-    if (_whence == SEEK_CUR)
-    {
-        _pos = _parser->naluSize - _parser->remNaluSize - ((_parser->cacheLength + 7) / 8) + _start;
-    }
-    else if (_whence == SEEK_END)
-    {
-        _pos = _parser->naluSize - _start;
-    }
-    else //(_whence == SEEK_SET)
-    {
-        _pos = _start;
-    }
-
-    _parser->pNaluBufCur = _parser->pNaluBuf + _pos;
-    _parser->remNaluSize = _parser->naluSize - _pos;
-
-    // Reset the cache
-    _parser->cache = 0;
-    _parser->cacheLength = 0;
-    _parser->oldZeroCount = 0; // NB: this value is wrong when emulation prevention is in use (inside NAL Units)
-
-    return _pos;
-}
-
-
 static inline int skipBytes(ARSTREAM2_H264Parser_t* _parser, int _byteCount)
 {
     int _ret, _i, _readBits = 0;
@@ -356,31 +418,46 @@ static inline int moreRbspData(ARSTREAM2_H264Parser_t* _parser)
     int _ret, _retval = 0;
     uint32_t _val;
 
-    if (_parser->remNaluSize > 1)
+    if ((_parser->cacheLength == 0) && (_parser->remNaluSize == 0))
+    {
+        // No more bits available
+        _retval = 0;
+    }
+    else if (_parser->cacheLength + _parser->remNaluSize * 8 > 8)
     {
         // More than 1 byte remaining
         _retval = 1;
     }
-    else if (_parser->remNaluSize == 1)
+    else
     {
-        // Exactly 1 byte remaining
-        _ret = readBits(_parser, 8, &_val, 1);
+        // 8 bits max remaining
+        int _remaining = _parser->cacheLength + _parser->remNaluSize * 8;
+        int _i = 1;
+
+        _ret = peekBits(_parser, _remaining, &_val, 1);
         if (_ret < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to read from the bitstream");
             return 0;
         }
-        if (_val != 0x80)
+        while (((_val & 1) != 1) && (_i < _remaining))
+        {
+            _val >>= 1;
+            _i++;
+        }
+        if (((_val & 1) == 1) && (_i != _remaining))
         {
             // Not only the RBSP trailing bits remain
             _retval = 1;
         }
-
-        _ret = seekToByte(_parser, -1, SEEK_CUR);
-        if (_ret < 0)
+        else if (((_val & 1) == 1) && (_i == _remaining))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "seekToByte() failed (%d)", _ret);
-            return 0;
+            // Not only the RBSP trailing bits remain
+            _retval = 0;
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed on moreRbspData()");
         }
     }
     
@@ -1783,15 +1860,23 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_userDataUnregistered(ARSTREAM2_H
             parser->userDataBufSize[parser->userDataCount] = payloadSize;
         }
 
-        ret = seekToByte(parser, -(_readBits / 8), SEEK_CUR);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to seek %d bytes backwards", (_readBits / 8));
-            return ret;
-        }
-        _readBits = 0;
-
-        for (i = 0; i < payloadSize; i++)
+        parser->pUserDataBuf[parser->userDataCount][0] = (uint8_t)((uuid1 >> 24) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][1] = (uint8_t)((uuid1 >> 16) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][2] = (uint8_t)((uuid1 >> 8) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][3] = (uint8_t)((uuid1 >> 0) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][4] = (uint8_t)((uuid1 >> 24) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][5] = (uint8_t)((uuid1 >> 16) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][6] = (uint8_t)((uuid1 >> 8) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][7] = (uint8_t)((uuid1 >> 0) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][8] = (uint8_t)((uuid1 >> 24) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][9] = (uint8_t)((uuid1 >> 16) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][10] = (uint8_t)((uuid1 >> 8) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][11] = (uint8_t)((uuid1 >> 0) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][12] = (uint8_t)((uuid1 >> 24) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][13] = (uint8_t)((uuid1 >> 16) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][14] = (uint8_t)((uuid1 >> 8) & 0xFF);
+        parser->pUserDataBuf[parser->userDataCount][15] = (uint8_t)((uuid1 >> 0) & 0xFF);
+        for (i = 16; i < payloadSize; i++)
         {
             ret = readBits(parser, 8, &val, 1);
             if (ret < 0)

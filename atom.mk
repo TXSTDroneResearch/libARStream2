@@ -13,7 +13,8 @@ LOCAL_LIBRARIES := \
 
 LOCAL_CONDITIONAL_LIBRARIES := \
 	OPTIONAL:libmux \
-	OPTIONAL:libpomp
+	OPTIONAL:libpomp \
+	OPTIONAL:libARMedia
 
 LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/Includes \
@@ -33,6 +34,7 @@ LOCAL_SRC_FILES := \
 	src/arstream2_rtp.c \
 	src/arstream2_rtp_h264.c \
 	src/arstream2_rtcp.c \
+	src/arstream2_stream_recorder.c \
 	src/arstream2_stream_receiver.c
 
 LOCAL_INSTALL_HEADERS := \
@@ -43,6 +45,7 @@ LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_h264_writer.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_rtp_receiver.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_rtp_sender.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_stream_recorder.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/
 
 include $(BUILD_LIBRARY)
