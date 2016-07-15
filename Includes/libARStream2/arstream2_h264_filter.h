@@ -236,6 +236,37 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
 
 
 /**
+ * @brief Start a stream recorder.
+ *
+ * The function starts recording the received stream to a file.
+ * The recording can be stopped using ARSTREAM2_H264Filter_StopRecording().
+ * The filter must be previously started using ARSTREAM2_H264Filter_Start().
+ * @note Only one recording can be done at a time.
+ *
+ * @param filterHandle Instance handle.
+ * @param recordFileName Record file absolute path.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle filterHandle, const char *recordFileName);
+
+
+/**
+ * @brief Stop a stream recorder.
+ *
+ * The function stops the current recording.
+ * If no recording is in progress nothing happens.
+ *
+ * @param filterHandle Instance handle.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle);
+
+
+/**
  * @brief RTP receiver NAL unit callback function
  *
  * @see ARSTREAM2_RtpReceiver_NaluCallback_t.

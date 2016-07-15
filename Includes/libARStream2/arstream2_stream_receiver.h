@@ -331,6 +331,37 @@ void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
 
 
+/**
+ * @brief Start a stream recorder.
+ *
+ * The function starts recording the received stream to a file.
+ * The recording can be stopped using ARSTREAM2_StreamReceiver_StopRecording().
+ * The filter must be previously started using ARSTREAM2_StreamReceiver_StartFilter().
+ * @note Only one recording can be done at a time.
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param recordFileName Record file absolute path.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, const char *recordFileName);
+
+
+/**
+ * @brief Stop a stream recorder.
+ *
+ * The function stops the current recording.
+ * If no recording is in progress nothing happens.
+ *
+ * @param streamReceiverHandle Instance handle.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
+
+
 #ifdef __cplusplus
 }
 #endif /* #ifdef __cplusplus */
