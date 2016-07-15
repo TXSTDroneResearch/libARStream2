@@ -11,38 +11,26 @@
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
+#include <libARSAL/ARSAL_Thread.h>
 
 #include <libARStream2/arstream2_rtp_receiver.h>
 #include <libARStream2/arstream2_h264_filter.h>
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
 #include <libARStream2/arstream2_h264_sei.h>
+#include <libARStream2/arstream2_stream_recorder.h>
 
 #include "arstream2_h264.h"
 
 
 #define ARSTREAM2_H264_FILTER_TAG "ARSTREAM2_H264Filter"
 
-#define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
-#define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
+#define ARSTREAM2_H264_FILTER_AU_BUFFER_SIZE (128 * 1024)
+#define ARSTREAM2_H264_FILTER_AU_BUFFER_POOL_SIZE (60)
 #define ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE (1024)
 #define ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE (1024)
-
-#define ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-    #include <stdio.h>
-
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/stream"
-    //#define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/stream"
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/stream"
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX "./stream"
-
-    #define ARSTREAM2_H264_FILTER_STREAM_OUTPUT_FILENAME "stream"
-#endif
+#define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
+#define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
 
 
 typedef enum
@@ -68,6 +56,33 @@ typedef enum
 } ARSTREAM2_H264Filter_H264SliceType_t;
 
 
+typedef struct ARSTREAM2_H264Filter_AuBufferItem_s
+{
+    uint8_t *buffer;
+    unsigned int bufferSize;
+    unsigned int auSize;
+    uint8_t *metadataBuffer;
+    unsigned int metadataBufferSize;
+    uint32_t naluCount;
+    uint32_t naluSize[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
+    uint8_t *naluData[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
+    int pushed;
+
+    struct ARSTREAM2_H264Filter_AuBufferItem_s* prev;
+    struct ARSTREAM2_H264Filter_AuBufferItem_s* next;
+
+} ARSTREAM2_H264Filter_AuBufferItem_t;
+
+
+typedef struct ARSTREAM2_H264Filter_AuBufferPool_s
+{
+    int size;
+    ARSTREAM2_H264Filter_AuBufferItem_t *free;
+    ARSTREAM2_H264Filter_AuBufferItem_t *pool;
+
+} ARSTREAM2_H264Filter_AuBufferPool_t;
+
+
 typedef struct ARSTREAM2_H264Filter_s
 {
     ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback;
@@ -85,6 +100,10 @@ typedef struct ARSTREAM2_H264Filter_s
     int replaceStartCodesWithNaluSize;
     int generateSkippedPSlices;
     int generateFirstGrayIFrame;
+
+    ARSTREAM2_H264Filter_AuBufferPool_t recordAuBufferPool;
+    ARSAL_Mutex_t recordAuBufferPoolMutex;
+    ARSTREAM2_H264Filter_AuBufferItem_t *recordAuBufferItem;
 
     uint8_t *currentAuBuffer;
     int currentAuBufferSize;
@@ -130,6 +149,7 @@ typedef struct ARSTREAM2_H264Filter_s
     int firstGrayIFramePending;
     int mbWidth;
     int mbHeight;
+    float framerate;
 
     ARSAL_Mutex_t mutex;
     ARSAL_Cond_t startCond;
@@ -139,11 +159,326 @@ typedef struct ARSTREAM2_H264Filter_s
     int threadShouldStop;
     int threadStarted;
 
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-    FILE* fStreamOut;
-#endif
+    char *recordFileName;
+    int recorderStartPending;
+    ARSTREAM2_StreamRecorder_Handle recorder;
+    ARSAL_Thread_t recorderThread;
 
 } ARSTREAM2_H264Filter_t;
+
+
+
+static int ARSTREAM2_H264Filter_AuBufferPoolInit(ARSTREAM2_H264Filter_AuBufferPool_t *pool, int maxCount, int bufferSize, int metadataBufferSize)
+{
+    int i;
+    ARSTREAM2_H264Filter_AuBufferItem_t* cur;
+
+    if (!pool)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (maxCount <= 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pool size (%d)", maxCount);
+        return -1;
+    }
+
+    memset(pool, 0, sizeof(ARSTREAM2_H264Filter_AuBufferPool_t));
+    pool->size = maxCount;
+    pool->pool = malloc(maxCount * sizeof(ARSTREAM2_H264Filter_AuBufferItem_t));
+    if (!pool->pool)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Pool allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_H264Filter_AuBufferItem_t));
+        pool->size = 0;
+        return -1;
+    }
+    memset(pool->pool, 0, maxCount * sizeof(ARSTREAM2_H264Filter_AuBufferItem_t));
+
+    for (i = 0; i < maxCount; i++)
+    {
+        cur = &pool->pool[i];
+        if (pool->free)
+        {
+            pool->free->prev = cur;
+        }
+        cur->next = pool->free;
+        cur->prev = NULL;
+        pool->free = cur;
+    }
+
+    if (bufferSize > 0)
+    {
+        for (i = 0; i < maxCount; i++)
+        {
+            pool->pool[i].buffer = malloc(bufferSize);
+            if (!pool->pool[i].buffer)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Pool buffer allocation failed (size %d)", bufferSize);
+                pool->size = 0;
+                return -1;
+            }
+            pool->pool[i].bufferSize = bufferSize;
+        }
+    }
+
+    if (metadataBufferSize > 0)
+    {
+        for (i = 0; i < maxCount; i++)
+        {
+            pool->pool[i].metadataBuffer = malloc(metadataBufferSize);
+            if (!pool->pool[i].metadataBuffer)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Pool buffer allocation failed (size %d)", metadataBufferSize);
+                pool->size = 0;
+                return -1;
+            }
+            pool->pool[i].metadataBufferSize = metadataBufferSize;
+        }
+    }
+
+    return 0;
+}
+
+
+static int ARSTREAM2_H264Filter_AuBufferPoolFree(ARSTREAM2_H264Filter_AuBufferPool_t *pool)
+{
+    int i;
+
+    if (!pool)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (pool->pool)
+    {
+        for (i = 0; i < pool->size; i++)
+        {
+            if (pool->pool[i].buffer)
+            {
+                free(pool->pool[i].buffer);
+                pool->pool[i].buffer = NULL;
+            }
+            if (pool->pool[i].metadataBuffer)
+            {
+                free(pool->pool[i].metadataBuffer);
+                pool->pool[i].metadataBuffer = NULL;
+            }
+        }
+
+        free(pool->pool);
+    }
+    memset(pool, 0, sizeof(ARSTREAM2_H264Filter_AuBufferPool_t));
+
+    return 0;
+}
+
+
+static ARSTREAM2_H264Filter_AuBufferItem_t* ARSTREAM2_H264Filter_AuBufferPoolPopFreeItem(ARSTREAM2_H264Filter_AuBufferPool_t *pool)
+{
+    if (!pool)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if (pool->free)
+    {
+        ARSTREAM2_H264Filter_AuBufferItem_t* cur = pool->free;
+        pool->free = cur->next;
+        if (cur->next) cur->next->prev = NULL;
+        cur->prev = NULL;
+        cur->next = NULL;
+        return cur;
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No free item in pool");
+        return NULL;
+    }
+}
+
+
+static int ARSTREAM2_H264Filter_AuBufferPoolPushFreeItem(ARSTREAM2_H264Filter_AuBufferPool_t *pool, ARSTREAM2_H264Filter_AuBufferItem_t *item)
+{
+    if ((!pool) || (!item))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (pool->free)
+    {
+        pool->free->prev = item;
+        item->next = pool->free;
+    }
+    else
+    {
+        item->next = NULL;
+    }
+    pool->free = item;
+    item->prev = NULL;
+
+    return 0;
+}
+
+
+static void ARSTREAM2_H264Filter_StreamRecorderAuCallback(eARSTREAM2_STREAM_RECORDER_AU_STATUS status, void *auUserPtr, void *userPtr)
+{
+    ARSTREAM2_H264Filter_t *filter = (ARSTREAM2_H264Filter_t*)userPtr;
+
+    if (!filter)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid recorder auCallback user pointer");
+        return;
+    }
+
+    ARSTREAM2_H264Filter_AuBufferItem_t *item = (ARSTREAM2_H264Filter_AuBufferItem_t*)auUserPtr;
+
+    if (!item)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid recorder access unit user pointer");
+        return;
+    }
+
+    ARSAL_Mutex_Lock(&(filter->recordAuBufferPoolMutex));
+    int ret = ARSTREAM2_H264Filter_AuBufferPoolPushFreeItem(&filter->recordAuBufferPool, item);
+    ARSAL_Mutex_Unlock(&(filter->recordAuBufferPoolMutex));
+    if (ret != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to push free item to AU buffer pool");
+    }
+}
+
+
+static int ARSTREAM2_H264Filter_StreamRecorderInit(ARSTREAM2_H264Filter_t *filter)
+{
+    int ret = -1;
+
+    if ((!filter->recorder) && (filter->recordFileName))
+    {
+        eARSTREAM2_ERROR recErr;
+        ARSTREAM2_StreamRecorder_Config_t recConfig;
+        memset(&recConfig, 0, sizeof(ARSTREAM2_StreamRecorder_Config_t));
+        recConfig.mediaFileName = filter->recordFileName;
+        recConfig.videoFramerate = filter->framerate;
+        recConfig.videoWidth = filter->mbWidth * 16; //TODO
+        recConfig.videoHeight = filter->mbHeight * 16; //TODO
+        recConfig.sps = filter->pSps;
+        recConfig.spsSize = filter->spsSize;
+        recConfig.pps = filter->pPps;
+        recConfig.ppsSize = filter->ppsSize;
+        recConfig.serviceType = 0; //TODO
+        recConfig.auFifoSize = ARSTREAM2_H264_FILTER_AU_BUFFER_POOL_SIZE;
+        recConfig.auCallback = ARSTREAM2_H264Filter_StreamRecorderAuCallback;
+        recConfig.auCallbackUserPtr = filter;
+        recErr = ARSTREAM2_StreamRecorder_Init(&filter->recorder, &recConfig);
+        if (recErr != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Init() failed (%d): %s",
+                        recErr, ARSTREAM2_Error_ToString(recErr));
+        }
+        else
+        {
+            int thErr = ARSAL_Thread_Create(&filter->recorderThread, ARSTREAM2_StreamRecorder_RunThread, (void*)filter->recorder);
+            if (thErr != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Recorder thread creation failed (%d)", thErr);
+            }
+            else
+            {
+                ret = 0;
+            }
+        }
+    }
+
+    return ret;
+}
+
+
+static int ARSTREAM2_H264Filter_StreamRecorderStart(ARSTREAM2_H264Filter_t *filter)
+{
+    int ret = -1;
+
+    if (filter->recorder)
+    {
+        ARSAL_Mutex_Lock(&(filter->recordAuBufferPoolMutex));
+        filter->recordAuBufferItem = ARSTREAM2_H264Filter_AuBufferPoolPopFreeItem(&filter->recordAuBufferPool);
+        ARSAL_Mutex_Unlock(&(filter->recordAuBufferPoolMutex));
+        if (filter->recordAuBufferItem)
+        {
+            filter->recordAuBufferItem->pushed = 0;
+            filter->recordAuBufferItem->auSize = 0;
+            filter->recordAuBufferItem->naluCount = 0;
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to get free item in AU buffer pool");
+            ARSTREAM2_StreamRecorder_Flush(filter->recorder);
+        }
+    }
+
+    return ret;
+}
+
+
+static int ARSTREAM2_H264Filter_StreamRecorderStop(ARSTREAM2_H264Filter_t *filter)
+{
+    int ret = 0;
+
+    if (filter->recorder)
+    {
+        eARSTREAM2_ERROR err;
+        err = ARSTREAM2_StreamRecorder_Stop(filter->recorder);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Stop() failed: %d (%s)",
+                        err, ARSTREAM2_Error_ToString(err));
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
+
+
+static int ARSTREAM2_H264Filter_StreamRecorderFree(ARSTREAM2_H264Filter_t *filter)
+{
+    int ret = 0;
+
+    if (filter->recorder)
+    {
+        int thErr;
+        eARSTREAM2_ERROR err;
+        if (filter->recorderThread)
+        {
+            thErr = ARSAL_Thread_Join(filter->recorderThread, NULL);
+            if (thErr != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSAL_Thread_Join() failed (%d)", thErr);
+                ret = -1;
+            }
+            thErr = ARSAL_Thread_Destroy(&filter->recorderThread);
+            if (thErr != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSAL_Thread_Destroy() failed (%d)", thErr);
+                ret = -1;
+            }
+            filter->recorderThread = NULL;
+        }
+        err = ARSTREAM2_StreamRecorder_Free(&filter->recorder);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Free() failed (%d): %s",
+                        err, ARSTREAM2_Error_ToString(err));
+            ret = -1;
+        }
+    }
+
+    return ret;
+}
 
 
 static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize)
@@ -172,13 +507,6 @@ static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *na
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
         }
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-        if (filter->fStreamOut)
-        {
-            fwrite(filter->pSps, filter->spsSize, 1, filter->fStreamOut);
-            fwrite(filter->pPps, filter->ppsSize, 1, filter->fStreamOut);
-        }
-#endif
     }
 
     /* Configure the writer */
@@ -192,11 +520,30 @@ static int ARSTREAM2_H264Filter_sync(ARSTREAM2_H264Filter_t *filter, uint8_t *na
     {
         filter->mbWidth = spsContext->pic_width_in_mbs_minus1 + 1;
         filter->mbHeight = (spsContext->pic_height_in_map_units_minus1 + 1) * ((spsContext->frame_mbs_only_flag) ? 1 : 2);
+        filter->framerate = (spsContext->num_units_in_tick != 0) ? (float)spsContext->time_scale / (float)(spsContext->num_units_in_tick * 2) : 30.;
         err = ARSTREAM2_H264Writer_SetSpsPpsContext(filter->writer, (void*)spsContext, (void*)ppsContext);
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSpsPpsContext() failed (%d)", err);
             ret = -1;
+        }
+        if (filter->recorderStartPending)
+        {
+            int recRet;
+            recRet = ARSTREAM2_H264Filter_StreamRecorderInit(filter);
+            if (recRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderInit() failed (%d)", recRet);
+            }
+            else
+            {
+                recRet = ARSTREAM2_H264Filter_StreamRecorderStart(filter);
+                if (recRet != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStart() failed (%d)", recRet);
+                }
+            }
+            filter->recorderStartPending = 0;
         }
     }
 
@@ -213,12 +560,6 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
     if ((!naluBuffer) || (naluSize <= 4))
     {
         return -1;
-    }
-
-    if (filter->replaceStartCodesWithNaluSize)
-    {
-        // Replace the NAL unit 4 bytes start code with the NALU size
-        *((uint32_t*)naluBuffer) = htonl((uint32_t)naluSize - 4);
     }
 
     err = ARSTREAM2_H264Parser_SetupNalu_buffer(filter->parser, naluBuffer + 4, naluSize - 4);
@@ -359,6 +700,15 @@ static int ARSTREAM2_H264Filter_processNalu(ARSTREAM2_H264Filter_t *filter, uint
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_Sync() failed (%d)", ret);
         }
     }
+    else if ((filter->running) && (filter->sync) && (filter->recorderStartPending))
+    {
+        int recRet = ARSTREAM2_H264Filter_StreamRecorderStart(filter);
+        if (recRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStart() failed (%d)", recRet);
+        }
+        filter->recorderStartPending = 0;
+    }
 
     filter->callbackInProgress = 0;
     ARSAL_Mutex_Unlock(&(filter->mutex));
@@ -375,6 +725,29 @@ static int ARSTREAM2_H264Filter_getNewAuBuffer(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuBuffer = filter->tempAuBuffer;
     filter->currentAuBufferSize = filter->tempAuBufferSize;
     filter->auBufferChangePending = 0;
+
+    if (filter->recorder)
+    {
+        if (filter->recordAuBufferItem->pushed)
+        {
+            ARSAL_Mutex_Lock(&(filter->recordAuBufferPoolMutex));
+            filter->recordAuBufferItem = ARSTREAM2_H264Filter_AuBufferPoolPopFreeItem(&filter->recordAuBufferPool);
+            ARSAL_Mutex_Unlock(&(filter->recordAuBufferPoolMutex));
+            if (!filter->recordAuBufferItem)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to get free item in AU buffer pool");
+                ARSTREAM2_StreamRecorder_Flush(filter->recorder);
+            }
+            else
+            {
+                filter->recordAuBufferItem->pushed = 0;
+            }
+        }
+        else
+        {
+            ARSAL_Mutex_Unlock(&(filter->recordAuBufferPoolMutex));
+        }
+    }
 
     return ret;
 }
@@ -398,6 +771,11 @@ static void ARSTREAM2_H264Filter_resetCurrentAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuCurrentSliceFirstMb = -1;
     filter->currentAuFirstNaluInputTime = 0;
     filter->previousSliceType = ARSTREAM2_H264_FILTER_H264_SLICE_TYPE_NON_VCL;
+    if (filter->recordAuBufferItem)
+    {
+        filter->recordAuBufferItem->auSize = 0;
+        filter->recordAuBufferItem->naluCount = 0;
+    }
 }
 
 
@@ -426,9 +804,22 @@ static void ARSTREAM2_H264Filter_updateCurrentAu(ARSTREAM2_H264Filter_t *filter,
 }
 
 
-static void ARSTREAM2_H264Filter_addNaluToCurrentAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264Filter_H264NaluType_t naluType, int naluSize)
+static void ARSTREAM2_H264Filter_addNaluToCurrentAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264Filter_H264NaluType_t naluType, uint8_t *naluBuffer, int naluSize)
 {
     int filterOut = 0;
+
+    if ((filter->recorder) && (filter->recordAuBufferItem)
+            && (filter->recordAuBufferItem->auSize + naluSize <= filter->recordAuBufferItem->bufferSize))
+    {
+        memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, naluBuffer, naluSize);
+        if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+        {
+            filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+            filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = naluSize;
+            filter->recordAuBufferItem->naluCount++;
+        }
+        filter->recordAuBufferItem->auSize += naluSize;
+    }
 
     if ((filter->filterOutSpsPps) && ((naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_SPS) || (naluType == ARSTREAM2_H264_FILTER_H264_NALU_TYPE_PPS)))
     {
@@ -442,6 +833,12 @@ static void ARSTREAM2_H264Filter_addNaluToCurrentAu(ARSTREAM2_H264Filter_t *filt
 
     if (!filterOut)
     {
+        if (filter->replaceStartCodesWithNaluSize)
+        {
+            // Replace the NAL unit 4 bytes start code with the NALU size
+            *((uint32_t*)naluBuffer) = htonl((uint32_t)naluSize - 4);
+        }
+
         filter->currentAuSize += naluSize;
     }
 }
@@ -547,16 +944,59 @@ static int ARSTREAM2_H264Filter_enqueueCurrentAu(ARSTREAM2_H264Filter_t *filter)
             }
             else
             {
+                filter->currentAuOutputIndex++;
                 ret = 1;
             }
+        }
+    }
 
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-            if (filter->fStreamOut)
+    if ((ret == 1) && (filter->recorder) && (filter->recordAuBufferItem) && (filter->recordAuBufferItem->auSize > 0))
+    {
+        ARSTREAM2_StreamRecorder_AccessUnit_t accessUnit;
+        memset(&accessUnit, 0, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
+        accessUnit.timestamp = filter->currentAuTimestamp;
+        accessUnit.index = filter->currentAuOutputIndex;
+        if (filter->recordAuBufferItem->naluCount > 0)
+        {
+            accessUnit.naluCount = filter->recordAuBufferItem->naluCount;
+            unsigned int i;
+            for (i = 0; i < filter->recordAuBufferItem->naluCount; i++)
             {
-                fwrite(auBuffer, auSize, 1, filter->fStreamOut);
+                accessUnit.naluData[i] = filter->recordAuBufferItem->naluData[i];
+                accessUnit.naluSize[i] = filter->recordAuBufferItem->naluSize[i];
             }
-#endif
-            filter->currentAuOutputIndex++;
+            accessUnit.auData = NULL;
+            accessUnit.auSize = 0;
+        }
+        else
+        {
+            accessUnit.naluCount = 0;
+            accessUnit.auData = filter->recordAuBufferItem->buffer;
+            accessUnit.auSize = filter->recordAuBufferItem->auSize;
+        }
+        accessUnit.auSyncType = filter->currentAuSyncType;
+        if ((filter->currentAuMetadataSize > 0) && ((unsigned)filter->currentAuMetadataSize <= filter->recordAuBufferItem->metadataBufferSize))
+        {
+            memcpy(filter->recordAuBufferItem->metadataBuffer, filter->currentAuMetadata, filter->currentAuMetadataSize);
+            accessUnit.auMetadata = filter->recordAuBufferItem->metadataBuffer;
+            accessUnit.auMetadataSize = filter->currentAuMetadataSize;
+        }
+        else
+        {
+            accessUnit.auMetadata = NULL;
+            accessUnit.auMetadataSize = 0;
+        }
+        accessUnit.auUserPtr = filter->recordAuBufferItem;
+        eARSTREAM2_ERROR err;
+        err = ARSTREAM2_StreamRecorder_PushAccessUnit(filter->recorder, &accessUnit);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_PushAccessUnit() failed: %d (%s)",
+                        err, ARSTREAM2_Error_ToString(err));
+        }
+        else
+        {
+            filter->recordAuBufferItem->pushed = 1;
         }
     }
 
@@ -608,6 +1048,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
         else
         {
             uint8_t *tmpBuf = NULL;
+            uint8_t *tmpBuf2 = NULL;
             int savedAuSize = filter->currentAuSize;
             int savedAuIncomplete = filter->currentAuIncomplete;
             eARSTREAM2_H264_FILTER_AU_SYNC_TYPE savedAuSyncType = filter->currentAuSyncType;
@@ -621,15 +1062,25 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             uint64_t savedAuTimestamp = filter->currentAuTimestamp;
             uint64_t savedAuTimestampShifted = filter->currentAuTimestampShifted;
             uint64_t savedAuFirstNaluInputTime = filter->currentAuFirstNaluInputTime;
+            unsigned int savedRecAuSize = 0;
+            uint32_t savedNaluCount = 0;
+            uint32_t savedNaluSize[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
+            if (filter->recordAuBufferItem)
+            {
+                savedRecAuSize = filter->recordAuBufferItem->auSize;
+                savedNaluCount = filter->recordAuBufferItem->naluCount;
+                if (savedNaluCount > 0)
+                {
+                    unsigned int i;
+                    for (i = 0; i < filter->recordAuBufferItem->naluCount; i++)
+                    {
+                        savedNaluSize[i] = filter->recordAuBufferItem->naluSize[i];
+                    }
+                }
+            }
             ret = 0;
 
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Gray I slice NALU output size: %d", outputSize); //TODO: debug
-
-            if (filter->replaceStartCodesWithNaluSize)
-            {
-                // Replace the NAL unit 4 bytes start code with the NALU size
-                *((uint32_t*)filter->tempSliceNaluBuffer) = htonl((uint32_t)outputSize - 4);
-            }
 
             if (filter->currentAuSize + naluSize > 0)
             {
@@ -639,6 +1090,14 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                     memcpy(tmpBuf, filter->currentAuBuffer, filter->currentAuSize + naluSize);
                 }
             }
+            if ((filter->recorder) && (filter->recordAuBufferItem) && (filter->recordAuBufferItem->auSize > 0))
+            {
+                tmpBuf2 = malloc(filter->recordAuBufferItem->auSize); //TODO
+                if (tmpBuf2)
+                {
+                    memcpy(tmpBuf2, filter->recordAuBufferItem->buffer, filter->recordAuBufferItem->auSize);
+                }
+            }
 
             ARSTREAM2_H264Filter_resetCurrentAu(filter);
             filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
@@ -646,14 +1105,31 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             filter->currentAuTimestampShifted -= ((filter->currentAuTimestampShifted >= 1000) ? 1000 : ((filter->currentAuTimestampShifted >= 1) ? 1 : 0));
             filter->currentAuFirstNaluInputTime -= ((filter->currentAuFirstNaluInputTime >= 1000) ? 1000 : ((filter->currentAuFirstNaluInputTime >= 1) ? 1 : 0));
 
-            if (!filter->filterOutSpsPps)
+            // Insert SPS+PPS before the I-frame
+            if (ret == 0)
             {
-                // Insert SPS+PPS before the I-frame
-                if (ret == 0)
+                if ((filter->recorder) && (filter->recordAuBufferItem)
+                        && (filter->recordAuBufferItem->auSize + filter->spsSize <= filter->recordAuBufferItem->bufferSize))
+                {
+                    memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, filter->pSps, filter->spsSize);
+                    if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+                    {
+                        filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+                        filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = filter->spsSize;
+                        filter->recordAuBufferItem->naluCount++;
+                    }
+                    filter->recordAuBufferItem->auSize += filter->spsSize;
+                }
+                if (!filter->filterOutSpsPps)
                 {
                     if (filter->currentAuSize + filter->spsSize <= filter->currentAuBufferSize)
                     {
                         memcpy(filter->currentAuBuffer + filter->currentAuSize, filter->pSps, filter->spsSize);
+                        if (filter->replaceStartCodesWithNaluSize)
+                        {
+                            // Replace the NAL unit 4 bytes start code with the NALU size
+                            *((uint32_t*)(filter->currentAuBuffer + filter->currentAuSize)) = htonl((uint32_t)filter->spsSize - 4);
+                        }
                         filter->currentAuSize += filter->spsSize;
                     }
                     else
@@ -662,11 +1138,31 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         ret = -1;
                     }
                 }
-                if (ret == 0)
+            }
+            if (ret == 0)
+            {
+                if ((filter->recorder) && (filter->recordAuBufferItem)
+                        && (filter->recordAuBufferItem->auSize + filter->ppsSize <= filter->recordAuBufferItem->bufferSize))
+                {
+                    memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, filter->pPps, filter->ppsSize);
+                    if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+                    {
+                        filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+                        filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = filter->ppsSize;
+                        filter->recordAuBufferItem->naluCount++;
+                    }
+                    filter->recordAuBufferItem->auSize += filter->ppsSize;
+                }
+                if (!filter->filterOutSpsPps)
                 {
                     if (filter->currentAuSize + filter->ppsSize <= filter->currentAuBufferSize)
                     {
                         memcpy(filter->currentAuBuffer + filter->currentAuSize, filter->pPps, filter->ppsSize);
+                        if (filter->replaceStartCodesWithNaluSize)
+                        {
+                            // Replace the NAL unit 4 bytes start code with the NALU size
+                            *((uint32_t*)(filter->currentAuBuffer + filter->currentAuSize)) = htonl((uint32_t)filter->spsSize - 4);
+                        }
                         filter->currentAuSize += filter->ppsSize;
                     }
                     else
@@ -680,8 +1176,25 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
             // Copy the gray I-frame
             if (ret == 0)
             {
+                if ((filter->recorder) && (filter->recordAuBufferItem)
+                        && (filter->recordAuBufferItem->auSize + outputSize <= filter->recordAuBufferItem->bufferSize))
+                {
+                    memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, filter->tempSliceNaluBuffer, outputSize);
+                    if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+                    {
+                        filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+                        filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = outputSize;
+                        filter->recordAuBufferItem->naluCount++;
+                    }
+                    filter->recordAuBufferItem->auSize += outputSize;
+                }
                 if (filter->currentAuSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
+                    if (filter->replaceStartCodesWithNaluSize)
+                    {
+                        // Replace the NAL unit 4 bytes start code with the NALU size
+                        *((uint32_t*)filter->tempSliceNaluBuffer) = htonl((uint32_t)outputSize - 4);
+                    }
                     memcpy(filter->currentAuBuffer + filter->currentAuSize, filter->tempSliceNaluBuffer, outputSize);
                     filter->currentAuSize += outputSize;
                 }
@@ -705,11 +1218,6 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                     {
                         ARSTREAM2_H264Filter_resetCurrentAu(filter);
 
-                        if (tmpBuf)
-                        {
-                            memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
-                        }
-
                         filter->currentAuTimestamp = savedAuTimestamp;
                         filter->currentAuTimestampShifted = savedAuTimestampShifted;
                         filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
@@ -723,6 +1231,30 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                         filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                         filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                         filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
+                        if (filter->recordAuBufferItem)
+                        {
+                            filter->recordAuBufferItem->auSize = savedRecAuSize;
+                            filter->recordAuBufferItem->naluCount = savedNaluCount;
+                            if (savedNaluCount > 0)
+                            {
+                                unsigned int i, offset;
+                                for (i = 0, offset = 0; i < filter->recordAuBufferItem->naluCount; i++)
+                                {
+                                    filter->recordAuBufferItem->naluData[i] = filter->recordAuBufferItem->buffer + offset;
+                                    filter->recordAuBufferItem->naluSize[i] = savedNaluSize[i];
+                                    offset += savedNaluSize[i];
+                                }
+                            }
+                        }
+
+                        if (tmpBuf)
+                        {
+                            memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
+                        }
+                        if ((filter->recorder) && (filter->recordAuBufferItem) && (savedRecAuSize > 0) && (tmpBuf2))
+                        {
+                            memcpy(filter->recordAuBufferItem->buffer, tmpBuf2, savedRecAuSize);
+                        }
 
                         filter->currentNaluBuffer = filter->currentAuBuffer + filter->currentAuSize;
                         filter->currentNaluBufferSize = filter->currentAuBufferSize - filter->currentAuSize;
@@ -740,26 +1272,45 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
                     filter->currentAuTimestamp = savedAuTimestamp;
                     filter->currentAuTimestampShifted = savedAuTimestampShifted;
                     filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
+                    filter->currentAuSize = savedAuSize;
+                    filter->currentAuIncomplete = savedAuIncomplete;
+                    filter->currentAuSyncType = savedAuSyncType;
+                    filter->currentAuSlicesAllI = savedAuSlicesAllI;
+                    filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                    filter->currentAuMetadataSize = savedAuMetadataSize;
+                    filter->currentAuUserDataSize = savedAuUserDataSize;
+                    filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
+                    filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
+                    filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
+                    if (filter->recordAuBufferItem)
+                    {
+                        filter->recordAuBufferItem->auSize = savedRecAuSize;
+                        filter->recordAuBufferItem->naluCount = savedNaluCount;
+                        if (savedNaluCount > 0)
+                        {
+                            unsigned int i, offset;
+                            for (i = 0, offset = 0; i < filter->recordAuBufferItem->naluCount; i++)
+                            {
+                                filter->recordAuBufferItem->naluData[i] = filter->recordAuBufferItem->buffer + offset;
+                                filter->recordAuBufferItem->naluSize[i] = savedNaluSize[i];
+                                offset += savedNaluSize[i];
+                            }
+                        }
+                    }
 
                     if (tmpBuf)
                     {
                         memcpy(filter->currentAuBuffer, tmpBuf, savedAuSize + naluSize);
-
-                        filter->currentAuSize = savedAuSize;
-                        filter->currentAuIncomplete = savedAuIncomplete;
-                        filter->currentAuSyncType = savedAuSyncType;
-                        filter->currentAuSlicesAllI = savedAuSlicesAllI;
-                        filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
-                        filter->currentAuMetadataSize = savedAuMetadataSize;
-                        filter->currentAuUserDataSize = savedAuUserDataSize;
-                        filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
-                        filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
-                        filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
+                    }
+                    if ((filter->recorder) && (filter->recordAuBufferItem) && (savedRecAuSize > 0) && (tmpBuf2))
+                    {
+                        memcpy(filter->recordAuBufferItem->buffer, tmpBuf2, savedRecAuSize);
                     }
                 }
             }
 
             if (tmpBuf) free(tmpBuf);
+            if (tmpBuf2) free(tmpBuf2);
         }
     }
 
@@ -767,7 +1318,7 @@ static int ARSTREAM2_H264Filter_generateGrayIFrame(ARSTREAM2_H264Filter_t *filte
 }
 
 
-static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize, ARSTREAM2_H264Filter_H264NaluType_t naluType, ARSTREAM2_H264Filter_H264SliceType_t sliceType, int isFirstNaluInAu, uint64_t auTimestamp)
+static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter, uint8_t *naluBuffer, int naluSize, ARSTREAM2_H264Filter_H264NaluType_t naluType, ARSTREAM2_H264Filter_H264SliceType_t sliceType, int isFirstNaluInAu, uint64_t auTimestamp, int *offset)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
@@ -873,6 +1424,18 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "#%d AUTS:%llu Skipped P slice NALU output size: %d", filter->currentAuOutputIndex, auTimestamp, outputSize); //TODO: debug
+                if ((filter->recorder) && (filter->recordAuBufferItem)
+                        && (filter->recordAuBufferItem->auSize + outputSize <= filter->recordAuBufferItem->bufferSize))
+                {
+                    memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, filter->tempSliceNaluBuffer, outputSize);
+                    if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+                    {
+                        filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+                        filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = outputSize;
+                        filter->recordAuBufferItem->naluCount++;
+                    }
+                    filter->recordAuBufferItem->auSize += outputSize;
+                }
                 if (filter->currentAuSize + naluSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
                     if (filter->replaceStartCodesWithNaluSize)
@@ -883,6 +1446,7 @@ static int ARSTREAM2_H264Filter_fillMissingSlices(ARSTREAM2_H264Filter_t *filter
                     memmove(naluBuffer + outputSize, naluBuffer, naluSize); //TODO
                     memcpy(naluBuffer, filter->tempSliceNaluBuffer, outputSize);
                     filter->currentAuSize += outputSize;
+                    if (offset) *offset = outputSize;
                 }
                 else
                 {
@@ -970,6 +1534,18 @@ static int ARSTREAM2_H264Filter_fillMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "#%d AUTS:%llu Skipped P slice NALU output size: %d", filter->currentAuOutputIndex, auTimestamp, outputSize); //TODO: debug
+                if ((filter->recorder) && (filter->recordAuBufferItem)
+                        && (filter->recordAuBufferItem->auSize + outputSize <= filter->recordAuBufferItem->bufferSize))
+                {
+                    memcpy(filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize, filter->tempSliceNaluBuffer, outputSize);
+                    if (filter->recordAuBufferItem->naluCount < ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT)
+                    {
+                        filter->recordAuBufferItem->naluData[filter->recordAuBufferItem->naluCount] = filter->recordAuBufferItem->buffer + filter->recordAuBufferItem->auSize;
+                        filter->recordAuBufferItem->naluSize[filter->recordAuBufferItem->naluCount] = outputSize;
+                        filter->recordAuBufferItem->naluCount++;
+                    }
+                    filter->recordAuBufferItem->auSize += outputSize;
+                }
                 if (filter->currentAuSize + (int)outputSize <= filter->currentAuBufferSize)
                 {
                     if (filter->replaceStartCodesWithNaluSize)
@@ -1156,7 +1732,8 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                     if (missingPacketsBefore)
                     {
                         // Fill the missing slices with fake bitstream
-                        ret = ARSTREAM2_H264Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu, filter->currentAuTimestamp);
+                        int offset = 0;
+                        ret = ARSTREAM2_H264Filter_fillMissingSlices(filter, naluBuffer, naluSize, naluType, sliceType, isFirstNaluInAu, filter->currentAuTimestamp, &offset);
                         if (ret < 0)
                         {
                             if (ret != -2)
@@ -1165,10 +1742,14 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                             }
                             filter->currentAuIncomplete = 1;
                         }
+                        else
+                        {
+                            naluBuffer += offset;
+                        }
                     }
                     ARSTREAM2_H264Filter_updateCurrentAu(filter, naluType);
 
-                    ARSTREAM2_H264Filter_addNaluToCurrentAu(filter, naluType, naluSize);
+                    ARSTREAM2_H264Filter_addNaluToCurrentAu(filter, naluType, naluBuffer, naluSize);
 
                     if (isLastNaluInAu)
                     {
@@ -1259,6 +1840,94 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
     }
 
     return retPtr;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle filterHandle, const char *recordFileName)
+{
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
+    int ret = ARSTREAM2_OK;
+
+    if (!filterHandle)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((!recordFileName) || (!strlen(recordFileName)))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (filter->recorder)
+    {
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+
+    filter->recordFileName = strdup(recordFileName);
+    if (!filter->recordFileName)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "String allocation failed");
+        ret = ARSTREAM2_ERROR_ALLOC;
+    }
+    else
+    {
+        ARSAL_Mutex_Lock(&(filter->mutex));
+        if (filter->sync)
+        {
+            filter->recorderStartPending = 0;
+            ARSAL_Mutex_Unlock(&(filter->mutex));
+            int recRet;
+            recRet = ARSTREAM2_H264Filter_StreamRecorderInit(filter);
+            if (recRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderInit() failed (%d)", recRet);
+            }
+            else
+            {
+                filter->recorderStartPending = 1;
+            }
+        }
+        else
+        {
+            filter->recorderStartPending = 1;
+            ARSAL_Mutex_Unlock(&(filter->mutex));
+        }
+    }
+
+    return ret;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle)
+{
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
+    int ret = ARSTREAM2_OK;
+
+    if (!filterHandle)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (!filter->recorder)
+    {
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
+
+    int recRet = ARSTREAM2_H264Filter_StreamRecorderStop(filter);
+    if (recRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStop() failed (%d)", recRet);
+        ret = ARSTREAM2_ERROR_INVALID_STATE;
+    }
+
+    recRet = ARSTREAM2_H264Filter_StreamRecorderFree(filter);
+    if (recRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderFree() failed (%d)", recRet);
+        ret = ARSTREAM2_ERROR_INVALID_STATE;
+    }
+
+    if (filter->recordFileName) free(filter->recordFileName);
+    filter->recordFileName = NULL;
+
+    return ret;
 }
 
 
@@ -1423,6 +2092,12 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHan
     ARSAL_Mutex_Unlock(&(filter->mutex));
     /* signal the filter thread to avoid a deadlock */
     ARSAL_Cond_Signal(&(filter->startCond));
+    int recRet = ARSTREAM2_H264Filter_StreamRecorderStop(filter);
+    if (recRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStop() failed (%d)", recRet);
+        ret = ARSTREAM2_ERROR_INVALID_STATE;
+    }
 
     return ret;
 }
@@ -1432,7 +2107,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
 {
     ARSTREAM2_H264Filter_t* filter;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-    int mutexWasInit = 0, startCondWasInit = 0, callbackCondWasInit = 0;
+    int mutexWasInit = 0, startCondWasInit = 0, callbackCondWasInit = 0, recordAuBufferPoolMutexWasInit = 0;
 
     if (!filterHandle)
     {
@@ -1518,6 +2193,30 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
             callbackCondWasInit = 1;
         }
     }
+    if (ret == ARSTREAM2_OK)
+    {
+        int mutexInitRet = ARSAL_Mutex_Init(&(filter->recordAuBufferPoolMutex));
+        if (mutexInitRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Mutex creation failed (%d)", mutexInitRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            recordAuBufferPoolMutexWasInit = 1;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        int poolRet = ARSTREAM2_H264Filter_AuBufferPoolInit(&filter->recordAuBufferPool, ARSTREAM2_H264_FILTER_AU_BUFFER_POOL_SIZE,
+                                                            ARSTREAM2_H264_FILTER_AU_BUFFER_SIZE, ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE);
+        if (poolRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Access unit buffer pool creation failed (%d)", poolRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+    }
 
     if (ret == ARSTREAM2_OK)
     {
@@ -1577,65 +2276,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         }
     }
 
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-    if (ret == ARSTREAM2_OK)
-    {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        szOutputFileName[0] = '\0';
-        if (0)
-        {
-        }
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_USB
-        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_USB;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_NAP_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_ANDROID_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT_ALLOW_PCLINUX
-        else if ((access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STREAM_OUTPUT_PATH_PCLINUX;
-        }
-#endif
-        if (pszFilePath)
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.264", pszFilePath, ARSTREAM2_H264_FILTER_STREAM_OUTPUT_FILENAME, i);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            filter->fStreamOut = fopen(szOutputFileName, "w");
-            if (!filter->fStreamOut)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Unable to open stream output file '%s'", szOutputFileName);
-            }
-        }
-    }
-#endif //#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-
     if (ret == ARSTREAM2_OK)
     {
         *filterHandle = (ARSTREAM2_H264Filter_Handle*)filter;
@@ -1647,15 +2287,14 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
             if (mutexWasInit) ARSAL_Mutex_Destroy(&(filter->mutex));
             if (startCondWasInit) ARSAL_Cond_Destroy(&(filter->startCond));
             if (callbackCondWasInit) ARSAL_Cond_Destroy(&(filter->callbackCond));
+            if (recordAuBufferPoolMutexWasInit) ARSAL_Mutex_Destroy(&(filter->recordAuBufferPoolMutex));
+            if (filter->recordAuBufferPool.size != 0) ARSTREAM2_H264Filter_AuBufferPoolFree(&filter->recordAuBufferPool);
             if (filter->parser) ARSTREAM2_H264Parser_Free(filter->parser);
             if (filter->tempAuBuffer) free(filter->tempAuBuffer);
             if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
             if (filter->currentAuMetadata) free(filter->currentAuMetadata);
             if (filter->currentAuUserData) free(filter->currentAuUserData);
             if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-            if (filter->fStreamOut) fclose(filter->fStreamOut);
-#endif
             free(filter);
         }
         *filterHandle = NULL;
@@ -1689,8 +2328,15 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
         ARSAL_Mutex_Destroy(&(filter->mutex));
         ARSAL_Cond_Destroy(&(filter->startCond));
         ARSAL_Cond_Destroy(&(filter->callbackCond));
+        ARSAL_Mutex_Destroy(&(filter->recordAuBufferPoolMutex));
+        ARSTREAM2_H264Filter_AuBufferPoolFree(&filter->recordAuBufferPool);
         ARSTREAM2_H264Parser_Free(filter->parser);
         ARSTREAM2_H264Writer_Free(filter->writer);
+        int recErr = ARSTREAM2_H264Filter_StreamRecorderFree(filter);
+        if (recErr != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderFree() failed (%d)", recErr);
+        }
 
         if (filter->pSps) free(filter->pSps);
         if (filter->pPps) free(filter->pPps);
@@ -1698,9 +2344,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
         if (filter->tempSliceNaluBuffer) free(filter->tempSliceNaluBuffer);
         if (filter->currentAuMetadata) free(filter->currentAuMetadata);
         if (filter->currentAuUserData) free(filter->currentAuUserData);
-#ifdef ARSTREAM2_H264_FILTER_STREAM_OUTPUT
-        if (filter->fStreamOut) fclose(filter->fStreamOut);
-#endif
+        if (filter->recordFileName) free(filter->recordFileName);
 
         free(filter);
         *filterHandle = NULL;
