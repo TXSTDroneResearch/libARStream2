@@ -2317,6 +2317,7 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTR
         senderConfig.naluFifoSize = ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_NALU_BUFFER_COUNT;
         senderConfig.maxPacketSize = config->maxPacketSize;
         senderConfig.targetPacketSize = config->targetPacketSize;
+        senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
         senderConfig.maxBitrate = receiver->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
         senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;

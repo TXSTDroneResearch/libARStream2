@@ -337,6 +337,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_
     resenderConfig.clientControlPort = config->clientControlPort;
     resenderConfig.maxPacketSize = config->maxPacketSize;
     resenderConfig.targetPacketSize = config->targetPacketSize;
+    resenderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
     resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
     resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;

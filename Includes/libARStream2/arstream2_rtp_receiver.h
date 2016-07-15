@@ -127,6 +127,7 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
     int clientControlPort;                          /**< Client control port */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
