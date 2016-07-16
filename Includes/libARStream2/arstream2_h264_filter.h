@@ -38,6 +38,22 @@ typedef enum
 
 
 /**
+ * @brief Macroblock status.
+ */
+typedef enum
+{
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN = 0,        /**< The macroblock status is unknown */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE,       /**< The macroblock is valid and contained in an I-slice */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_PSLICE,       /**< The macroblock is valid and contained in a P-slice */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING_CONCEALED,  /**< The macroblock is missing and concealed */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING,            /**< The macroblock is missing and not concealed */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_ERROR_PROPAGATION,  /**< The macroblock is valid but within an error propagation */
+    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MAX,
+
+} eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS;
+
+
+/**
  * @brief ARSTREAM2 H264Filter configuration for initialization.
  */
 typedef struct
@@ -233,6 +249,29 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHan
  * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+
+
+/**
+ * @brief Get the frame macroblocks status.
+ *
+ * This function returns pointers to a macroblock status array for the current frame and image
+ * macroblock width and height.
+ * Macroblock statuses are of type eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS.
+ * This function must be called only within the ARSTREAM2_H264Filter_AuReadyCallback_t function.
+ * The valididy of the data returned is only during the call to ARSTREAM2_H264Filter_AuReadyCallback_t
+ * and the user must copy the macroblock status array to its own buffer for further use.
+ *
+ * @param filterHandle Instance handle.
+ * @param macroblocks Pointer to the macroblock status array.
+ * @param mbWidth pointer to the image macroblock-width.
+ * @param mbHeight pointer to the image macroblock-height.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS have not been received (no sync).
+ * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if macroblocks status is not available.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
 
 
 /**
