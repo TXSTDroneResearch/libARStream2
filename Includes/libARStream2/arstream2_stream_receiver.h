@@ -263,6 +263,29 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 
 
 /**
+ * @brief Get the frame macroblocks status.
+ *
+ * This function returns pointers to a macroblock status array for the current frame and image
+ * macroblock width and height.
+ * Macroblock statuses are of type eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS.
+ * This function must be called only within the ARSTREAM2_H264Filter_AuReadyCallback_t function.
+ * The valididy of the data returned is only during the call to ARSTREAM2_H264Filter_AuReadyCallback_t
+ * and the user must copy the macroblock status array to its own buffer for further use.
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param macroblocks Pointer to the macroblock status array.
+ * @param mbWidth pointer to the image macroblock-width.
+ * @param mbHeight pointer to the image macroblock-height.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS have not been received (no sync).
+ * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if macroblocks status is not available.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
+
+
+/**
  * @brief Initialize a new resender.
  *
  * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_Free() or ARSTREAM2_StreamReceiver_FreeResender() to free the resources.
