@@ -304,6 +304,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_H264Filter_GetFrameMacroblockStatus(streamReceiver->filter, macroblocks, mbWidth, mbHeight);
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
@@ -338,6 +352,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_
     resenderConfig.clientControlPort = config->clientControlPort;
     resenderConfig.maxPacketSize = config->maxPacketSize;
     resenderConfig.targetPacketSize = config->targetPacketSize;
+    resenderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
     resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
     resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;

@@ -496,6 +496,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobjec
     config.clientControlPort = clientControlPort;
     config.maxPacketSize = maxPacketSize;
     config.targetPacketSize = targetPacketSize;
+    config.streamSocketBufferSize = 0;
     config.maxLatencyMs = maxLatency;
     config.maxNetworkLatencyMs = maxNetworkLatency;
 

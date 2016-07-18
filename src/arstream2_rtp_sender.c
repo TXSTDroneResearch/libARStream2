@@ -41,6 +41,12 @@
 
 
 /**
+ * Default stream socket send buffer size (100ms at 10 Mbit/s)
+ */
+#define ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE (10000000 * 100 / 1000 / 8)
+
+
+/**
  * Maximum number of elements for the monitoring
  */
 #define ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS (2048)
@@ -141,7 +147,6 @@ struct ARSTREAM2_RtpSender_t {
     /* NAL unit FIFO */
     ARSAL_Mutex_t naluFifoMutex;
     int naluFifoPipe[2];
-    int naluFifoBufferSize;
     ARSTREAM2_RTPH264_NaluFifo_t naluFifo;
 
     /* Packet FIFO */
@@ -302,7 +307,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
 
     if (ret == 0)
     {
-        /* set the socket buffer size and NALU FIFO buffer size */
+        /* set the socket buffer size */
         if (sender->streamSocketSendBufferSize)
         {
             err = ARSTREAM2_RtpSender_SetSocketSendBufferSize(sender, sender->streamSocket, sender->streamSocketSendBufferSize);
@@ -516,7 +521,7 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
 }
 
 
-ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error)
+ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpSender_t *retSender = NULL;
     int streamMutexWasInit = 0;
@@ -606,22 +611,27 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *con
         retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
         retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-        int totalBufSize = 0, minStreamSocketSendBufferSize = 0;
-        if (config->maxNetworkLatencyMs > 0)
+        if (config->streamSocketBufferSize > 0)
         {
-            totalBufSize = (config->maxNetworkLatencyMs > 0) ? retSender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8 : 0;
-            minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
-            retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
+            retSender->streamSocketSendBufferSize = config->streamSocketBufferSize;
         }
         else
         {
-            totalBufSize = (config->maxLatencyMs > 0) ? retSender->maxBitrate * config->maxLatencyMs / 1000 / 8 : 0;
-            minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE;
-            retSender->streamSocketSendBufferSize = (totalBufSize / 6 > minStreamSocketSendBufferSize) ? totalBufSize / 6 : minStreamSocketSendBufferSize;
+            int totalBufSize = 0;
+            if (config->maxNetworkLatencyMs > 0)
+            {
+                totalBufSize = retSender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8;
+            }
+            else if (config->maxLatencyMs > 0)
+            {
+                totalBufSize = retSender->maxBitrate * config->maxLatencyMs / 1000 / 8;
+            }
+            int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
+            retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
         }
+
         retSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
         retSender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
-        retSender->naluFifoBufferSize = totalBufSize - retSender->streamSocketSendBufferSize;
         retSender->rtpSenderContext.useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         retSender->rtpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtpSenderContext.rtpClockRate = 90000;
@@ -1459,6 +1469,84 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
 
     return (void*)0;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sender, ARSTREAM2_RtpSender_DynamicConfig_t *config)
+{
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+
+    if ((sender == NULL) || (config == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    config->targetPacketSize = sender->rtpSenderContext.targetPacketSize;
+    config->streamSocketBufferSize = sender->streamSocketSendBufferSize;
+    config->maxBitrate = sender->maxBitrate;
+    if (sender->maxLatencyUs > 0)
+    {
+        config->maxLatencyMs = (sender->maxLatencyUs + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
+    }
+    else
+    {
+        config->maxLatencyMs = 0;
+    }
+    if (sender->maxNetworkLatencyUs > 0)
+    {
+        config->maxNetworkLatencyMs = (sender->maxNetworkLatencyUs + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
+    }
+    else
+    {
+        config->maxNetworkLatencyMs = 0;
+    }
+
+    return ret;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_DynamicConfig_t *config)
+{
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+
+    if ((sender == NULL) || (config == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    sender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : sender->rtpSenderContext.maxPacketSize;
+    sender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
+    if (config->streamSocketBufferSize > 0)
+    {
+        sender->streamSocketSendBufferSize = config->streamSocketBufferSize;
+    }
+    else
+    {
+        int totalBufSize = 0;
+        if (config->maxNetworkLatencyMs > 0)
+        {
+            totalBufSize = sender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8;
+        }
+        else if (config->maxLatencyMs > 0)
+        {
+            totalBufSize = sender->maxBitrate * config->maxLatencyMs / 1000 / 8;
+        }
+        int minStreamSocketSendBufferSize = (sender->maxBitrate > 0) ? sender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
+        sender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
+    }
+    sender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
+    sender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
+
+    if ((sender->streamSocket != -1) && (sender->streamSocketSendBufferSize))
+    {
+        int err = ARSTREAM2_RtpSender_SetSocketSendBufferSize(sender, sender->streamSocket, sender->streamSocketSendBufferSize);
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set the send socket buffer size");
+        }
+    }
+
+    return ret;
 }
 
 

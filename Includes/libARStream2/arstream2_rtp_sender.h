@@ -162,12 +162,27 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
-    int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
+    int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_RtpSender_Config_t;
+
+
+/**
+ * @brief RtpSender dynamic configuration parameters
+ */
+typedef struct ARSTREAM2_RtpSender_DynamicConfig_t
+{
+    int targetPacketSize;                           /**< Target network packet size in bytes */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
+    int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
+    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
+    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+
+} ARSTREAM2_RtpSender_DynamicConfig_t;
 
 
 /**
@@ -208,7 +223,7 @@ typedef struct ARSTREAM2_RtpSender_t ARSTREAM2_RtpSender_t;
  * @see ARSTREAM2_RtpSender_Stop()
  * @see ARSTREAM2_RtpSender_Delete()
  */
-ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error);
 
 
 /**
@@ -287,6 +302,30 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
 void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
+
+
+/**
+ * @brief Get the current dynamic configuration parameters
+ *
+ * @param[in] sender The sender instance
+ * @param[out] config Pointer to a dynamic config structure to fill
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or config pointers are invalid
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sender, ARSTREAM2_RtpSender_DynamicConfig_t *config);
+
+
+/**
+ * @brief Set the current dynamic configuration parameters
+ *
+ * @param[in] sender The sender instance
+ * @param[in] config Pointer to a dynamic config structure
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or config pointers are invalid
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_DynamicConfig_t *config);
 
 
 /**
