@@ -438,7 +438,7 @@ static ARSTREAM2_StreamRecorder_AuFifoItem_t* ARSTREAM2_StreamRecorder_FifoPopFr
     }
     else
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "NALU FIFO is full");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "AU FIFO is full");
         return NULL;
     }
 }

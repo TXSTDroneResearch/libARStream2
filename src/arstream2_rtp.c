@@ -269,7 +269,7 @@ int ARSTREAM2_RTP_FifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTR
     }
     else
     {
-        /* insert at tail */
+        /* insert at head */
         item->next = NULL;
         item->prev = NULL;
         fifo->tail = item;
@@ -312,6 +312,28 @@ ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoDequeueItem(ARSTREAM2_RTP_Pack
     }
     cur->prev = NULL;
     cur->next = NULL;
+
+    return cur;
+}
+
+
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoPeekItem(ARSTREAM2_RTP_PacketFifo_t *fifo)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
+
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if ((!fifo->head) || (!fifo->count))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Packet FIFO is empty");
+        return NULL;
+    }
+
+    cur = fifo->head;
 
     return cur;
 }
@@ -963,7 +985,7 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
                         - ((int64_t)recvRtpTimestamp - (int64_t)item->packet.extRtpTimestamp);
                     if (d < 0) d = -d;
                     rtcpContext->interarrivalJitter = (uint32_t)((int64_t)rtcpContext->interarrivalJitter
-                                                                    + (d - (int64_t)rtcpContext->interarrivalJitter) / 16);
+                                                      + (d - (int64_t)rtcpContext->interarrivalJitter) / 16);
                     context->previousRecvRtpTimestamp = recvRtpTimestamp;
                     context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
                 }

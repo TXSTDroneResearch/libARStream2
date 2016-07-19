@@ -102,7 +102,8 @@ typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t inputTimestamp
 /**
  * @brief RTP sender context
  */
-typedef struct ARSTREAM2_RTP_SenderContext_s {
+typedef struct ARSTREAM2_RTP_SenderContext_s
+{
     uint32_t senderSsrc;
     uint32_t rtpClockRate;
     uint32_t rtpTimestampOffset;
@@ -137,13 +138,15 @@ typedef struct ARSTREAM2_RTP_SenderContext_s {
     void *naluCallbackUserPtr;
     ARSTREAM2_RTP_SenderMonitoringCallback_t monitoringCallback;
     void *monitoringCallbackUserPtr;
+
 } ARSTREAM2_RTP_SenderContext_t;
 
 
 /**
  * @brief RTP sender context
  */
-typedef struct ARSTREAM2_RTP_ReceiverContext_s {
+typedef struct ARSTREAM2_RTP_ReceiverContext_s
+{
     uint32_t rtpClockRate;
     uint32_t maxPacketSize;
     uint32_t nominalDelay;
@@ -152,6 +155,7 @@ typedef struct ARSTREAM2_RTP_ReceiverContext_s {
     int32_t previousExtSeqNum;
     uint64_t previousExtRtpTimestamp;
     uint64_t previousRecvRtpTimestamp;
+
 } ARSTREAM2_RTP_ReceiverContext_t;
 
 
@@ -172,6 +176,8 @@ int ARSTREAM2_RTP_FifoEnqueueItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RT
 int ARSTREAM2_RTP_FifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
 ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoDequeueItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
+
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_FifoPeekItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
 int ARSTREAM2_RTP_FifoEnqueuePacket(ARSTREAM2_RTP_PacketFifo_t *fifo, const ARSTREAM2_RTP_Packet_t *packet);
 

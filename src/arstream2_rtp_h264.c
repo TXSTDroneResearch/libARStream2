@@ -20,254 +20,10 @@
 #define ARSTREAM2_RTPH264_TAG "ARSTREAM2_Rtp"
 
 
-
-int ARSTREAM2_RTPH264_FifoInit(ARSTREAM2_RTPH264_NaluFifo_t *fifo, int maxCount)
+//TODO replace with FifoDequeue+FifoPushFreeItem
+static int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_H264_NaluFifo_t *fifo, ARSTREAM2_H264_NalUnit_t *nalu)
 {
-    int i;
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
-
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (maxCount <= 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid FIFO size (%d)", maxCount);
-        return -1;
-    }
-
-    memset(fifo, 0, sizeof(ARSTREAM2_RTPH264_NaluFifo_t));
-    fifo->size = maxCount;
-    fifo->pool = malloc(maxCount * sizeof(ARSTREAM2_RTPH264_NaluFifoItem_t));
-    if (!fifo->pool)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_RTPH264_NaluFifoItem_t));
-        return -1;
-    }
-    memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_RTPH264_NaluFifoItem_t));
-
-    for (i = 0; i < maxCount; i++)
-    {
-        cur = &fifo->pool[i];
-        if (fifo->free)
-        {
-            fifo->free->prev = cur;
-        }
-        cur->next = fifo->free;
-        cur->prev = NULL;
-        fifo->free = cur;
-    }
-
-    return 0;
-}
-
-
-int ARSTREAM2_RTPH264_FifoFree(ARSTREAM2_RTPH264_NaluFifo_t *fifo)
-{
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (fifo->pool)
-    {
-        free(fifo->pool);
-    }
-    memset(fifo, 0, sizeof(ARSTREAM2_RTPH264_NaluFifo_t));
-
-    return 0;
-}
-
-
-ARSTREAM2_RTPH264_NaluFifoItem_t* ARSTREAM2_RTPH264_FifoPopFreeItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo)
-{
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return NULL;
-    }
-
-    if (fifo->free)
-    {
-        ARSTREAM2_RTPH264_NaluFifoItem_t* cur = fifo->free;
-        fifo->free = cur->next;
-        if (cur->next) cur->next->prev = NULL;
-        cur->prev = NULL;
-        cur->next = NULL;
-        return cur;
-    }
-    else
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full");
-        return NULL;
-    }
-}
-
-
-int ARSTREAM2_RTPH264_FifoPushFreeItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_NaluFifoItem_t *item)
-{
-    if ((!fifo) || (!item))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (fifo->free)
-    {
-        fifo->free->prev = item;
-        item->next = fifo->free;
-    }
-    else
-    {
-        item->next = NULL;
-    }
-    fifo->free = item;
-    item->prev = NULL;
-
-    return 0;
-}
-
-
-int ARSTREAM2_RTPH264_FifoEnqueueItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_NaluFifoItem_t *item)
-{
-    if ((!fifo) || (!item))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (fifo->count >= fifo->size)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full");
-        return -2;
-    }
-
-    item->next = NULL;
-    if (fifo->tail)
-    {
-        fifo->tail->next = item;
-        item->prev = fifo->tail;
-    }
-    else
-    {
-        item->prev = NULL;
-    }
-    fifo->tail = item;
-    if (!fifo->head)
-    {
-        fifo->head = item;
-    }
-    fifo->count++;
-
-    return 0;
-}
-
-
-ARSTREAM2_RTPH264_NaluFifoItem_t* ARSTREAM2_RTPH264_FifoDequeueItem(ARSTREAM2_RTPH264_NaluFifo_t *fifo)
-{
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
-
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return NULL;
-    }
-
-    if ((!fifo->head) || (!fifo->count))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "NALU FIFO is empty");
-        return NULL;
-    }
-
-    cur = fifo->head;
-    if (cur->next)
-    {
-        cur->next->prev = NULL;
-        fifo->head = cur->next;
-        fifo->count--;
-    }
-    else
-    {
-        fifo->head = NULL;
-        fifo->count = 0;
-        fifo->tail = NULL;
-    }
-    cur->prev = NULL;
-    cur->next = NULL;
-
-    return cur;
-}
-
-
-int ARSTREAM2_RTPH264_FifoEnqueueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const ARSTREAM2_RTPH264_Nalu_t *nalu)
-{
-    if ((!fifo) || (!nalu))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (fifo->count >= fifo->size)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full");
-        return -2;
-    }
-
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur = ARSTREAM2_RTPH264_FifoPopFreeItem(fifo);
-    if (!cur)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "No free element found in NALU FIFO, this should not happen!");
-        return -3;
-    }
-    memcpy(&cur->nalu, nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
-
-    return ARSTREAM2_RTPH264_FifoEnqueueItem(fifo, cur);
-}
-
-
-int ARSTREAM2_RTPH264_FifoEnqueueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, const ARSTREAM2_RTPH264_Nalu_t *nalus, int naluCount)
-{
-    int i, ret = 0;
-
-    if ((!fifo) || (!nalus) || (naluCount <= 0))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (fifo->count + naluCount >= fifo->size)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO would be full");
-        return -2;
-    }
-
-    for (i = 0; i < naluCount; i++)
-    {
-        ARSTREAM2_RTPH264_NaluFifoItem_t* cur = ARSTREAM2_RTPH264_FifoPopFreeItem(fifo);
-        if (!cur)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "No free element found in NALU FIFO, this should not happen!");
-            return -3;
-        }
-        memcpy(&cur->nalu, &nalus[i], sizeof(ARSTREAM2_RTPH264_Nalu_t));
-
-        ret = ARSTREAM2_RTPH264_FifoEnqueueItem(fifo, cur);
-        if (ret != 0)
-        {
-            break;
-        }
-    }
-
-    return ret;
-}
-
-
-int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_Nalu_t *nalu)
-{
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
+    ARSTREAM2_H264_NaluFifoItem_t* cur;
 
     if ((!fifo) || (!nalu))
     {
@@ -281,16 +37,16 @@ int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTRE
         return -2;
     }
 
-    cur = ARSTREAM2_RTPH264_FifoDequeueItem(fifo);
+    cur = ARSTREAM2_H264_NaluFifoDequeueItem(fifo);
     if (!cur)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to dequeue FIFO item");
         return -1;
     }
 
-    memcpy(nalu, &cur->nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
+    memcpy(nalu, &cur->nalu, sizeof(ARSTREAM2_H264_NalUnit_t));
 
-    int ret = ARSTREAM2_RTPH264_FifoPushFreeItem(fifo, cur);
+    int ret = ARSTREAM2_H264_NaluFifoPushFreeItem(fifo, cur);
     if (ret < 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -301,58 +57,8 @@ int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTRE
 }
 
 
-int ARSTREAM2_RTPH264_FifoDequeueNalus(ARSTREAM2_RTPH264_NaluFifo_t *fifo, ARSTREAM2_RTPH264_Nalu_t *nalus, int maxNaluCount, int *naluCount)
-{
-    ARSTREAM2_RTPH264_NaluFifoItem_t* cur;
-    int count = 0;
-
-    if ((!fifo) || (!nalus) || (!naluCount))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (maxNaluCount <= 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid array size");
-        return -1;
-    }
-
-    if ((!fifo->head) || (!fifo->count))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "NALU FIFO is empty");
-        return -2;
-    }
-
-    while ((fifo->head) && (count < maxNaluCount))
-    {
-        cur = ARSTREAM2_RTPH264_FifoDequeueItem(fifo);
-        if (!cur)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to dequeue FIFO item");
-            return -1;
-        }
-
-        memcpy(&nalus[count], &cur->nalu, sizeof(ARSTREAM2_RTPH264_Nalu_t));
-
-        int ret = ARSTREAM2_RTPH264_FifoPushFreeItem(fifo, cur);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
-            return -1;
-        }
-
-        count++;
-    }
-
-    *naluCount = count;
-
-    return 0;
-}
-
-
 static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext_t *context,
-                                                     ARSTREAM2_RTPH264_Nalu_t *nalu,
+                                                     ARSTREAM2_H264_NalUnit_t *nalu,
                                                      ARSTREAM2_RTP_PacketFifo_t *packetFifo, uint64_t curTime)
 {
     int ret = 0;
@@ -430,7 +136,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 
 
 static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *context,
-                                               ARSTREAM2_RTPH264_Nalu_t *nalu,
+                                               ARSTREAM2_H264_NalUnit_t *nalu,
                                                unsigned int fragmentCount,
                                                ARSTREAM2_RTP_PacketFifo_t *packetFifo, uint64_t curTime)
 {
@@ -548,7 +254,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
 
 static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext_t *context,
-                                                     ARSTREAM2_RTPH264_Nalu_t *nalu,
+                                                     ARSTREAM2_H264_NalUnit_t *nalu,
                                                      ARSTREAM2_RTP_PacketFifo_t *packetFifo, uint64_t curTime)
 {
     int ret = 0;
@@ -614,7 +320,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
 
 
 static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderContext_t *context,
-                                                        ARSTREAM2_RTPH264_Nalu_t *nalu)
+                                                        ARSTREAM2_H264_NalUnit_t *nalu)
 {
     int ret = 0;
 
@@ -691,14 +397,14 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
 
 
 int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t *context,
-                                                  ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
+                                                  ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   uint64_t curTime)
 {
-    ARSTREAM2_RTPH264_Nalu_t nalu;
-    int ret = 0, fifoRes, naluCount = 0;
+    ARSTREAM2_H264_NalUnit_t nalu;
+    int ret = 0, fifoRes, naluCount = 0, err;
 
-    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0)
+    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0) //TODO replace with FifoDequeue+FifoPushFreeItem
     {
         naluCount++;
         if ((context->previousTimestamp != 0) && (nalu.ntpTimestamp != context->previousTimestamp))
@@ -706,10 +412,10 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
             if (context->stapPending)
             {
                 /* Finish the previous STAP-A packet */
-                ret = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
-                if (ret != 0)
+                err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                if (err != 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
                 }
             }
 
@@ -740,17 +446,17 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                 if (context->stapPending)
                 {
                     /* Finish the previous STAP-A packet */
-                    ret = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
-                    if (ret != 0)
+                    err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                    if (err != 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
                     }
                 }
 
-                ret = ARSTREAM2_RTPH264_Sender_FuAPackets(context, &nalu, fragmentCount, packetFifo, curTime);
-                if (ret != 0)
+                err = ARSTREAM2_RTPH264_Sender_FuAPackets(context, &nalu, fragmentCount, packetFifo, curTime);
+                if (err != 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FuAPackets() failed (%d)", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FuAPackets() failed (%d)", err);
                 }
             }
             else
@@ -763,10 +469,10 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                     if (context->stapPending)
                     {
                         /* Finish the previous STAP-A packet */
-                        ret = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
-                        if (ret != 0)
+                        err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                        if (err != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
                         }
                     }
                 }
@@ -775,10 +481,10 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                         || (context->stapPayloadSize + context->stapHeaderExtensionSize + newStapSize > context->targetPacketSize))
                 {
                     /* Single NAL unit */
-                    ret = ARSTREAM2_RTPH264_Sender_SingleNaluPacket(context, &nalu, packetFifo, curTime);
-                    if (ret != 0)
+                    err = ARSTREAM2_RTPH264_Sender_SingleNaluPacket(context, &nalu, packetFifo, curTime);
+                    if (err != 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_SingleNaluPacket() failed (%d)", ret);
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_SingleNaluPacket() failed (%d)", err);
                     }
                 }
                 else
@@ -787,28 +493,28 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                     if (!context->stapPending)
                     {
                         /* Start a new STAP-A packet */
-                        ret = ARSTREAM2_RTPH264_Sender_BeginStapAPacket(context, &nalu, packetFifo, curTime);
-                        if (ret != 0)
+                        err = ARSTREAM2_RTPH264_Sender_BeginStapAPacket(context, &nalu, packetFifo, curTime);
+                        if (err != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_BeginStapAPacket() failed (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_BeginStapAPacket() failed (%d)", err);
                         }
                     }
                     if (context->stapPending)
                     {
                         /* Append to the current STAP-A packet */
-                        ret = ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(context, &nalu);
-                        if (ret != 0)
+                        err = ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(context, &nalu);
+                        if (err != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_AppendToStapAPacket() failed (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_AppendToStapAPacket() failed (%d)", err);
                         }
 
                         if (nalu.isLastInAu)
                         {
                             /* Finish the STAP-A packet */
-                            ret = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 1); // set the marker bit
-                            if (ret != 0)
+                            err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 1); // set the marker bit
+                            if (err != 0)
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", ret);
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
                             }
                         }
                     }
@@ -871,13 +577,13 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
 
 
 int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
-                                       ARSTREAM2_RTPH264_NaluFifo_t *naluFifo,
+                                       ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                        uint64_t curTime)
 {
-    ARSTREAM2_RTPH264_Nalu_t nalu;
+    ARSTREAM2_H264_NalUnit_t nalu;
     int ret = 0, fifoRes, naluCount = 0;
 
-    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0)
+    while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0) //TODO replace with FifoDequeue+FifoPushFreeItem
     {
         naluCount++;
 

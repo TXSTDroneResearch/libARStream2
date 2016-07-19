@@ -52,7 +52,16 @@
 /**
  * @brief Default H.264 NAL unit FIFO size
  */
-#define ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE (500)
+#define ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE (3000)
+
+/**
+ * @brief Default H.264 NAL unit FIFO size
+ */
+#define ARSTREAM2_RTP_RECEIVER_DEFAULT_AU_FIFO_SIZE (60)
+
+#define ARSTREAM2_RTP_RECEIVER_AU_BUFFER_SIZE (128 * 1024)
+#define ARSTREAM2_RTP_RECEIVER_AU_METADATA_BUFFER_SIZE (1024)
+#define ARSTREAM2_RTP_RECEIVER_AU_USER_DATA_BUFFER_SIZE (1024)
 
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_COUNT (4)
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_NALU_BUFFER_COUNT (1024) //TODO: tune this value
@@ -188,6 +197,7 @@ struct ARSTREAM2_RtpReceiver_t {
     /* Process context */
     struct ARSTREAM2_RtpReceiver_ProcessContext_t process;
     ARSTREAM2_RTP_ReceiverContext_t rtpReceiverContext;
+    ARSTREAM2_RTPH264_ReceiverContext_t rtph264ReceiverContext;
     ARSTREAM2_RTCP_ReceiverContext_t rtcpReceiverContext;
 
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;
@@ -217,7 +227,10 @@ struct ARSTREAM2_RtpReceiver_t {
     ARSTREAM2_RTP_PacketFifo_t packetFifo;
 
     /* NAL unit FIFO */
-    ARSTREAM2_RTPH264_NaluFifo_t naluFifo;
+    ARSTREAM2_H264_NaluFifo_t naluFifo;
+
+    /* Access unit FIFO */
+    ARSTREAM2_H264_AuFifo_t auFifo;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;
@@ -1616,6 +1629,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     int naluBufferMutexWasInit = 0;
     int packetFifoWasCreated = 0;
     int naluFifoWasCreated = 0;
+    int auFifoWasCreated = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -1834,10 +1848,26 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
     }
 
+    /* Setup the access unit FIFO */
+    if (internalError == ARSTREAM2_OK)
+    {
+        int auFifoRet = ARSTREAM2_H264_AuFifoInit(&retReceiver->auFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_AU_FIFO_SIZE,
+                                                  ARSTREAM2_RTP_RECEIVER_AU_BUFFER_SIZE, ARSTREAM2_RTP_RECEIVER_AU_METADATA_BUFFER_SIZE,
+                                                  ARSTREAM2_RTP_RECEIVER_AU_USER_DATA_BUFFER_SIZE);
+        if (auFifoRet != 0)
+        {
+            internalError = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            auFifoWasCreated = 1;
+        }
+    }
+
     /* Setup the NAL unit FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int naluFifoRet = ARSTREAM2_RTPH264_FifoInit(&retReceiver->naluFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE);
+        int naluFifoRet = ARSTREAM2_H264_NaluFifoInit(&retReceiver->naluFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_NALU_FIFO_SIZE);
         if (naluFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
@@ -1962,7 +1992,11 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
         if (naluFifoWasCreated == 1)
         {
-            ARSTREAM2_RTPH264_FifoFree(&retReceiver->naluFifo);
+            ARSTREAM2_H264_NaluFifoFree(&retReceiver->naluFifo);
+        }
+        if (auFifoWasCreated == 1)
+        {
+            ARSTREAM2_H264_AuFifoFree(&retReceiver->auFifo);
         }
         if ((retReceiver) && (retReceiver->net.serverAddr))
         {
@@ -2092,7 +2126,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
             ARSTREAM2_RTP_FifoFree(&(*receiver)->packetFifo);
-            ARSTREAM2_RTPH264_FifoFree(&(*receiver)->naluFifo);
+            ARSTREAM2_H264_NaluFifoFree(&(*receiver)->naluFifo);
+            ARSTREAM2_H264_AuFifoFree(&(*receiver)->auFifo);
             if ((*receiver)->net.serverAddr)
             {
                 free((*receiver)->net.serverAddr);

@@ -147,7 +147,7 @@ struct ARSTREAM2_RtpSender_t {
     /* NAL unit FIFO */
     ARSAL_Mutex_t naluFifoMutex;
     int naluFifoPipe[2];
-    ARSTREAM2_RTPH264_NaluFifo_t naluFifo;
+    ARSTREAM2_H264_NaluFifo_t naluFifo;
 
     /* Packet FIFO */
     ARSTREAM2_RTP_PacketFifo_t packetFifo;
@@ -687,7 +687,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     /* Setup the NAL unit FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int naluFifoRet = ARSTREAM2_RTPH264_FifoInit(&retSender->naluFifo, retSender->naluFifoSize);
+        int naluFifoRet = ARSTREAM2_H264_NaluFifoInit(&retSender->naluFifo, retSender->naluFifoSize);
         if (naluFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
@@ -868,7 +868,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
         if (naluFifoWasCreated == 1)
         {
-            ARSTREAM2_RTPH264_FifoFree(&retSender->naluFifo);
+            ARSTREAM2_H264_NaluFifoFree(&retSender->naluFifo);
         }
         if (naluFifoMutexWasInit == 1)
         {
@@ -949,7 +949,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             ARSAL_Mutex_Destroy(&((*sender)->streamMutex));
             ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
             ARSTREAM2_RTP_FifoFree(&(*sender)->packetFifo);
-            ARSTREAM2_RTPH264_FifoFree(&(*sender)->naluFifo);
+            ARSTREAM2_H264_NaluFifoFree(&(*sender)->naluFifo);
             ARSAL_Mutex_Destroy(&((*sender)->naluFifoMutex));
             if ((*sender)->naluFifoPipe[0] != -1)
             {
@@ -1043,7 +1043,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
     {
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
 
-        ARSTREAM2_RTPH264_NaluFifoItem_t *item = ARSTREAM2_RTPH264_FifoPopFreeItem(&sender->naluFifo);
+        ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
         if (item)
         {
             item->nalu.inputTimestamp = inputTime;
@@ -1062,10 +1062,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
             item->nalu.auUserPtr = nalu->auUserPtr;
             item->nalu.naluUserPtr = nalu->naluUserPtr;
 
-            res = ARSTREAM2_RTPH264_FifoEnqueueItem(&sender->naluFifo, item);
+            res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
             if (res != 0)
             {
-                ARSTREAM2_RTPH264_FifoPushFreeItem(&sender->naluFifo, item);
+                ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
                 retVal = ARSTREAM2_ERROR_INVALID_STATE;
             }
         }
@@ -1124,7 +1124,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
 
         for (k = 0; k < naluCount; k++)
         {
-            ARSTREAM2_RTPH264_NaluFifoItem_t *item = ARSTREAM2_RTPH264_FifoPopFreeItem(&sender->naluFifo);
+            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
             if (item)
             {
                 item->nalu.inputTimestamp = inputTime;
@@ -1143,10 +1143,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
                 item->nalu.auUserPtr = nalu[k].auUserPtr;
                 item->nalu.naluUserPtr = nalu[k].naluUserPtr;
 
-                res = ARSTREAM2_RTPH264_FifoEnqueueItem(&sender->naluFifo, item);
+                res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
                 if (res != 0)
                 {
-                    ARSTREAM2_RTPH264_FifoPushFreeItem(&sender->naluFifo, item);
+                    ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
                     retVal = ARSTREAM2_ERROR_INVALID_STATE;
                     break;
                 }
