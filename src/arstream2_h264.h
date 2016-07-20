@@ -147,6 +147,7 @@ typedef struct ARSTREAM2_H264_NalUnit_s
     uint64_t ntpTimestamp;
     uint32_t isLastInAu;
     uint32_t seqNumForcedDiscontinuity;
+    uint32_t missingPacketsBefore;
     uint32_t importance;
     uint32_t priority;
     uint8_t *metadata;
@@ -202,8 +203,8 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     unsigned int userDataBufferSize;
     unsigned int userDataSize;
     uint32_t naluCount;
-    uint32_t naluSize[ARSTREAM2_H264_AU_NALU_MAX_COUNT];
-    uint8_t *naluData[ARSTREAM2_H264_AU_NALU_MAX_COUNT];
+    ARSTREAM2_H264_NaluFifoItem_t *naluHead;
+    ARSTREAM2_H264_NaluFifoItem_t *naluTail;
 
 } ARSTREAM2_H264_AccessUnit_t;
 
@@ -240,6 +241,10 @@ typedef struct ARSTREAM2_H264_AuFifo_s
  * Functions
  */
 
+void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu);
+
+void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au);
+
 int ARSTREAM2_H264_NaluFifoInit(ARSTREAM2_H264_NaluFifo_t *fifo, int maxCount);
 
 int ARSTREAM2_H264_NaluFifoFree(ARSTREAM2_H264_NaluFifo_t *fifo);
@@ -268,6 +273,10 @@ int ARSTREAM2_H264_AuFifoEnqueueItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
 ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuFifo_t *fifo);
 
 int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo);
+
+int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem);
+
+ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au);
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size);
 

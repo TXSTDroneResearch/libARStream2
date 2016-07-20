@@ -69,6 +69,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
         unsigned int offsetInBuffer = 0;
         uint8_t *payload = NULL, *headerExtension = NULL;
         unsigned int payloadSize = 0, headerExtensionSize = 0;
+        ARSTREAM2_RTP_PacketReset(&item->packet);
 
         if ((context->useRtpHeaderExtensions) && (nalu->metadata) && (nalu->metadataSize > 4))
         {
@@ -170,6 +171,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                     uint8_t *payload = NULL, *headerExtension = NULL;
                     unsigned int payloadSize = 0, headerExtensionSize = 0;
                     uint8_t startBit = 0, endBit = 0;
+                    ARSTREAM2_RTP_PacketReset(&item->packet);
 
                     if ((context->useRtpHeaderExtensions) && (offset == 1) && (nalu->metadata) && (nalu->metadataSize > 4) && (nalu->metadataSize < packetSize))
                     {
@@ -262,6 +264,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     context->stapItem = ARSTREAM2_RTP_FifoPopFreeItem(packetFifo);
     if (context->stapItem)
     {
+        ARSTREAM2_RTP_PacketReset(&context->stapItem->packet);
         context->stapMaxNri = 0;
         context->stapImportance = 0;
         context->stapPriority = 0;

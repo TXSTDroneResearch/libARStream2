@@ -28,6 +28,31 @@ struct mmsghdr {
 #endif
 
 
+void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet)
+{
+    if (!packet)
+    {
+        return;
+    }
+
+    packet->inputTimestamp = 0;
+    packet->timeoutTimestamp = 0;
+    packet->ntpTimestamp = 0;
+    packet->extRtpTimestamp = 0;
+    packet->rtpTimestamp = 0;
+    packet->seqNum = 0;
+    packet->extSeqNum = 0;
+    packet->markerBit = 0;
+    packet->headerExtension = NULL;
+    packet->headerExtensionSize = 0;
+    packet->payload = NULL;
+    packet->payloadSize = 0;
+    packet->importance = 0;
+    packet->priority = 0;
+    packet->msgIovLength = 0;
+}
+
+
 int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize)
 {
     int i;
@@ -871,6 +896,7 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
         item = ARSTREAM2_RTP_FifoPopFreeItem(fifo);
         if (item)
         {
+            ARSTREAM2_RTP_PacketReset(&item->packet);
             if (fifo->msgVec[i].msg_len > sizeof(ARSTREAM2_RTP_Header_t))
             {
                 uint16_t flags;

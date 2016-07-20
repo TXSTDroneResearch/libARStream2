@@ -1046,6 +1046,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
         ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
         if (item)
         {
+            ARSTREAM2_H264_NaluReset(&item->nalu);
             item->nalu.inputTimestamp = inputTime;
             uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
             uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;
@@ -1127,6 +1128,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
             ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
             if (item)
             {
+                ARSTREAM2_H264_NaluReset(&item->nalu);
                 item->nalu.inputTimestamp = inputTime;
                 uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
                 uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;

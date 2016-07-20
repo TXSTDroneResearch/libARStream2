@@ -163,6 +163,7 @@ typedef struct ARSTREAM2_RTP_ReceiverContext_s
  * Functions
  */
 
+void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet);
 int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize);
 
 int ARSTREAM2_RTP_FifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo);

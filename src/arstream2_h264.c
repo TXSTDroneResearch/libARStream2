@@ -18,6 +18,46 @@
 #define ARSTREAM2_H264_TAG "ARSTREAM2_H264"
 
 
+void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu)
+{
+    if (!nalu)
+    {
+        return;
+    }
+
+    nalu->inputTimestamp = 0;
+    nalu->timeoutTimestamp = 0;
+    nalu->ntpTimestamp = 0;
+    nalu->isLastInAu = 0;
+    nalu->seqNumForcedDiscontinuity = 0;
+    nalu->missingPacketsBefore = 0;
+    nalu->importance = 0;
+    nalu->priority = 0;
+    nalu->metadata = NULL;
+    nalu->metadataSize = 0;
+    nalu->nalu = NULL;
+    nalu->naluSize = 0;
+    nalu->auUserPtr = NULL;
+    nalu->naluUserPtr = NULL;
+}
+
+
+void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
+{
+    if (!au)
+    {
+        return;
+    }
+
+    au->auSize = 0;
+    au->metadataSize = 0;
+    au->userDataSize = 0;
+    au->naluCount = 0;
+    au->naluHead = NULL;
+    au->naluTail = NULL;
+}
+
+
 int ARSTREAM2_H264_NaluFifoInit(ARSTREAM2_H264_NaluFifo_t *fifo, int maxCount)
 {
     int i;
@@ -493,6 +533,70 @@ int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo)
     while (item);
 
     return count;
+}
+
+
+int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem)
+{
+    if ((!au) || (!naluItem))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    naluItem->next = NULL;
+    if (au->naluTail)
+    {
+        au->naluTail->next = naluItem;
+        naluItem->prev = au->naluTail;
+    }
+    else
+    {
+        naluItem->prev = NULL;
+    }
+    au->naluTail = naluItem;
+    if (!au->naluHead)
+    {
+        au->naluHead = naluItem;
+    }
+    au->naluCount++;
+
+    return 0;
+}
+
+
+ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au)
+{
+    ARSTREAM2_H264_NaluFifoItem_t* cur;
+
+    if (!au)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if ((!au->naluHead) || (!au->naluCount))
+    {
+        return NULL;
+    }
+
+    cur = au->naluHead;
+    if (cur->next)
+    {
+        cur->next->prev = NULL;
+        au->naluHead = cur->next;
+        au->naluCount--;
+    }
+    else
+    {
+        au->naluHead = NULL;
+        au->naluCount = 0;
+        au->naluTail = NULL;
+    }
+    cur->prev = NULL;
+    cur->next = NULL;
+
+    return cur;
 }
 
 
