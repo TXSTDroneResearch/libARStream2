@@ -856,7 +856,7 @@ int ARSTREAM2_RTP_Receiver_FifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *conte
         cur->packet.msgIov[0].iov_len = sizeof(ARSTREAM2_RTP_Header_t);
 
         /* RTP payload */
-        cur->packet.msgIov[1].iov_base = &cur->packet.buffer;
+        cur->packet.msgIov[1].iov_base = cur->packet.buffer;
         cur->packet.msgIov[1].iov_len = context->maxPacketSize;
 
         fifo->msgVec[i].msg_hdr.msg_name = NULL;
