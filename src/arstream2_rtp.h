@@ -164,6 +164,7 @@ typedef struct ARSTREAM2_RTP_ReceiverContext_s
  */
 
 void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet);
+
 int ARSTREAM2_RTP_FifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize);
 
 int ARSTREAM2_RTP_FifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo);
@@ -215,5 +216,7 @@ int ARSTREAM2_RTP_Receiver_FifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *conte
 int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context,
                                              ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime,
                                              ARSTREAM2_RTCP_ReceiverContext_t *rtcpReceiverContext);
+
+int ARSTREAM2_RTP_Receiver_FifoFlush(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
 #endif /* _ARSTREAM2_RTP_H_ */

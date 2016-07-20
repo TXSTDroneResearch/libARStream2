@@ -845,8 +845,16 @@ int ARSTREAM2_RTP_Receiver_FifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *conte
 
     if (!fifo->free)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Packet FIFO is full");
-        return -2;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Packet FIFO is full => flush to recover (count = %d)", fifo->count);
+        int ret = ARSTREAM2_RTP_Receiver_FifoFlush(fifo);
+        if (ret < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_Receiver_FifoFlush() failed (%d)", ret);
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "%d packets flushed", ret);
+        }
     }
 
     for (cur = fifo->free, i = 0; ((cur) && (i < fifo->size)); cur = cur->next, i++)
@@ -881,10 +889,10 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
 {
     ARSTREAM2_RTP_PacketFifoItem_t* item = NULL;
     ARSTREAM2_RTP_PacketFifoItem_t* garbage = NULL;
-    int ret = 0;
-    unsigned int i;
+    int ret = 0, garbageCount = 0, garbageCount2 = 0;
+    unsigned int i, popCount = 0, enqueueCount = 0;
 
-    if ((!context) || (!fifo))
+    if ((!context) || (!fifo) || (!rtcpContext))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
         return -1;
@@ -904,6 +912,7 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
         if (item)
         {
             ARSTREAM2_RTP_PacketReset(&item->packet);
+            popCount++;
             if (fifo->msgVec[i].msg_len > sizeof(ARSTREAM2_RTP_Header_t))
             {
                 uint16_t flags;
@@ -986,14 +995,15 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
                 {
                     if (ret == -3)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Duplicate RTP packet received (seqNum %d, extSeqNum %d)",
-                                    item->packet.seqNum, item->packet.extSeqNum);
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Duplicate RTP packet received (seqNum %d, extSeqNum %d)",
+                                    item->packet.seqNum, item->packet.extSeqNum); //TODO: debug
                     }
                     else
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_FifoEnqueueItem() failed (%d)", ret);
                     }
                     /* failed to enqueue, flag the item for garbage collection */
+                    garbageCount++;
                     if (!garbage)
                     {
                         garbage = item;
@@ -1007,8 +1017,9 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
                 }
                 else if (ret == 1)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Out of order RTP packet received (seqNum %d, extSeqNum %d, delta %d)",
-                                item->packet.seqNum, item->packet.extSeqNum, -seqNumDelta);
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Out of order RTP packet received (seqNum %d, extSeqNum %d, delta %d)",
+                                item->packet.seqNum, item->packet.extSeqNum, -seqNumDelta); //TODO: debug
+                    enqueueCount++;
                 }
                 else
                 {
@@ -1021,11 +1032,13 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
                                                       + (d - (int64_t)rtcpContext->interarrivalJitter) / 16);
                     context->previousRecvRtpTimestamp = recvRtpTimestamp;
                     context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
+                    enqueueCount++;
                 }
             }
             else
             {
                 /* invalid payload, flag the item for garbage collection */
+                garbageCount++;
                 if (!garbage)
                 {
                     garbage = item;
@@ -1046,6 +1059,7 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
 
     while (garbage)
     {
+        garbageCount2++;
         ARSTREAM2_RTP_PacketFifoItem_t* next = garbage->next;
         int pushRet = ARSTREAM2_RTP_FifoPushFreeItem(fifo, garbage);
         if (pushRet < 0)
@@ -1054,6 +1068,39 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
         }
         garbage = next;
     }
+    if (garbageCount != garbageCount2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Garbage count mismatch: %d vs. %d", garbageCount, garbageCount2);
+    }
+    if (popCount != enqueueCount + garbageCount)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Pop count mismatch: %d vs. %d", popCount, enqueueCount + garbageCount);
+    }
+    //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "popCount=%d, enqueueCount=%d, garbageCount=%d", popCount, enqueueCount, garbageCount); //TODO: debug
 
     return ret;
+}
+
+
+int ARSTREAM2_RTP_Receiver_FifoFlush(ARSTREAM2_RTP_PacketFifo_t *fifo)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* item;
+    int count = 0;
+
+    do
+    {
+        item = ARSTREAM2_RTP_FifoDequeueItem(fifo);
+        if (item)
+        {
+            int fifoErr = ARSTREAM2_RTP_FifoPushFreeItem(fifo, item);
+            if (fifoErr != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_FifoPushFreeItem() failed (%d)", fifoErr);
+            }
+            count++;
+        }
+    }
+    while (item);
+
+    return count;
 }
