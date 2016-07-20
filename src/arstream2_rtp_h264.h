@@ -30,7 +30,9 @@
 typedef struct ARSTREAM2_RTPH264_ReceiverContext_s
 {
     int32_t previousDepayloadExtSeqNum;
+    uint64_t previousDepayloadExtRtpTimestamp;
     int fuPending;
+    ARSTREAM2_H264_NaluFifoItem_t *fuNaluItem;
 
     uint32_t startCode;
     int startCodeLength;
@@ -51,5 +53,11 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
 int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
                                        ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                        uint64_t curTime);
+
+int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverContext_t *context,
+                                                  ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                  ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                  ARSTREAM2_H264_AuFifo_t *auFifo,
+                                                  uint64_t curTime, ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext);
 
 #endif /* _ARSTREAM2_RTPH264_H_ */
