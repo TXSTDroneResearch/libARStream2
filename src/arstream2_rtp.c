@@ -295,10 +295,17 @@ int ARSTREAM2_RTP_FifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTR
     else
     {
         /* insert at head */
-        item->next = NULL;
+        item->next = fifo->head;
+        if (fifo->head)
+        {
+            fifo->head->prev = item;
+        }
         item->prev = NULL;
-        fifo->tail = item;
         fifo->head = item;
+        if (!fifo->tail)
+        {
+            fifo->tail = item;
+        }
         fifo->count++;
     }
 
