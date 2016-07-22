@@ -19,6 +19,7 @@
 #define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE 0x00000001
 #define ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH 4
 
+#define ARSTREAM2_H264_NALU_TYPE_UNKNOWN 0
 #define ARSTREAM2_H264_NALU_TYPE_SLICE 1
 #define ARSTREAM2_H264_NALU_TYPE_SLICE_IDR 5
 #define ARSTREAM2_H264_NALU_TYPE_SEI 6
@@ -32,6 +33,7 @@
 #define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED 5
 #define ARSTREAM2_H264_SEI_PAYLOAD_TYPE_RECOVERY_POINT 6
 
+#define ARSTREAM2_H264_SLICE_TYPE_NON_VCL 0xFF
 #define ARSTREAM2_H264_SLICE_TYPE_P 0
 #define ARSTREAM2_H264_SLICE_TYPE_B 1
 #define ARSTREAM2_H264_SLICE_TYPE_I 2
@@ -145,6 +147,8 @@ typedef struct ARSTREAM2_H264_NalUnit_s
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t extRtpTimestamp;
+    uint32_t rtpTimestamp;
     uint32_t isLastInAu;
     uint32_t seqNumForcedDiscontinuity;
     uint32_t missingPacketsBefore;
@@ -156,6 +160,8 @@ typedef struct ARSTREAM2_H264_NalUnit_s
     unsigned int naluSize;
     void *auUserPtr;
     void *naluUserPtr;
+    uint8_t naluType;
+    uint8_t sliceType;
 
 } ARSTREAM2_H264_NalUnit_t;
 
@@ -202,6 +208,11 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     uint8_t *userDataBuffer;
     unsigned int userDataBufferSize;
     unsigned int userDataSize;
+    uint64_t inputTimestamp;
+    uint64_t timeoutTimestamp;
+    uint64_t ntpTimestamp;
+    uint64_t extRtpTimestamp;
+    uint32_t rtpTimestamp;
     uint32_t naluCount;
     ARSTREAM2_H264_NaluFifoItem_t *naluHead;
     ARSTREAM2_H264_NaluFifoItem_t *naluTail;
@@ -275,6 +286,9 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuF
 int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo);
 
 int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem);
+
+int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem,
+                                       ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem);
 
 ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au);
 

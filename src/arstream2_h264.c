@@ -28,6 +28,8 @@ void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu)
     nalu->inputTimestamp = 0;
     nalu->timeoutTimestamp = 0;
     nalu->ntpTimestamp = 0;
+    nalu->extRtpTimestamp = 0;
+    nalu->rtpTimestamp = 0;
     nalu->isLastInAu = 0;
     nalu->seqNumForcedDiscontinuity = 0;
     nalu->missingPacketsBefore = 0;
@@ -39,6 +41,8 @@ void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu)
     nalu->naluSize = 0;
     nalu->auUserPtr = NULL;
     nalu->naluUserPtr = NULL;
+    nalu->naluType = ARSTREAM2_H264_NALU_TYPE_UNKNOWN;
+    nalu->sliceType = ARSTREAM2_H264_SLICE_TYPE_NON_VCL;
 }
 
 
@@ -52,6 +56,11 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->auSize = 0;
     au->metadataSize = 0;
     au->userDataSize = 0;
+    au->inputTimestamp = 0;
+    au->timeoutTimestamp = 0;
+    au->ntpTimestamp = 0;
+    au->extRtpTimestamp = 0;
+    au->rtpTimestamp = 0;
     au->naluCount = 0;
     au->naluHead = NULL;
     au->naluTail = NULL;
@@ -544,6 +553,15 @@ int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264
         return -1;
     }
 
+    if (au->naluCount == 0)
+    {
+        au->inputTimestamp = naluItem->nalu.inputTimestamp;
+        au->timeoutTimestamp = naluItem->nalu.timeoutTimestamp;
+        au->ntpTimestamp = naluItem->nalu.ntpTimestamp;
+        au->extRtpTimestamp = naluItem->nalu.extRtpTimestamp;
+        au->rtpTimestamp = naluItem->nalu.rtpTimestamp;
+    }
+
     naluItem->next = NULL;
     if (au->naluTail)
     {
@@ -559,6 +577,32 @@ int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264
     {
         au->naluHead = naluItem;
     }
+    au->naluCount++;
+
+    return 0;
+}
+
+
+int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem,
+                                       ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem)
+{
+    if ((!au) || (!naluItem) || (!nextNaluItem))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    naluItem->next = nextNaluItem;
+    if (nextNaluItem->prev)
+    {
+        naluItem->prev = nextNaluItem->prev;
+    }
+    else
+    {
+        naluItem->prev = NULL;
+        au->naluHead = naluItem;
+    }
+    nextNaluItem->prev = naluItem;
     au->naluCount++;
 
     return 0;
@@ -609,7 +653,7 @@ int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned 
         au->buffer = realloc(au->buffer, newSize);
         if (au->buffer == NULL)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Access unit realloc failed (size %d)", newSize);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Access unit realloc failed (size %u)", newSize);
             return -1;
         }
     }

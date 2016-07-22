@@ -683,12 +683,16 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         item->nalu.inputTimestamp = packet->inputTimestamp;
         item->nalu.timeoutTimestamp = packet->timeoutTimestamp;
         item->nalu.ntpTimestamp = packet->ntpTimestamp;
+        item->nalu.extRtpTimestamp = packet->extRtpTimestamp;
+        item->nalu.rtpTimestamp = packet->rtpTimestamp;
+        item->nalu.isLastInAu = packet->markerBit;
         item->nalu.missingPacketsBefore = missingPacketsBefore;
 
         err = ARSTREAM2_H264_AuEnqueueNalu(&context->auItem->au, item);
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to enqueue NALU item in AU");
+            context->auItem->au.auSize -= item->nalu.naluSize;
             err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
             if (err != 0)
             {
@@ -731,7 +735,7 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
-    naluSize = ((uint16_t)(*packetBuf) << 8) | ((uint16_t)(*(packetBuf + 1)));
+    naluSize = (((uint16_t)(*packetBuf) << 8) & 0xFF00) | (((uint16_t)(*(packetBuf + 1))) & 0x00FF);
     packetBuf += 2;
     sizeLeft -= 2;
     first = 1;
@@ -770,12 +774,16 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
             item->nalu.inputTimestamp = packet->inputTimestamp;
             item->nalu.timeoutTimestamp = packet->timeoutTimestamp;
             item->nalu.ntpTimestamp = packet->ntpTimestamp;
+            item->nalu.extRtpTimestamp = packet->extRtpTimestamp;
+            item->nalu.rtpTimestamp = packet->rtpTimestamp;
+            item->nalu.isLastInAu = (sizeLeft - naluSize >= 2) ? 0 : packet->markerBit;
             item->nalu.missingPacketsBefore = (first) ? missingPacketsBefore : 0;
 
             err = ARSTREAM2_H264_AuEnqueueNalu(&context->auItem->au, item);
             if (err != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to enqueue NALU item in AU");
+                context->auItem->au.auSize -= item->nalu.naluSize;
                 err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
                 if (err != 0)
                 {
@@ -843,6 +851,8 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
         context->fuNaluItem->nalu.inputTimestamp = packet->inputTimestamp;
         context->fuNaluItem->nalu.timeoutTimestamp = packet->timeoutTimestamp;
         context->fuNaluItem->nalu.ntpTimestamp = packet->ntpTimestamp;
+        context->fuNaluItem->nalu.extRtpTimestamp = packet->extRtpTimestamp;
+        context->fuNaluItem->nalu.rtpTimestamp = packet->rtpTimestamp;
         context->fuNaluItem->nalu.missingPacketsBefore = missingPacketsBefore;
 
         if (context->startCodeLength > 0)
@@ -901,7 +911,8 @@ static int ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(ARSTREAM2_RTPH264_Receiv
 }
 
 
-static int ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(ARSTREAM2_RTPH264_ReceiverContext_t *context)
+static int ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(ARSTREAM2_RTPH264_ReceiverContext_t *context,
+                                                       ARSTREAM2_RTP_Packet_t *packet)
 {
     int ret = 0, err;
 
@@ -910,6 +921,8 @@ static int ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(ARSTREAM2_RTPH264_Receive
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
         return -1;
     }
+
+    context->fuNaluItem->nalu.isLastInAu = packet->markerBit;
 
     err = ARSTREAM2_H264_AuEnqueueNalu(&context->auItem->au, context->fuNaluItem);
     if (err != 0)
@@ -941,7 +954,10 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
         return -1;
     }
 
-    context->auItem->au.auSize -= context->fuNaluItem->nalu.naluSize;
+    if (context->fuNaluItem->nalu.naluSize <= context->auItem->au.auSize)
+    {
+        context->auItem->au.auSize -= context->fuNaluItem->nalu.naluSize;
+    }
     context->fuPending = 0;
 
     err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, context->fuNaluItem);
@@ -992,6 +1008,14 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 if ((ret == 0) && (context->auItem != NULL) && (context->previousDepayloadExtRtpTimestamp != 0)
                         && (packet->extRtpTimestamp != context->previousDepayloadExtRtpTimestamp))
                 {
+                    /* drop the previous incomplete FU-A */
+                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum); //TODO: debug
+                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                    if (err != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
+                    }
+
                     /* change of RTP timestamp without the marker bit set on previous packet => output the access unit */
                     err = ARSTREAM2_H264_AuFifoEnqueueItem(auFifo, context->auItem);
                     if (err != 0)
@@ -1088,18 +1112,18 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
                                         }
                                     }
-                                }
 
-                                if (endBit)
-                                {
-                                    err = ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(context);
-                                    if (err != 0)
+                                    if (endBit)
                                     {
-                                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_FinishFuAPackets() failed (%d)", err);
-                                        err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                        err = ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(context, packet);
                                         if (err != 0)
                                         {
-                                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
+                                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_FinishFuAPackets() failed (%d)", err);
+                                            err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                            if (err != 0)
+                                            {
+                                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
+                                            }
                                         }
                                     }
                                 }
