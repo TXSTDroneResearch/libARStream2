@@ -3578,17 +3578,17 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Hand
 }
 
 
-int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle)
+uint8_t ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
 
     if (!parserHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
-        return -1;
+        return 0;
     }
 
-    return parser->sliceContext.nal_unit_type;
+    return (uint8_t)parser->sliceContext.nal_unit_type;
 }
 
 

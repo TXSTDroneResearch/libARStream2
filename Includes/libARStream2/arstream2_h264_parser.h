@@ -155,9 +155,9 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
  * @param parserHandle Instance handle.
  *
  * @return the last NAL unit type.
- * @return -1 if an error occurred.
+ * @return 0 if an error occurred.
  */
-int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle);
+uint8_t ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle);
 
 
 /**
