@@ -52,8 +52,9 @@ typedef void* ARSTREAM2_StreamReceiver_Handle;
 typedef void* ARSTREAM2_StreamReceiver_ResenderHandle;
 
 
+
 /**
- * @brief ARSTREAM2 StreamReceiver configuration for initialization.
+ * @brief ARSTREAM2 StreamReceiver net configuration for initialization.
  */
 typedef struct
 {
@@ -64,6 +65,25 @@ typedef struct
     int serverControlPort;                                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
     int clientStreamPort;                                           /**< Client stream port */
     int clientControlPort;                                          /**< Client control port */
+
+} ARSTREAM2_StreamReceiver_NetConfig_t;
+
+// Forward declaration of the mux_ctx structure
+struct mux_ctx;
+
+/**
+ * @brief ARSTREAM2 StreamReceiver mux configuration for initialization.
+ */
+typedef struct
+{
+    struct mux_ctx *mux;                                            /**< libmux context */
+
+} ARSTREAM2_StreamReceiver_MuxConfig_t;
+/**
+ * @brief ARSTREAM2 StreamReceiver configuration for initialization.
+ */
+typedef struct
+{
     int maxPacketSize;                                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int maxBitrate;                                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
@@ -93,8 +113,10 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
     int clientControlPort;                          /**< Client control port */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_StreamReceiver_ResenderConfig_t;
 
@@ -106,11 +128,16 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
  *
  * @param streamReceiverHandle Pointer to the handle used in future calls to the library.
  * @param config The instance configuration.
+ * @param net_config The instance network configuration, or NULL if libmux is used.
+ * @param mux_config The instance libmux configuration, or NULL if network is used.
  *
  * @return 0 if no error occurred.
  * @return -1 if an error occurred.
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle, ARSTREAM2_StreamReceiver_Config_t *config);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
+                                               ARSTREAM2_StreamReceiver_Config_t *config,
+                                               ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
+                                               ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config);
 
 
 /**
@@ -236,6 +263,29 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 
 
 /**
+ * @brief Get the frame macroblocks status.
+ *
+ * This function returns pointers to a macroblock status array for the current frame and image
+ * macroblock width and height.
+ * Macroblock statuses are of type eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS.
+ * This function must be called only within the ARSTREAM2_H264Filter_AuReadyCallback_t function.
+ * The valididy of the data returned is only during the call to ARSTREAM2_H264Filter_AuReadyCallback_t
+ * and the user must copy the macroblock status array to its own buffer for further use.
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param macroblocks Pointer to the macroblock status array.
+ * @param mbWidth pointer to the image macroblock-width.
+ * @param mbHeight pointer to the image macroblock-height.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS have not been received (no sync).
+ * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if macroblocks status is not available.
+ * @return an eARSTREAM2_ERROR error code if another error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
+
+
+/**
  * @brief Initialize a new resender.
  *
  * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_Free() or ARSTREAM2_StreamReceiver_FreeResender() to free the resources.
@@ -303,6 +353,37 @@ void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
  * @return -1 if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
+
+
+/**
+ * @brief Start a stream recorder.
+ *
+ * The function starts recording the received stream to a file.
+ * The recording can be stopped using ARSTREAM2_StreamReceiver_StopRecording().
+ * The filter must be previously started using ARSTREAM2_StreamReceiver_StartFilter().
+ * @note Only one recording can be done at a time.
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param recordFileName Record file absolute path.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, const char *recordFileName);
+
+
+/**
+ * @brief Stop a stream recorder.
+ *
+ * The function stops the current recording.
+ * If no recording is in progress nothing happens.
+ *
+ * @param streamReceiverHandle Instance handle.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle);
 
 
 #ifdef __cplusplus

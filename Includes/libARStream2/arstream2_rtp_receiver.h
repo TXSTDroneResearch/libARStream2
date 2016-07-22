@@ -75,9 +75,9 @@ typedef uint8_t* (*ARSTREAM2_RtpReceiver_NaluCallback_t)(eARSTREAM2_RTP_RECEIVER
 
 
 /**
- * @brief RtpReceiver configuration parameters
+ * @brief RtpReceiver net configuration parameters
  */
-typedef struct ARSTREAM2_RtpReceiver_Config_t
+typedef struct ARSTREAM2_RtpReceiver_NetConfig_t
 {
     const char *serverAddr;                         /**< Server address */
     const char *mcastAddr;                          /**< Multicast receive address (optional, NULL for no multicast) */
@@ -86,6 +86,23 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     int serverControlPort;                          /**< Server control port, @see ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
+} ARSTREAM2_RtpReceiver_NetConfig_t;
+
+// Forward declaration of the mux_ctx structure
+struct mux_ctx;
+
+/**
+ * @brief RtpReceiver mux configuration parameters
+ */
+typedef struct ARSTREAM2_RtpReceiver_MuxConfig_t
+{
+    struct mux_ctx *mux;                            /**< libmux context */
+} ARSTREAM2_RtpReceiver_MuxConfig_t;
+/**
+ * @brief RtpReceiver configuration parameters
+ */
+typedef struct ARSTREAM2_RtpReceiver_Config_t
+{
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;   /**< NAL unit callback function */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
@@ -93,7 +110,6 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds (should be provided by the server, can be 0) */
     int insertStartCodes;                           /**< Boolean-like (0-1) flag: if active insert a start code prefix before NAL units */
-
 } ARSTREAM2_RtpReceiver_Config_t;
 
 
@@ -111,9 +127,10 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
     int clientControlPort;                          /**< Client control port */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
-
+    int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 } ARSTREAM2_RtpReceiver_RtpResender_Config_t;
 
 
@@ -141,7 +158,10 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_t ARSTREAM2_RtpReceiver_RtpRese
  * @see ARSTREAM2_RtpReceiver_Stop()
  * @see ARSTREAM2_RtpReceiver_Delete()
  */
-ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_t *config,
+                                                   ARSTREAM2_RtpReceiver_NetConfig_t *net_config,
+                                                   ARSTREAM2_RtpReceiver_MuxConfig_t *mux_config,
+                                                   eARSTREAM2_ERROR *error);
 
 
 /**
