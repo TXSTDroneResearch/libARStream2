@@ -93,8 +93,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 
         receiverConfig.filterPipe[0] = streamReceiver->pipe[0];
         receiverConfig.filterPipe[1] = streamReceiver->pipe[1];
-        receiverConfig.naluCallback = NULL; //TODO ARSTREAM2_H264Filter_RtpReceiverNaluCallback;
-        receiverConfig.naluCallbackUserPtr = NULL; //TODO (void*)streamReceiver->filter;
         receiverConfig.maxPacketSize = config->maxPacketSize;
         receiverConfig.maxBitrate = config->maxBitrate;
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
@@ -303,8 +301,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_H
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to pause H264Filter: %s", ARSTREAM2_Error_ToString(ret));
         return ret;
     }
-
-    ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(streamReceiver->receiver);
 
     return ret;
 }

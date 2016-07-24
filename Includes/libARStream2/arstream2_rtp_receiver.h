@@ -29,54 +29,6 @@ extern "C" {
 
 
 /**
- * @brief Causes for NAL unit callback function
- */
-typedef enum
-{
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE = 0,       /**< NAL unit is complete (no error) */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL,   /**< NAL unit buffer is too small */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE,      /**< The copy of the previous NAL unit buffer is complete (used only after ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL) */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL,                  /**< The receiver is closing, so buffer is no longer used */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_MAX,
-
-} eARSTREAM2_RTP_RECEIVER_CAUSE;
-
-
-/**
- * @brief Callback function for NAL units
- *
- * @param[in] cause Describes why the callback function was called
- * @param[in] naluBuffer Pointer to the NAL unit buffer
- * @param[in] naluSize NAL unit size in bytes
- * @param[in] auRtpTimestamp Access unit RTP timestamp (90000 Hz clock)
- * @param[in] auNtpTimestamp Access unit NTP timestamp (microseconds) in the sender's clock reference (0 if RTCP is not available)
- * @param[in] auNtpTimestampLocal Access unit NTP timestamp (microseconds) in the local clock reference (0 if clock sync or RTCP is not available)
- * @param[in] naluMetadata Pointer to the NAL unit metadata buffer
- * @param[in] naluSize NAL unit metadata size in bytes
- * @param[in] isFirstNaluInAu Boolean-like (0-1) flag indicating that the NAL unit is the first in an access unit
- * @param[in] isLastNaluInAu Boolean-like (0-1) flag indicating that the NAL unit is the last in an access unit
- * @param[in] missingPacketsBefore Number of missing network packets before this NAL unit (should be 0 most of the time)
- * @param[inout] newNaluBufferSize Pointer to the new NAL unit buffer size in bytes
- * @param[in] userPtr Global NAL unit callback user pointer
- *
- * @return address of a new buffer which will hold the next NAL unit
- *
- * @note If cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE, naluBuffer contains a valid NAL unit.
- * @note If cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, any data already present in the previous NAL unit buffer will be copied by the receiver into the new buffer.
- * The previous NAL unit buffer will still be in use until the callback function is called again with the ARSTREAM2_RTP_RECEIVER_CAUSE_COPY_COMPLETE cause.
- * If the new buffer is still too small, the current NAL unit will be skipped.
- * @note If cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE, the return value and newNaluBufferSize are unused.
- * @note If cause is ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL, the return value and newNaluBufferSize are unused.
- *
- * @warning If the cause is ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL, returning a buffer smaller than the initial value of newNaluBufferSize or a NULL pointer will skip the current NAL unit.
- */
-typedef uint8_t* (*ARSTREAM2_RtpReceiver_NaluCallback_t)(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize,
-                                                         uint32_t auRtpTimestamp, uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
-                                                         uint8_t *naluMetadata, int naluMetadataSize, int isFirstNaluInAu, int isLastNaluInAu,
-                                                         int missingPacketsBefore, int *newNaluBufferSize, void *userPtr);
-
-
-/**
  * @brief RtpReceiver net configuration parameters
  */
 typedef struct ARSTREAM2_RtpReceiver_NetConfig_t
@@ -106,8 +58,6 @@ typedef struct ARSTREAM2_RtpReceiver_MuxConfig_t
 typedef struct ARSTREAM2_RtpReceiver_Config_t
 {
     int filterPipe[2];                              /**< Filter signaling pipe file desciptors */
-    ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;   /**< NAL unit callback function */
-    void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
@@ -169,19 +119,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 
 
 /**
- * @brief Invalidate the current NAL unit buffer
- *
- * This function blocks until the current NAL unit buffer is no longer used by the receiver.
- * The NAL unit callback function will then be called with cause ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL to get a new buffer.
- *
- * @param[in] receiver The receiver instance
- *
- * @note Calling this function multiple times has no effect
- */
-void ARSTREAM2_RtpReceiver_InvalidateNaluBuffer(ARSTREAM2_RtpReceiver_t *receiver);
-
-
-/**
  * @brief Stops a running RtpReceiver
  * @warning Once stopped, a receiver cannot be restarted
  *
@@ -229,15 +166,6 @@ void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the receiver is invalid or if timeIntervalUs is 0.
  */
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSharedContext(ARSTREAM2_RtpReceiver_t *receiver, void **auFifo, void **naluFifo, void **mutex);
-
-
-/**
- * @brief Get the user pointer associated with the receiver NAL unit callback function
- *
- * @param[in] receiver The receiver instance
- * @return The user pointer associated with the NALU callback, or NULL if receiver does not point to a valid receiver
- */
-void* ARSTREAM2_RtpReceiver_GetNaluCallbackUserPtr(ARSTREAM2_RtpReceiver_t *receiver);
 
 
 /**
