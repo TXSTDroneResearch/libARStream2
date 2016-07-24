@@ -14,7 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
-#include <libARStream2/arstream2_h264_filter.h>
+#include <libARStream2/arstream2_stream_receiver.h>
 
 
 /**

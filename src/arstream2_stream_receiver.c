@@ -11,6 +11,7 @@
 #include <libARSAL/ARSAL_Print.h>
 
 #include <libARStream2/arstream2_stream_receiver.h>
+#include "arstream2_h264_filter.h"
 
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"

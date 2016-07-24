@@ -26,6 +26,7 @@ LOCAL_CFLAGS := \
 LOCAL_SRC_FILES := \
 	gen/Sources/arstream2_error.c \
 	src/arstream2_h264_filter.c \
+	src/arstream2_h264_filter_error.c \
 	src/arstream2_h264_parser.c \
 	src/arstream2_h264_sei.c \
 	src/arstream2_h264_writer.c \
@@ -40,7 +41,6 @@ LOCAL_SRC_FILES := \
 
 LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_error.h:usr/include/libARStream2/ \
-	Includes/libARStream2/arstream2_h264_filter.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_parser.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_sei.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_writer.h:usr/include/libARStream2/ \

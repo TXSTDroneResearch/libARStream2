@@ -1,21 +1,72 @@
 /**
- * @file arstream2_h264_filter.h
- * @brief Parrot Streaming Library - H.264 Filter
+ * @file arstream2_h264_filter.c
+ * @brief Parrot Reception Library - H.264 Filter
  * @date 08/04/2015
  * @author aurelien.barre@parrot.com
  */
 
-#ifndef _ARSTREAM2_H264_FILTER_H_
-#define _ARSTREAM2_H264_FILTER_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* #ifdef __cplusplus */
+#ifndef _ARSTREAM2_H264_FILTER_INTERNAL_H_
+#define _ARSTREAM2_H264_FILTER_INTERNAL_H_
 
-#include <inttypes.h>
-#include <libARStream2/arstream2_error.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <arpa/inet.h>
+
+#include <libARSAL/ARSAL_Print.h>
+#include <libARSAL/ARSAL_Mutex.h>
+#include <libARSAL/ARSAL_Thread.h>
+
 #include <libARStream2/arstream2_rtp_receiver.h>
+#include <libARStream2/arstream2_h264_parser.h>
+#include <libARStream2/arstream2_h264_writer.h>
+#include <libARStream2/arstream2_h264_sei.h>
+#include <libARStream2/arstream2_stream_recorder.h>
+#include <libARStream2/arstream2_stream_receiver.h>
 
+#include "arstream2_h264.h"
+
+
+/*
+ * Macros
+ */
+
+#define ARSTREAM2_H264_FILTER_TIMEOUT_US (100 * 1000)
+
+#define ARSTREAM2_H264_FILTER_AU_BUFFER_SIZE (128 * 1024)
+#define ARSTREAM2_H264_FILTER_AU_BUFFER_POOL_SIZE (60)
+#define ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE (1024)
+#define ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE (1024)
+#define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
+#define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
+
+#define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MAX)
+#define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (5)
+#define ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL (1000000)
+
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
+
+#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_DRONE
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_DRONE "/data/ftp/internal_000/streamstats"
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_NAP_USB
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/streamstats"
+//#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_NAP_INTERNAL
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/streamstats"
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_ANDROID_INTERNAL
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/streamstats"
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_PCLINUX
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_PCLINUX "./streamstats"
+
+#define ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_FILENAME "videostats"
+#endif
+
+
+/*
+ * Types
+ */
 
 /**
  * @brief ARSTREAM2 H264Filter instance handle.
@@ -24,40 +75,11 @@ typedef void* ARSTREAM2_H264Filter_Handle;
 
 
 /**
- * @brief AU synchronization type.
- */
-typedef enum
-{
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE = 0,    /**< The Access Unit is not a synchronization point */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR,         /**< The Access Unit is an IDR picture */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME,      /**< The Access Unit is an I-frame */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START,   /**< The Access Unit is a Periodic Intra Refresh start */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX,
-
-} eARSTREAM2_H264_FILTER_AU_SYNC_TYPE;
-
-
-/**
- * @brief Macroblock status.
- */
-typedef enum
-{
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN = 0,        /**< The macroblock status is unknown */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE,       /**< The macroblock is valid and contained in an I-slice */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_PSLICE,       /**< The macroblock is valid and contained in a P-slice */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING_CONCEALED,  /**< The macroblock is missing and concealed */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING,            /**< The macroblock is missing and not concealed */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_ERROR_PROPAGATION,  /**< The macroblock is valid but within an error propagation */
-    ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MAX,
-
-} eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS;
-
-
-/**
  * @brief ARSTREAM2 H264Filter configuration for initialization.
  */
 typedef struct
 {
+    int filterPipe[2];                                              /**< Filter signaling pipe file desciptors */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
@@ -65,82 +87,166 @@ typedef struct
     int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
+    void *auFifo;
+    void *naluFifo;
+    void *mutex;
 
 } ARSTREAM2_H264Filter_Config_t;
 
 
-/**
- * @brief SPS/PPS NAL units callback function
- *
- * The optional SPS/PPS callback function is called when SPS/PPS are found in the stream.
- *
- * @param spsBuffer Pointer to the SPS NAL unit buffer
- * @param spsSize Size in bytes of the SPS NAL unit
- * @param ppsBuffer Pointer to the PPS NAL unit buffer
- * @param ppsSize Size in bytes of the PPS NAL unit
- * @param userPtr SPS/PPS callback user pointer
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- *
- * @note This callback function is optional.
- *
- * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
+typedef struct ARSTREAM2_H264Filter_AuBufferItem_s
+{
+    uint8_t *buffer;
+    unsigned int bufferSize;
+    unsigned int auSize;
+    uint8_t *metadataBuffer;
+    unsigned int metadataBufferSize;
+    uint32_t naluCount;
+    uint32_t naluSize[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
+    uint8_t *naluData[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
+    int pushed;
+
+    struct ARSTREAM2_H264Filter_AuBufferItem_s* prev;
+    struct ARSTREAM2_H264Filter_AuBufferItem_s* next;
+
+} ARSTREAM2_H264Filter_AuBufferItem_t;
+
+
+typedef struct ARSTREAM2_H264Filter_AuBufferPool_s
+{
+    int size;
+    ARSTREAM2_H264Filter_AuBufferItem_t *free;
+    ARSTREAM2_H264Filter_AuBufferItem_t *pool;
+
+} ARSTREAM2_H264Filter_AuBufferPool_t;
+
+
+typedef struct ARSTREAM2_H264Filter_VideoStats_s
+{
+    uint32_t totalFrameCount;
+    uint32_t outputFrameCount;
+    uint32_t discardedFrameCount;
+    uint32_t missedFrameCount;
+    uint32_t errorSecondCount;
+    uint64_t errorSecondStartTime;
+    uint32_t errorSecondCountByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+    uint64_t errorSecondStartTimeByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+    uint32_t macroblockStatus[ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT][ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+
+} ARSTREAM2_H264Filter_VideoStats_t;
+
+
+typedef struct ARSTREAM2_H264Filter_s
+{
+    ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback;
+    void* spsPpsCallbackUserPtr;
+    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback;
+    void* getAuBufferCallbackUserPtr;
+    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback;
+    void* auReadyCallbackUserPtr;
+    int callbackInProgress;
+
+    int waitForSync;
+    int outputIncompleteAu;
+    int filterOutSpsPps;
+    int filterOutSei;
+    int replaceStartCodesWithNaluSize;
+    int generateSkippedPSlices;
+    int generateFirstGrayIFrame;
+
+    ARSTREAM2_H264Filter_AuBufferPool_t recordAuBufferPool;
+    ARSAL_Mutex_t recordAuBufferPoolMutex;
+    ARSTREAM2_H264Filter_AuBufferItem_t *recordAuBufferItem;
+
+    uint8_t *currentAuBuffer;
+    int currentAuBufferSize;
+    void *currentAuBufferUserPtr;
+    uint8_t *currentNaluBuffer;
+    int currentNaluBufferSize;
+    uint8_t *tempAuBuffer;
+    int tempAuBufferSize;
+
+    int currentAuOutputIndex;
+    int currentAuSize;
+    uint32_t currentAuRtpTimestamp;
+    uint64_t currentAuNtpTimestamp;
+    uint64_t currentAuNtpTimestampLocal;
+    uint64_t currentAuFirstNaluInputTime;
+    int currentAuIncomplete;
+    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE currentAuSyncType;
+    int currentAuFrameNum;
+    int previousAuFrameNum;
+    int currentAuSlicesReceived;
+    int currentAuSlicesAllI;
+    int currentAuStreamingInfoAvailable;
+    int currentAuMetadataSize;
+    uint8_t *currentAuMetadata;
+    int currentAuUserDataSize;
+    uint8_t *currentAuUserData;
+    ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfo;
+    uint16_t currentAuStreamingSliceMbCount[ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT];
+    int currentAuPreviousSliceIndex;
+    int currentAuPreviousSliceFirstMb;
+    int currentAuCurrentSliceFirstMb;
+    uint8_t previousSliceType;
+
+    uint8_t *currentAuRefMacroblockStatus;
+    uint8_t *currentAuMacroblockStatus;
+    int currentAuIsRef;
+    int currentAuInferredSliceMbCount;
+    int currentAuInferredPreviousSliceFirstMb;
+
+    /* H.264-level stats */
+    ARSTREAM2_H264Filter_VideoStats_t stats;
+    uint64_t lastStatsOutputTimestamp;
+#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
+    FILE* fStatsOut;
+#endif
+
+    ARSTREAM2_H264Parser_Handle parser;
+    ARSTREAM2_H264Writer_Handle writer;
+    uint8_t *tempSliceNaluBuffer;
+    int tempSliceNaluBufferSize;
+
+    int sync;
+    int spsSync;
+    int spsSize;
+    uint8_t* pSps;
+    int ppsSync;
+    int ppsSize;
+    uint8_t* pPps;
+    int firstGrayIFramePending;
+    int mbWidth;
+    int mbHeight;
+    int mbCount;
+    float framerate;
+    int maxFrameNum;
+
+    ARSAL_Mutex_t mutex;
+    ARSAL_Cond_t startCond;
+    ARSAL_Cond_t callbackCond;
+    int auBufferChangePending;
+    int running;
+    int threadShouldStop;
+    int threadStarted;
+    int pipe[2];
+
+    /* NAL unit and access unit FIFO */
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;
+    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSAL_Mutex_t *fifoMutex;
+
+    char *recordFileName;
+    int recorderStartPending;
+    ARSTREAM2_StreamRecorder_Handle recorder;
+    ARSAL_Thread_t recorderThread;
+
+} ARSTREAM2_H264Filter_t;
+
+
+/*
+ * Functions
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
-
-
-/**
- * @brief Get access unit buffer callback function
- *
- * The mandatory get AU buffer callback function is called to retreive a buffer to fill with an access unit.
- *
- * @param auBuffer Pointer to the AU buffer pointer
- * @param auBufferSize Pointer to the AU buffer size in bytes
- * @param auBufferUserPtr Pointer to the AU buffer user pointer
- * @param userPtr Get AU buffer callback user pointer
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if no buffers are available.
- * @return an eARSTREAM2_ERROR error code if another error occurred.
- *
- * @warning This callback function is mandatory.
- * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
- */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
-
-
-/**
- * @brief Access unit ready callback function
- *
- * The mandatory AU ready callback function is called to output an access unit.
- *
- * @param auBuffer Pointer to the AU buffer
- * @param auSize AU size in bytes
- * @param auRtpTimestamp Access unit RTP timestamp (90000 Hz clock)
- * @param auNtpTimestamp Access unit NTP timestamp (microseconds) in the sender's clock reference (0 if RTCP is not available)
- * @param auNtpTimestampLocal Access unit NTP timestamp (microseconds) in the local clock reference (0 if clock sync or RTCP is not available)
- * @param auSyncType AU synchronization type
- * @param auMetadata AU metadata buffer
- * @param auMetadataSize AU metadata size in bytes
- * @param auUserData AU user data SEI buffer
- * @param auUserDataSize AU user data SEI size in bytes
- * @param auBufferUserPtr AU buffer user pointer
- * @param userPtr AU readey callback user pointer
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return ARSTREAM2_ERROR_RESYNC_REQUIRED if a decoding error occurred and re-sync is needed.
- * @return an eARSTREAM2_ERROR error code if another error occurred.
- *
- * @warning This callback function is mandatory.
- * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
- */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp,
-                                                                   uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
-                                                                   eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType,
-                                                                   void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize,
-                                                                   void *auBufferUserPtr, void *userPtr);
-
 
 /**
  * @brief Initialize an H264Filter instance.
@@ -318,8 +424,25 @@ uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CA
                                                       int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore, int *newNaluBufferSize, void *custom);
 
 
-#ifdef __cplusplus
-}
-#endif /* #ifdef __cplusplus */
+void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter);
 
-#endif /* #ifndef _ARSTREAM2_H264_FILTER_H_ */
+
+int ARSTREAM2_H264Filter_OutputAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AuFifoItem_t *auItem, int *auLocked);
+
+
+/*
+ * Error concealment functions
+ */
+
+int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *nextAu);
+
+
+int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
+                                                  ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem, int isFirstNaluInAu);
+
+
+int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
+                                                      ARSTREAM2_H264_NaluFifoItem_t *prevNaluItem);
+
+
+#endif /* #ifndef _ARSTREAM2_H264_FILTER_INTERNAL_H_ */
