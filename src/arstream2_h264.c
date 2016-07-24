@@ -28,6 +28,7 @@ void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu)
     nalu->inputTimestamp = 0;
     nalu->timeoutTimestamp = 0;
     nalu->ntpTimestamp = 0;
+    nalu->ntpTimestampLocal = 0;
     nalu->extRtpTimestamp = 0;
     nalu->rtpTimestamp = 0;
     nalu->isLastInAu = 0;
@@ -59,6 +60,7 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->inputTimestamp = 0;
     au->timeoutTimestamp = 0;
     au->ntpTimestamp = 0;
+    au->ntpTimestampLocal = 0;
     au->extRtpTimestamp = 0;
     au->rtpTimestamp = 0;
     au->naluCount = 0;
@@ -558,6 +560,7 @@ int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264
         au->inputTimestamp = naluItem->nalu.inputTimestamp;
         au->timeoutTimestamp = naluItem->nalu.timeoutTimestamp;
         au->ntpTimestamp = naluItem->nalu.ntpTimestamp;
+        au->ntpTimestampLocal = naluItem->nalu.ntpTimestampLocal;
         au->extRtpTimestamp = naluItem->nalu.extRtpTimestamp;
         au->rtpTimestamp = naluItem->nalu.rtpTimestamp;
     }

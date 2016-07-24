@@ -683,6 +683,7 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         item->nalu.inputTimestamp = packet->inputTimestamp;
         item->nalu.timeoutTimestamp = packet->timeoutTimestamp;
         item->nalu.ntpTimestamp = packet->ntpTimestamp;
+        item->nalu.ntpTimestampLocal = packet->ntpTimestampLocal;
         item->nalu.extRtpTimestamp = packet->extRtpTimestamp;
         item->nalu.rtpTimestamp = packet->rtpTimestamp;
         item->nalu.isLastInAu = packet->markerBit;
@@ -774,6 +775,7 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
             item->nalu.inputTimestamp = packet->inputTimestamp;
             item->nalu.timeoutTimestamp = packet->timeoutTimestamp;
             item->nalu.ntpTimestamp = packet->ntpTimestamp;
+            item->nalu.ntpTimestampLocal = packet->ntpTimestampLocal;
             item->nalu.extRtpTimestamp = packet->extRtpTimestamp;
             item->nalu.rtpTimestamp = packet->rtpTimestamp;
             item->nalu.isLastInAu = (sizeLeft - naluSize >= 2) ? 0 : packet->markerBit;
@@ -851,6 +853,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
         context->fuNaluItem->nalu.inputTimestamp = packet->inputTimestamp;
         context->fuNaluItem->nalu.timeoutTimestamp = packet->timeoutTimestamp;
         context->fuNaluItem->nalu.ntpTimestamp = packet->ntpTimestamp;
+        context->fuNaluItem->nalu.ntpTimestampLocal = packet->ntpTimestampLocal;
         context->fuNaluItem->nalu.extRtpTimestamp = packet->extRtpTimestamp;
         context->fuNaluItem->nalu.rtpTimestamp = packet->rtpTimestamp;
         context->fuNaluItem->nalu.missingPacketsBefore = missingPacketsBefore;

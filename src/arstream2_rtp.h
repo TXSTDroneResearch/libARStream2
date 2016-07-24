@@ -54,6 +54,7 @@ typedef struct ARSTREAM2_RTP_Packet_s {
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t ntpTimestampLocal;
     uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;
     uint16_t seqNum;
