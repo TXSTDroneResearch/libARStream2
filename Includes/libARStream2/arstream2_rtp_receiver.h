@@ -105,6 +105,7 @@ typedef struct ARSTREAM2_RtpReceiver_MuxConfig_t
  */
 typedef struct ARSTREAM2_RtpReceiver_Config_t
 {
+    int filterPipe[2];                              /**< Filter signaling pipe file desciptors */
     ARSTREAM2_RtpReceiver_NaluCallback_t naluCallback;   /**< NAL unit callback function */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
@@ -207,23 +208,27 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 
 
 /**
- * @brief Runs the stream loop of the RtpReceiver
+ * @brief Runs the main loop of the RtpReceiver
  * @warning This function never returns until ARSTREAM2_RtpReceiver_Stop() is called. Thus, it should be called on its own thread.
  * @post Stop the receiver by calling ARSTREAM2_RtpReceiver_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RunStreamThread(void *ARSTREAM2_RtpReceiver_t_Param);
+void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
 
 
 /**
- * @brief Runs the control loop of the RtpReceiver
- * @warning This function never returns until ARSTREAM2_RtpReceiver_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the receiver by calling ARSTREAM2_RtpReceiver_Stop() before joining the thread calling this function.
+ * @brief Get the receiver shared context
  *
- * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
+ * @param[in] receiver The receiver instance
+ * @param[out] auFifo Pointer to the access unit FIFO
+ * @param[out] naluFifo Pointer to the NAL unit FIFO
+ * @param[out] mutex Pointer to the mutex
+ *
+ * @return ARSTREAM2_OK if no error occured.
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the receiver is invalid or if timeIntervalUs is 0.
  */
-void* ARSTREAM2_RtpReceiver_RunControlThread(void *ARSTREAM2_RtpReceiver_t_Param);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSharedContext(ARSTREAM2_RtpReceiver_t *receiver, void **auFifo, void **naluFifo, void **mutex);
 
 
 /**

@@ -21,6 +21,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
 {
     ARSTREAM2_H264Filter_Handle filter;
     ARSTREAM2_RtpReceiver_t *receiver;
+    int pipe[2];
 
 } ARSTREAM2_StreamReceiver_t;
 
@@ -33,6 +34,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     ARSTREAM2_StreamReceiver_t *streamReceiver = NULL;
+    void *auFifo, *naluFifo, *mutex;
 
     if (!streamReceiverHandle)
     {
@@ -67,21 +69,15 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     if (ret == ARSTREAM2_OK)
     {
         memset(streamReceiver, 0, sizeof(*streamReceiver));
+        streamReceiver->pipe[0] = -1;
+        streamReceiver->pipe[1] = -1;
+    }
 
-        ARSTREAM2_H264Filter_Config_t filterConfig;
-        memset(&filterConfig, 0, sizeof(filterConfig));
-        filterConfig.waitForSync = config->waitForSync;
-        filterConfig.outputIncompleteAu = config->outputIncompleteAu;
-        filterConfig.filterOutSpsPps = config->filterOutSpsPps;
-        filterConfig.filterOutSei = config->filterOutSei;
-        filterConfig.replaceStartCodesWithNaluSize = config->replaceStartCodesWithNaluSize;
-        filterConfig.generateSkippedPSlices = config->generateSkippedPSlices;
-        filterConfig.generateFirstGrayIFrame = config->generateFirstGrayIFrame;
-
-        ret = ARSTREAM2_H264Filter_Init(&streamReceiver->filter, &filterConfig);
-        if (ret != 0)
+    if (ret == ARSTREAM2_OK)
+    {
+        if (pipe(streamReceiver->pipe) != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating H264Filter: %s", ARSTREAM2_Error_ToString(ret));
+            ret = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
         }
     }
 
@@ -95,8 +91,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         memset(&receiver_mux_config, 0, sizeof(receiver_mux_config));
 
 
-        receiverConfig.naluCallback = ARSTREAM2_H264Filter_RtpReceiverNaluCallback;
-        receiverConfig.naluCallbackUserPtr = (void*)streamReceiver->filter;
+        receiverConfig.filterPipe[0] = streamReceiver->pipe[0];
+        receiverConfig.filterPipe[1] = streamReceiver->pipe[1];
+        receiverConfig.naluCallback = NULL; //TODO ARSTREAM2_H264Filter_RtpReceiverNaluCallback;
+        receiverConfig.naluCallbackUserPtr = NULL; //TODO (void*)streamReceiver->filter;
         receiverConfig.maxPacketSize = config->maxPacketSize;
         receiverConfig.maxBitrate = config->maxBitrate;
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
@@ -122,6 +120,38 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating receiver : %s", ARSTREAM2_Error_ToString(ret));
         }
+        else
+        {
+            ret = ARSTREAM2_RtpReceiver_GetSharedContext(streamReceiver->receiver, &auFifo, &naluFifo, &mutex);
+            if (ret != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to get shared context : %s", ARSTREAM2_Error_ToString(ret));
+            }
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        ARSTREAM2_H264Filter_Config_t filterConfig;
+        memset(&filterConfig, 0, sizeof(filterConfig));
+        filterConfig.filterPipe[0] = streamReceiver->pipe[0];
+        filterConfig.filterPipe[1] = streamReceiver->pipe[1];
+        filterConfig.waitForSync = config->waitForSync;
+        filterConfig.outputIncompleteAu = config->outputIncompleteAu;
+        filterConfig.filterOutSpsPps = config->filterOutSpsPps;
+        filterConfig.filterOutSei = config->filterOutSei;
+        filterConfig.replaceStartCodesWithNaluSize = config->replaceStartCodesWithNaluSize;
+        filterConfig.generateSkippedPSlices = config->generateSkippedPSlices;
+        filterConfig.generateFirstGrayIFrame = config->generateFirstGrayIFrame;
+        filterConfig.auFifo = auFifo;
+        filterConfig.naluFifo = naluFifo;
+        filterConfig.mutex = mutex;
+
+        ret = ARSTREAM2_H264Filter_Init(&streamReceiver->filter, &filterConfig);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating H264Filter: %s", ARSTREAM2_Error_ToString(ret));
+        }
     }
 
     if (ret == ARSTREAM2_OK)
@@ -132,6 +162,16 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     {
         if (streamReceiver)
         {
+            if (streamReceiver->pipe[0] != -1)
+            {
+                close(streamReceiver->pipe[0]);
+                streamReceiver->pipe[0] = -1;
+            }
+            if (streamReceiver->pipe[1] != -1)
+            {
+                close(streamReceiver->pipe[1]);
+                streamReceiver->pipe[1] = -1;
+            }
             if (streamReceiver->receiver) ARSTREAM2_RtpReceiver_Delete(&(streamReceiver->receiver));
             if (streamReceiver->filter) ARSTREAM2_H264Filter_Free(&(streamReceiver->filter));
             free(streamReceiver);
@@ -168,6 +208,17 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete H264Filter: %s", ARSTREAM2_Error_ToString(ret));
     }
 
+    if (streamReceiver->pipe[0] != -1)
+    {
+        close(streamReceiver->pipe[0]);
+        streamReceiver->pipe[0] = -1;
+    }
+    if (streamReceiver->pipe[1] != -1)
+    {
+        close(streamReceiver->pipe[1]);
+        streamReceiver->pipe[1] = -1;
+    }
+
     free(streamReceiver);
     *streamReceiverHandle = NULL;
 
@@ -199,21 +250,13 @@ void* ARSTREAM2_StreamReceiver_RunStreamThread(void *streamReceiverHandle)
         return NULL;
     }
 
-    return ARSTREAM2_RtpReceiver_RunStreamThread((void*)streamReceiver->receiver);
+    return ARSTREAM2_RtpReceiver_RunThread((void*)streamReceiver->receiver);
 }
 
 
 void* ARSTREAM2_StreamReceiver_RunControlThread(void *streamReceiverHandle)
 {
-    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
-
-    if (!streamReceiverHandle)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
-        return NULL;
-    }
-
-    return ARSTREAM2_RtpReceiver_RunControlThread((void*)streamReceiver->receiver);
+    return (void*)0;
 }
 
 

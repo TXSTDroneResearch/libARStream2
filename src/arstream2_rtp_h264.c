@@ -1038,6 +1038,11 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                     else
                     {
                         context->auItem = NULL;
+                        if (context->auPipe != -1)
+                        {
+                            char * buff = "x";
+                            write(context->auPipe, buff, 1);
+                        }
                     }
                 }
 
@@ -1213,6 +1218,11 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                     else
                     {
                         context->auItem = NULL;
+                        if (context->auPipe != -1)
+                        {
+                            char * buff = "x";
+                            write(context->auPipe, buff, 1);
+                        }
                     }
                 }
 

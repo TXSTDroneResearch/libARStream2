@@ -37,6 +37,7 @@ typedef struct ARSTREAM2_RTPH264_ReceiverContext_s
     uint32_t startCode;
     int startCodeLength;
     ARSTREAM2_H264_AuFifoItem_t *auItem;
+    int auPipe;
 
 } ARSTREAM2_RTPH264_ReceiverContext_t;
 
