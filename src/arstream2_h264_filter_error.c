@@ -129,14 +129,11 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 eARSTREAM2_H264_FILTER_AU_SYNC_TYPE savedAuSyncType = filter->currentAuSyncType;
                 int savedAuSlicesAllI = filter->currentAuSlicesAllI;
                 int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
-                int savedAuMetadataSize = filter->currentAuMetadataSize;
-                int savedAuUserDataSize = filter->currentAuUserDataSize;
                 int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
                 int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
                 int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
                 int savedAuIsRef = filter->currentAuIsRef;
                 int savedAuFrameNum = filter->currentAuFrameNum;
-                uint64_t savedAuFirstNaluInputTime = filter->currentAuFirstNaluInputTime;
                 uint8_t *savedAuMacroblockStatus = NULL;
                 if (filter->currentAuMacroblockStatus)
                 {
@@ -219,13 +216,10 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
 
                 /* restore the current AU context */
                 ARSTREAM2_H264Filter_ResetAu(filter);
-                filter->currentAuFirstNaluInputTime = savedAuFirstNaluInputTime;
                 filter->currentAuIncomplete = savedAuIncomplete;
                 filter->currentAuSyncType = savedAuSyncType;
                 filter->currentAuSlicesAllI = savedAuSlicesAllI;
                 filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
-                filter->currentAuMetadataSize = savedAuMetadataSize;
-                filter->currentAuUserDataSize = savedAuUserDataSize;
                 filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                 filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                 filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;

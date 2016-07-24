@@ -6,8 +6,8 @@
  */
 
 
-#ifndef _ARSTREAM2_H264_FILTER_INTERNAL_H_
-#define _ARSTREAM2_H264_FILTER_INTERNAL_H_
+#ifndef _ARSTREAM2_H264_FILTER_H_
+#define _ARSTREAM2_H264_FILTER_H_
 
 
 #include <stdio.h>
@@ -34,13 +34,6 @@
  */
 
 #define ARSTREAM2_H264_FILTER_TIMEOUT_US (100 * 1000)
-
-#define ARSTREAM2_H264_FILTER_AU_BUFFER_SIZE (128 * 1024)
-#define ARSTREAM2_H264_FILTER_AU_BUFFER_POOL_SIZE (60)
-#define ARSTREAM2_H264_FILTER_AU_METADATA_BUFFER_SIZE (1024)
-#define ARSTREAM2_H264_FILTER_AU_USER_DATA_BUFFER_SIZE (1024)
-#define ARSTREAM2_H264_FILTER_TEMP_AU_BUFFER_SIZE (1024 * 1024)
-#define ARSTREAM2_H264_FILTER_TEMP_SLICE_NALU_BUFFER_SIZE (64 * 1024)
 
 #define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MAX)
 #define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (5)
@@ -94,33 +87,6 @@ typedef struct
 } ARSTREAM2_H264Filter_Config_t;
 
 
-typedef struct ARSTREAM2_H264Filter_AuBufferItem_s
-{
-    uint8_t *buffer;
-    unsigned int bufferSize;
-    unsigned int auSize;
-    uint8_t *metadataBuffer;
-    unsigned int metadataBufferSize;
-    uint32_t naluCount;
-    uint32_t naluSize[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
-    uint8_t *naluData[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];
-    int pushed;
-
-    struct ARSTREAM2_H264Filter_AuBufferItem_s* prev;
-    struct ARSTREAM2_H264Filter_AuBufferItem_s* next;
-
-} ARSTREAM2_H264Filter_AuBufferItem_t;
-
-
-typedef struct ARSTREAM2_H264Filter_AuBufferPool_s
-{
-    int size;
-    ARSTREAM2_H264Filter_AuBufferItem_t *free;
-    ARSTREAM2_H264Filter_AuBufferItem_t *pool;
-
-} ARSTREAM2_H264Filter_AuBufferPool_t;
-
-
 typedef struct ARSTREAM2_H264Filter_VideoStats_s
 {
     uint32_t totalFrameCount;
@@ -154,24 +120,8 @@ typedef struct ARSTREAM2_H264Filter_s
     int generateSkippedPSlices;
     int generateFirstGrayIFrame;
 
-    ARSTREAM2_H264Filter_AuBufferPool_t recordAuBufferPool;
-    ARSAL_Mutex_t recordAuBufferPoolMutex;
-    ARSTREAM2_H264Filter_AuBufferItem_t *recordAuBufferItem;
-
-    uint8_t *currentAuBuffer;
-    int currentAuBufferSize;
-    void *currentAuBufferUserPtr;
-    uint8_t *currentNaluBuffer;
-    int currentNaluBufferSize;
-    uint8_t *tempAuBuffer;
-    int tempAuBufferSize;
-
     int currentAuOutputIndex;
     int currentAuSize;
-    uint32_t currentAuRtpTimestamp;
-    uint64_t currentAuNtpTimestamp;
-    uint64_t currentAuNtpTimestampLocal;
-    uint64_t currentAuFirstNaluInputTime;
     int currentAuIncomplete;
     eARSTREAM2_H264_FILTER_AU_SYNC_TYPE currentAuSyncType;
     int currentAuFrameNum;
@@ -179,10 +129,6 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
-    int currentAuMetadataSize;
-    uint8_t *currentAuMetadata;
-    int currentAuUserDataSize;
-    uint8_t *currentAuUserData;
     ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfo;
     uint16_t currentAuStreamingSliceMbCount[ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT];
     int currentAuPreviousSliceIndex;
@@ -205,8 +151,6 @@ typedef struct ARSTREAM2_H264Filter_s
 
     ARSTREAM2_H264Parser_Handle parser;
     ARSTREAM2_H264Writer_Handle writer;
-    uint8_t *tempSliceNaluBuffer;
-    int tempSliceNaluBufferSize;
 
     int sync;
     int spsSync;
@@ -223,9 +167,7 @@ typedef struct ARSTREAM2_H264Filter_s
     int maxFrameNum;
 
     ARSAL_Mutex_t mutex;
-    ARSAL_Cond_t startCond;
     ARSAL_Cond_t callbackCond;
-    int auBufferChangePending;
     int running;
     int threadShouldStop;
     int threadStarted;
@@ -413,17 +355,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle 
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
-/**
- * @brief RTP receiver NAL unit callback function
- *
- * @see ARSTREAM2_RtpReceiver_NaluCallback_t.
- *
- */
-uint8_t* ARSTREAM2_H264Filter_RtpReceiverNaluCallback(eARSTREAM2_RTP_RECEIVER_CAUSE cause, uint8_t *naluBuffer, int naluSize, uint32_t auRtpTimestamp,
-                                                      uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, uint8_t *naluMetadata, int naluMetadataSize,
-                                                      int isFirstNaluInAu, int isLastNaluInAu, int missingPacketsBefore, int *newNaluBufferSize, void *custom);
-
-
 void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter);
 
 
@@ -445,4 +376,4 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                                                       ARSTREAM2_H264_NaluFifoItem_t *prevNaluItem);
 
 
-#endif /* #ifndef _ARSTREAM2_H264_FILTER_INTERNAL_H_ */
+#endif /* #ifndef _ARSTREAM2_H264_FILTER_H_ */
