@@ -63,7 +63,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 {
     int ret = 0;
 
-    ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_FifoPopFreeItem(packetFifo);
+    ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
     if (item)
     {
         unsigned int offsetInBuffer = 0;
@@ -118,16 +118,16 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 
         if (ret == 0)
         {
-            ret = ARSTREAM2_RTP_FifoEnqueueItem(packetFifo, item);
+            ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, item);
             if (ret != 0)
             {
-                ARSTREAM2_RTP_FifoPushFreeItem(packetFifo, item);
+                ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
             }
         }
     }
     else
     {
-        int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
+        int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
         ret = -1;
     }
@@ -164,7 +164,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
             if (packetSize + 2 <= context->maxPacketSize)
             {
-                ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_FifoPopFreeItem(packetFifo);
+                ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
                 if (item)
                 {
                     unsigned int offsetInBuffer = 0;
@@ -225,16 +225,16 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
                     if (ret == 0)
                     {
-                        ret = ARSTREAM2_RTP_FifoEnqueueItem(packetFifo, item);
+                        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, item);
                         if (ret != 0)
                         {
-                            ARSTREAM2_RTP_FifoPushFreeItem(packetFifo, item);
+                            ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
                         }
                     }
                 }
                 else
                 {
-                    int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
+                    int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
                     status = -1;
                     break;
@@ -261,7 +261,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
 {
     int ret = 0;
 
-    context->stapItem = ARSTREAM2_RTP_FifoPopFreeItem(packetFifo);
+    context->stapItem = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
     if (context->stapItem)
     {
         ARSTREAM2_RTP_PacketReset(&context->stapItem->packet);
@@ -313,7 +313,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     }
     else
     {
-        int flushRet = ARSTREAM2_RTP_Sender_FifoFlush(context, packetFifo, curTime);
+        int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
         ret = -1;
     }
@@ -385,10 +385,10 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
 
     if (ret == 0)
     {
-        ret = ARSTREAM2_RTP_FifoEnqueueItem(packetFifo, context->stapItem);
+        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, context->stapItem);
         if (ret != 0)
         {
-            ARSTREAM2_RTP_FifoPushFreeItem(packetFifo, context->stapItem);
+            ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, context->stapItem);
         }
     }
     context->stapPayloadSize = 0;
@@ -985,14 +985,14 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
     ARSTREAM2_RTP_PacketFifoItem_t *packetItem;
     int ret = 0, packetCount = 0, peekCount = 0, err;
 
-    while ((packetItem = ARSTREAM2_RTP_FifoPeekItem(packetFifo)) != NULL)
+    while ((packetItem = ARSTREAM2_RTP_PacketFifoPeekItem(packetFifo)) != NULL)
     {
         peekCount++;
         if ((context->previousDepayloadExtSeqNum == -1)
                 || (packetItem->packet.extSeqNum == (unsigned)context->previousDepayloadExtSeqNum + 1)
                 || (curTime >= packetItem->packet.timeoutTimestamp))
         {
-            packetItem = ARSTREAM2_RTP_FifoDequeueItem(packetFifo);
+            packetItem = ARSTREAM2_RTP_PacketFifoDequeueItem(packetFifo);
             if (packetItem)
             {
                 ARSTREAM2_RTP_Packet_t *packet = &packetItem->packet;
@@ -1231,7 +1231,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 context->previousDepayloadExtRtpTimestamp = packet->extRtpTimestamp;
                 packetCount++;
 
-                err = ARSTREAM2_RTP_FifoPushFreeItem(packetFifo, packetItem);
+                err = ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, packetItem);
                 if (err < 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the packet FIFO (%d)", err);

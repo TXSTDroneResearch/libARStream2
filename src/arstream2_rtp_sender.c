@@ -792,7 +792,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
                 ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
                 : retSender->naluFifoSize;
         if (packetFifoSize < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE) packetFifoSize = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE;
-        int packetFifoRet = ARSTREAM2_RTP_FifoInit(&retSender->packetFifo, packetFifoSize, retSender->rtpSenderContext.maxPacketSize);
+        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retSender->packetFifo, packetFifoSize, retSender->rtpSenderContext.maxPacketSize);
         if (packetFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
@@ -939,7 +939,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
         if (packetFifoWasCreated == 1)
         {
-            ARSTREAM2_RTP_FifoFree(&retSender->packetFifo);
+            ARSTREAM2_RTP_PacketFifoFree(&retSender->packetFifo);
         }
         if (naluFifoWasCreated == 1)
         {
@@ -1023,7 +1023,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
         {
             ARSAL_Mutex_Destroy(&((*sender)->streamMutex));
             ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
-            ARSTREAM2_RTP_FifoFree(&(*sender)->packetFifo);
+            ARSTREAM2_RTP_PacketFifoFree(&(*sender)->packetFifo);
             ARSTREAM2_H264_NaluFifoFree(&(*sender)->naluFifo);
             ARSAL_Mutex_Destroy(&((*sender)->naluFifoMutex));
             if ((*sender)->naluFifoPipe[0] != -1)
@@ -1400,7 +1400,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTP packet FIFO cleanup (packets on timeout) */
-        ret = ARSTREAM2_RTP_Sender_FifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, curTime);
+        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, curTime);
         if (ret < 0)
         {
             if (ret != -2)
@@ -1425,7 +1425,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         /* RTP packets sending */
         if ((!packetsPending) || ((packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, &writeSet)))))
         {
-            ret = ARSTREAM2_RTP_Sender_FifoFillMsgVec(&sender->packetFifo);
+            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifo);
             if (ret < 0)
             {
                 if (ret != -2)
@@ -1471,7 +1471,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug
                 }
 
-                ret = ARSTREAM2_RTP_Sender_FifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo, msgVecSentCount, curTime);
+                ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo, msgVecSentCount, curTime);
                 if (ret < 0)
                 {
                     if (ret != -2)
@@ -1551,7 +1551,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
     ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
     ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
-    ARSTREAM2_RTP_Sender_FifoFlush(&sender->rtpSenderContext, &sender->packetFifo, curTime);
+    ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, &sender->packetFifo, curTime);
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
 
