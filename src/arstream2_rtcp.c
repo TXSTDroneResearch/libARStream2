@@ -301,6 +301,12 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         return -1;
     }
 
+    if (context->lastSrReceptionTimestamp == 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "No sender report received");
+        return -1;
+    }
+
     int rrCount = ((context->packetsReceived > 0) && (context->packetsReceived > context->lastRrPacketsReceived)) ? 1 : 0;
 
     receiverReport->flags = (2 << 6) | (rrCount & 0x1F);
