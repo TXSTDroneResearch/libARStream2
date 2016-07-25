@@ -515,7 +515,7 @@ static ARSTREAM2_StreamRecorder_AuFifoItem_t* ARSTREAM2_StreamRecorder_FifoDeque
 
     if ((!fifo->head) || (!fifo->count))
     {
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECORDER_TAG, "FIFO is empty"); //TODO: debug
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECORDER_TAG, "FIFO is empty");
         return NULL;
     }
 

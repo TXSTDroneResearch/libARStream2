@@ -445,8 +445,8 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
             char str[256];
             memcpy(str, ptr, len);
             str[len] = '\0';
-            if (id <= 8)
-                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s=%s", ssrc, ARSTREAM2_RTCP_SdesItemName[id - 1], str);
+            /*if (id <= 8)
+                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s=%s", ssrc, ARSTREAM2_RTCP_SdesItemName[id - 1], str);*/
             ptr += len;
             remLength -= len;
         }
@@ -751,10 +751,10 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                     else
                     {
                         if (gotReceiverReport) *gotReceiverReport = 1;
-                        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
+                        /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
                                     (float)context->roundTripDelay / 1000., (float)context->interarrivalJitter / 1000.,
                                     context->receiverLostCount, (float)context->receiverFractionLost * 100. / 256.,
-                                    context->receiverExtHighestSeqNum);
+                                    context->receiverExtHighestSeqNum);*/
                     }
                 }
                 break;
@@ -776,8 +776,8 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
-                                context->clockDelta.clockDelta, context->clockDelta.rtDelay);
+                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                context->clockDelta.clockDelta, context->clockDelta.rtDelay);*/
                 }
                 break;
             default:
@@ -820,9 +820,9 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
+                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Sender state: interval=%.1fms packetRate=%.1fpacket/s bitrate=%.2fkbit/s",
                                 (float)context->lastSrInterval / 1000., (float)context->srIntervalPacketCount * 1000000. / (float)context->lastSrInterval,
-                                (float)context->srIntervalByteCount * 8000. / (float)context->lastSrInterval);
+                                (float)context->srIntervalByteCount * 8000. / (float)context->lastSrInterval);*/
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
@@ -843,8 +843,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
-                                context->clockDelta.clockDeltaAvg, context->clockDelta.rtDelay);
+                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                context->clockDelta.clockDeltaAvg, context->clockDelta.rtDelay);*/
                 }
                 break;
             default:

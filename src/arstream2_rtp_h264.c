@@ -33,7 +33,7 @@ static int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_H264_NaluFifo_t *fifo, AR
 
     if ((!fifo->head) || (!fifo->count))
     {
-        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "NALU FIFO is empty");
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "NALU FIFO is empty");
         return -2;
     }
 
@@ -1012,7 +1012,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         && (packet->extRtpTimestamp != context->previousDepayloadExtRtpTimestamp))
                 {
                     /* drop the previous incomplete FU-A */
-                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum); //TODO: debug
+                    //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
                     if (err != 0)
                     {
@@ -1081,7 +1081,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 if ((context->fuPending) && (startBit))
                                 {
                                     /* drop the previous incomplete FU-A */
-                                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum); //TODO: debug
+                                    //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
                                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
                                     if (err != 0)
                                     {
@@ -1100,7 +1100,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 else if (seqNumDelta > 1)
                                 {
                                     /* drop the FU-A if there is a seqNum discontinuity */
-                                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet at extSeqNum %d", packet->extSeqNum); //TODO: debug
+                                    //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet at extSeqNum %d", packet->extSeqNum);
                                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
                                     if (err != 0)
                                     {
@@ -1138,7 +1138,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for FU-A packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for FU-A packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
                             }
                         }
                         else if ((headByte & 0x1F) == ARSTREAM2_RTPH264_NALU_TYPE_STAPA)
@@ -1148,7 +1148,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             if (context->fuPending)
                             {
                                 /* drop the previous incomplete FU-A */
-                                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum); //TODO: debug
+                                //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
                                 err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
                                 if (err != 0)
                                 {
@@ -1166,7 +1166,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             }
                             else
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for STAP-A packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for STAP-A packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
                             }
                         }
                         else
@@ -1176,7 +1176,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             if (context->fuPending)
                             {
                                 /* drop the previous incomplete FU-A */
-                                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum); //TODO: debug
+                                //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
                                 err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
                                 if (err != 0)
                                 {
@@ -1193,7 +1193,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
+                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Invalid payload size (%d) for packet at extSeqNum %d", packet->payloadSize, packet->extSeqNum);
                     }
                 }
 

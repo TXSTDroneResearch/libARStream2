@@ -226,7 +226,7 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoDequeueItem(ARSTREAM2_H264
 
     if ((!fifo->head) || (!fifo->count))
     {
-        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "NALU FIFO is empty");
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "NALU FIFO is empty");
         return NULL;
     }
 
@@ -499,7 +499,7 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuF
 
     if ((!fifo->head) || (!fifo->count))
     {
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "FIFO is empty"); //TODO: debug
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "FIFO is empty");
         return NULL;
     }
 
