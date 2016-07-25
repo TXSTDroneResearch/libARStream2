@@ -2012,7 +2012,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read data (%d)", ret);
                 }
             }
-            else
+            else if (ret > 0)
             {
                 unsigned int recvMsgCount = (unsigned int)ret;
 
@@ -2233,7 +2233,7 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read data (%d)", ret);
                     }
                 }
-                else
+                else if (ret > 0)
                 {
                     unsigned int recvMsgCount = (unsigned int)ret;
 
