@@ -943,11 +943,11 @@ int ARSTREAM2_RTP_Receiver_FifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *co
                         rtcpContext->extHighestSeqNum = context->extHighestSeqNum;
                     }
                     item->packet.extRtpTimestamp = (context->extHighestRtpTimestamp & 0xFFFFFFFF00000000LL) | ((uint64_t)item->packet.rtpTimestamp & 0xFFFFFFFFLL);
-                    if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp < -2147483648)
+                    if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp < -2147483648LL)
                     {
                         item->packet.extSeqNum += 0x100000000LL;
                     }
-                    else if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp > 2147483648)
+                    else if ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->previousExtRtpTimestamp > 2147483648LL)
                     {
                         item->packet.extSeqNum -= 0x100000000LL;
                     }
