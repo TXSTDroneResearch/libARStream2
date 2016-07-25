@@ -607,7 +607,7 @@ int ARSTREAM2_H264Filter_OutputAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264
                 /* call the auReadyCallback */
                 ARSAL_Mutex_Unlock(&(filter->mutex));
 
-                cbRet = filter->auReadyCallback(auBuffer, auSize, au->rtpTimestamp, au->ntpTimestamp,
+                cbRet = filter->auReadyCallback(auBuffer, auSize, /*TODO au->rtpTimestamp,*/ au->ntpTimestamp,
                                                 au->ntpTimestampLocal, filter->currentAuSyncType,
                                                 (au->metadataSize > 0) ? au->metadataBuffer : NULL, au->metadataSize,
                                                 (au->userDataSize > 0) ? au->userDataBuffer : NULL, au->userDataSize,

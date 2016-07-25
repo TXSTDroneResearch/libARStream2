@@ -95,6 +95,79 @@
 #endif
 
 
+//TODO: move back to interface
+/**
+ * @brief Sender monitoring data
+ */
+typedef struct ARSTREAM2_RtpSender_MonitoringData_t
+{
+    uint64_t startTimestamp;                /**< Monitoring start timestamp in microseconds */
+    uint32_t timeInterval;                  /**< Monitoring time interval in microseconds */
+    uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during realTimeIntervalUs in microseconds */
+    uint32_t acqToNetworkTimeJitter;        /**< Acquisition to network time jitter during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMin;                /**< Minimum network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMax;                /**< Maximum network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeMean;               /**< Mean network time during realTimeIntervalUs in microseconds */
+    uint32_t networkTimeJitter;             /**< Network time jitter during realTimeIntervalUs in microseconds */
+    uint32_t bytesSent;                     /**< Bytes sent during realTimeIntervalUs */
+    uint32_t packetsSent;                   /**< Packets sent during realTimeIntervalUs */
+    uint32_t packetSizeMin;                 /**< Minimum packet size during realTimeIntervalUs */
+    uint32_t packetSizeMax;                 /**< Maximum packet size during realTimeIntervalUs */
+    uint32_t packetSizeMean;                /**< Mean packet size during realTimeIntervalUs */
+    uint32_t packetSizeStdDev;              /**< Packet size standard deviation during realTimeIntervalUs */
+    uint32_t bytesDropped;                  /**< Bytes dropped during realTimeIntervalUs */
+    uint32_t packetsDropped;                /**< Packets dropped during realTimeIntervalUs */
+
+} ARSTREAM2_RtpSender_MonitoringData_t;
+
+
+//TODO: move back to interface
+/**
+ * @brief RTCP receiver report data
+ */
+typedef struct ARSTREAM2_RtpSender_ReceiverReportData_t
+{
+    uint64_t lastReceiverReportReceptionTimestamp;  /**< Last receiver report reception timestamp */
+    uint32_t roundTripDelay;                        /**< Round-trip delay in microseconds */
+    uint32_t interarrivalJitter;                    /**< Interarrival jitter in microseconds */
+    uint32_t receiverLostCount;                     /**< Cumulated lost packets count on the receiver side */
+    uint32_t receiverFractionLost;                  /**< Fraction of packets lost on the receiver side since the last report */
+    uint32_t receiverExtHighestSeqNum;              /**< Extended highest sequence number received on the receiver side */
+    uint32_t lastSenderReportInterval;              /**< Time interval between the last two sender reports in microseconds */
+    uint32_t senderReportIntervalPacketCount;       /**< Sent packets count over the last sender report interval */
+    uint32_t senderReportIntervalByteCount;         /**< Sent bytes count over the last sender report interval */
+    int64_t peerClockDelta;                         /**< Peer clock delta in microseconds */
+    uint32_t roundTripDelayFromClockDelta;          /**< Round-trip delay in microseconds (from the clock delta computation) */
+
+} ARSTREAM2_RtpSender_ReceiverReportData_t;
+
+
+//TODO: move back to interface
+/**
+ * @brief Callback function for receiver reports
+ * This callback function is called when an RTCP receiver report has been received.
+ *
+ * @param[in] report RTCP receiver report data
+ * @param[in] userPtr Global receiver report callback user pointer
+ */
+typedef void (*ARSTREAM2_RtpSender_ReceiverReportCallback_t) (ARSTREAM2_RtpSender_ReceiverReportData_t *report, void *userPtr);
+
+
+//TODO: move back to interface
+/**
+ * @brief Callback function for disconnection
+ * This callback function is called when the stream socket is no longer connected.
+ * The sender thread continues running and the callback function may be called multiple times.
+ *
+ * @note It is the application's responsibility to stop a sender using ARSTREAM2_RtpSender_Stop() and ARSTREAM2_RtpSender_Delete()
+ *
+ * @param[in] userPtr Global receiver report callback user pointer
+ */
+typedef void (*ARSTREAM2_RtpSender_DisconnectionCallback_t) (void *userPtr);
+
+
 typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
     uint64_t inputTimestamp;
     uint64_t outputTimestamp;
@@ -537,12 +610,13 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
     }
-    if ((config->canonicalName == NULL) || (!strlen(config->canonicalName)))
+    //TODO
+    /*if ((config->canonicalName == NULL) || (!strlen(config->canonicalName)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no canonical name provided");
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
-    }
+    }*/
     if ((config->clientAddr == NULL) || (!strlen(config->clientAddr)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no client address provided");
@@ -572,14 +646,15 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->controlSocket = -1;
         retSender->naluFifoPipe[0] = -1;
         retSender->naluFifoPipe[1] = -1;
-        if (config->canonicalName)
+        //TODO
+        /*if (config->canonicalName)
         {
             retSender->canonicalName = strndup(config->canonicalName, 40);
-        }
-        if (config->friendlyName)
+        }*/
+        /*if (config->friendlyName)
         {
             retSender->friendlyName = strndup(config->friendlyName, 40);
-        }
+        }*/
         if (config->clientAddr)
         {
             retSender->clientAddr = strndup(config->clientAddr, 16);
@@ -602,10 +677,11 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->rtpSenderContext.naluCallbackUserPtr = config->naluCallbackUserPtr;
         retSender->rtpSenderContext.monitoringCallback = ARSTREAM2_RtpSender_UpdateMonitoring;
         retSender->rtpSenderContext.monitoringCallbackUserPtr = retSender;
-        retSender->receiverReportCallback = config->receiverReportCallback;
+        //TODO
+        /*retSender->receiverReportCallback = config->receiverReportCallback;
         retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
         retSender->disconnectionCallback = config->disconnectionCallback;
-        retSender->disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
+        retSender->disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;*/
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
         retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
@@ -636,8 +712,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->rtpSenderContext.rtpClockRate = 90000;
         retSender->rtpSenderContext.rtpTimestampOffset = 0;
         retSender->rtcpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
-        retSender->rtcpSenderContext.cname = retSender->canonicalName;
-        retSender->rtcpSenderContext.name = retSender->friendlyName;
+        retSender->rtcpSenderContext.cname = ARSTREAM2_RTP_SENDER_CNAME; //TODO: retSender->canonicalName;
+        retSender->rtcpSenderContext.name = NULL; //TODO: retSender->friendlyName;
         retSender->rtcpSenderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->rtcpSenderContext.rtpClockRate = 90000;
         retSender->rtcpSenderContext.rtpTimestampOffset = 0;
@@ -1010,10 +1086,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, uint64_t inputTime)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int res;
+    struct timespec t1;
+    uint64_t inputTime;
 
     // Args check
     if ((sender == NULL) ||
@@ -1040,6 +1118,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
 
     if (retVal == ARSTREAM2_OK)
     {
+        ARSAL_Time_GetTime(&t1);
+        inputTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
 
         ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
@@ -1053,8 +1134,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
             item->nalu.ntpTimestamp = nalu->auTimestamp;
             item->nalu.isLastInAu = nalu->isLastNaluInAu;
             item->nalu.seqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
-            item->nalu.importance = nalu->importance;
-            item->nalu.priority = nalu->priority;
+            //TODO: item->nalu.importance = nalu->importance;
+            //TODO: item->nalu.priority = nalu->priority;
             item->nalu.metadata = nalu->auMetadata;
             item->nalu.metadataSize = nalu->auMetadataSize;
             item->nalu.nalu = nalu->naluBuffer;
@@ -1086,10 +1167,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int k, res;
+    struct timespec t1;
+    uint64_t inputTime;
 
     // Args check
     if ((sender == NULL) ||
@@ -1120,6 +1203,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
 
     if (retVal == ARSTREAM2_OK)
     {
+        ARSAL_Time_GetTime(&t1);
+        inputTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
 
         for (k = 0; k < naluCount; k++)
@@ -1135,8 +1221,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
                 item->nalu.ntpTimestamp = nalu[k].auTimestamp;
                 item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
                 item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
-                item->nalu.importance = nalu[k].importance;
-                item->nalu.priority = nalu[k].priority;
+                //TODO: item->nalu.importance = nalu[k].importance;
+                //TODO: item->nalu.priority = nalu[k].priority;
                 item->nalu.metadata = nalu[k].auMetadata;
                 item->nalu.metadataSize = nalu[k].auMetadataSize;
                 item->nalu.nalu = nalu[k].naluBuffer;
@@ -1199,7 +1285,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 }
 
 
-void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
+static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 {
     /* Local declarations */
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
@@ -1473,6 +1559,18 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 }
 
 
+void* ARSTREAM2_RtpSender_RunStreamThread(void *ARSTREAM2_RtpSender_t_Param)
+{
+    return ARSTREAM2_RtpSender_RunThread(ARSTREAM2_RtpSender_t_Param);
+}
+
+
+void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param)
+{
+    return (void*)0;
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sender, ARSTREAM2_RtpSender_DynamicConfig_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
@@ -1551,8 +1649,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
-                                                   ARSTREAM2_RtpSender_MonitoringData_t *monitoringData)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *_realTimeIntervalUs, uint32_t *_meanAcqToNetworkTime,
+                                                   uint32_t *_acqToNetworkJitter, uint32_t *_meanNetworkTime, uint32_t *_networkJitter, uint32_t *_bytesSent, uint32_t *_meanPacketSize,
+                                                   uint32_t *_packetSizeStdDev, uint32_t *_packetsSent, uint32_t *_bytesDropped, uint32_t *_naluDropped)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     uint64_t endTime, curTime, previousTime, acqToNetworkSum = 0, networkSum = 0, acqToNetworkVarSum = 0, networkVarSum = 0, packetSizeVarSum = 0;
@@ -1562,7 +1661,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
     uint32_t maxAcqToNetworkTime = 0, maxNetworkTime = 0, maxPacketSize = 0;
     int points = 0, usefulPoints = 0, packetsSent = 0, packetsDropped = 0, idx, i, firstUsefulIdx = -1;
 
-    if ((sender == NULL) || (timeIntervalUs == 0) || (monitoringData == NULL))
+    if ((sender == NULL) || (timeIntervalUs == 0) /*TODO || (monitoringData == NULL)*/)
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
@@ -1653,7 +1752,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
 
     ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
 
-    monitoringData->startTimestamp = endTime;
+    //TODO
+    /*monitoringData->startTimestamp = endTime;
     monitoringData->timeInterval = (startTime - endTime);
     monitoringData->acqToNetworkTimeMin = minAcqToNetworkTime;
     monitoringData->acqToNetworkTimeMax = maxAcqToNetworkTime;
@@ -1670,7 +1770,18 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender
     monitoringData->packetSizeStdDev = packetSizeStdDev;
     monitoringData->packetsSent = packetsSent;
     monitoringData->bytesDropped = bytesDroppedSum;
-    monitoringData->packetsDropped = packetsDropped;
+    monitoringData->packetsDropped = packetsDropped;*/
+    if (_realTimeIntervalUs) *_realTimeIntervalUs = (startTime - endTime);
+    if (_meanAcqToNetworkTime) *_meanAcqToNetworkTime = meanAcqToNetworkTime;
+    if (_acqToNetworkJitter) *_acqToNetworkJitter = acqToNetworkJitter;
+    if (_meanNetworkTime) *_meanNetworkTime = meanNetworkTime;
+    if (_networkJitter) *_networkJitter = networkJitter;
+    if (_bytesSent) *_bytesSent = bytesSentSum;
+    if (_meanPacketSize) *_meanPacketSize = meanPacketSize;
+    if (_packetSizeStdDev) *_packetSizeStdDev = packetSizeStdDev;
+    if (_packetsSent) *_packetsSent = packetsSent;
+    if (_bytesDropped) *_bytesDropped = bytesDroppedSum;
+    if (_naluDropped) *_naluDropped = packetsDropped;
 
     return ret;
 }

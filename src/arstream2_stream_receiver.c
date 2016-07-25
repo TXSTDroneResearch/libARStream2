@@ -98,7 +98,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
         receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
         receiverConfig.insertStartCodes = 1;
-        receiverConfig.generateReceiverReports = config->generateReceiverReports;
+        receiverConfig.generateReceiverReports = 0; //TODO: config->generateReceiverReports;
 
         if (usemux) {
             receiver_mux_config.mux = mux_config->mux;
@@ -425,9 +425,15 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle)
+void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle)
 {
     return ARSTREAM2_RtpReceiver_RtpResender_RunThread(resenderHandle);
+}
+
+
+void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle)
+{
+    return (void*)0;
 }
 
 

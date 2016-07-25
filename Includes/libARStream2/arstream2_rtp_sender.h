@@ -45,53 +45,6 @@ typedef enum {
 
 
 /**
- * @brief Sender monitoring data
- */
-typedef struct ARSTREAM2_RtpSender_MonitoringData_t
-{
-    uint64_t startTimestamp;                /**< Monitoring start timestamp in microseconds */
-    uint32_t timeInterval;                  /**< Monitoring time interval in microseconds */
-    uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeJitter;        /**< Acquisition to network time jitter during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMin;                /**< Minimum network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMax;                /**< Maximum network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMean;               /**< Mean network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeJitter;             /**< Network time jitter during realTimeIntervalUs in microseconds */
-    uint32_t bytesSent;                     /**< Bytes sent during realTimeIntervalUs */
-    uint32_t packetsSent;                   /**< Packets sent during realTimeIntervalUs */
-    uint32_t packetSizeMin;                 /**< Minimum packet size during realTimeIntervalUs */
-    uint32_t packetSizeMax;                 /**< Maximum packet size during realTimeIntervalUs */
-    uint32_t packetSizeMean;                /**< Mean packet size during realTimeIntervalUs */
-    uint32_t packetSizeStdDev;              /**< Packet size standard deviation during realTimeIntervalUs */
-    uint32_t bytesDropped;                  /**< Bytes dropped during realTimeIntervalUs */
-    uint32_t packetsDropped;                /**< Packets dropped during realTimeIntervalUs */
-
-} ARSTREAM2_RtpSender_MonitoringData_t;
-
-
-/**
- * @brief RTCP receiver report data
- */
-typedef struct ARSTREAM2_RtpSender_ReceiverReportData_t
-{
-    uint64_t lastReceiverReportReceptionTimestamp;  /**< Last receiver report reception timestamp */
-    uint32_t roundTripDelay;                        /**< Round-trip delay in microseconds */
-    uint32_t interarrivalJitter;                    /**< Interarrival jitter in microseconds */
-    uint32_t receiverLostCount;                     /**< Cumulated lost packets count on the receiver side */
-    uint32_t receiverFractionLost;                  /**< Fraction of packets lost on the receiver side since the last report */
-    uint32_t receiverExtHighestSeqNum;              /**< Extended highest sequence number received on the receiver side */
-    uint32_t lastSenderReportInterval;              /**< Time interval between the last two sender reports in microseconds */
-    uint32_t senderReportIntervalPacketCount;       /**< Sent packets count over the last sender report interval */
-    uint32_t senderReportIntervalByteCount;         /**< Sent bytes count over the last sender report interval */
-    int64_t peerClockDelta;                         /**< Peer clock delta in microseconds */
-    uint32_t roundTripDelayFromClockDelta;          /**< Round-trip delay in microseconds (from the clock delta computation) */
-
-} ARSTREAM2_RtpSender_ReceiverReportData_t;
-
-
-/**
  * @brief Callback function for access units
  * This callback function is called when buffers associated with an access unit are no longer used by the sender.
  * This occurs when packets corresponding to an access unit have all been sent or dropped.
@@ -116,34 +69,10 @@ typedef void (*ARSTREAM2_RtpSender_NaluCallback_t) (eARSTREAM2_RTP_SENDER_STATUS
 
 
 /**
- * @brief Callback function for receiver reports
- * This callback function is called when an RTCP receiver report has been received.
- *
- * @param[in] report RTCP receiver report data
- * @param[in] userPtr Global receiver report callback user pointer
- */
-typedef void (*ARSTREAM2_RtpSender_ReceiverReportCallback_t) (ARSTREAM2_RtpSender_ReceiverReportData_t *report, void *userPtr);
-
-
-/**
- * @brief Callback function for disconnection
- * This callback function is called when the stream socket is no longer connected.
- * The sender thread continues running and the callback function may be called multiple times.
- *
- * @note It is the application's responsibility to stop a sender using ARSTREAM2_RtpSender_Stop() and ARSTREAM2_RtpSender_Delete()
- *
- * @param[in] userPtr Global receiver report callback user pointer
- */
-typedef void (*ARSTREAM2_RtpSender_DisconnectionCallback_t) (void *userPtr);
-
-
-/**
  * @brief RtpSender configuration parameters
  */
 typedef struct ARSTREAM2_RtpSender_Config_t
 {
-    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
-    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
@@ -155,10 +84,6 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_RtpSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
-    ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;   /**< NAL unit callback function (optional, can be NULL) */
-    void *receiverReportCallbackUserPtr;            /**< NAL unit callback function user pointer (optional, can be NULL) */
-    ARSTREAM2_RtpSender_DisconnectionCallback_t disconnectionCallback;   /**< Disconnection callback function (optional, can be NULL) */
-    void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
@@ -195,10 +120,8 @@ typedef struct ARSTREAM2_RtpSender_H264NaluDesc_t
     uint8_t *auMetadata;                            /**< Pointer to the optional access unit metadata buffer */
     uint32_t auMetadataSize;                        /**< Size of the optional access unit metadata in bytes */
     uint64_t auTimestamp;                           /**< Access unit timastamp in microseconds. All NAL units of an access unit must share the same timestamp */
-    uint32_t isLastNaluInAu;                        /**< Boolean-like flag (0/1). If active, tells the sender that the NAL unit is the last of the access unit */
-    uint32_t seqNumForcedDiscontinuity;             /**< Force an added discontinuity in RTP sequence number before the NAL unit */
-    uint32_t importance;                            /**< Importance indication (0: unspecified, low numbers are more important) */
-    uint32_t priority;                              /**< Priority indication (0: unspecified, low numbers have more priority) */
+    int isLastNaluInAu;                             /**< Boolean-like flag (0/1). If active, tells the sender that the NAL unit is the last of the access unit */
+    int seqNumForcedDiscontinuity;                  /**< Force an added discontinuity in RTP sequence number before the NAL unit */
     void *auUserPtr;                                /**< Access unit user pointer that will be passed to the access unit callback function (optional, can be NULL) */
     void *naluUserPtr;                              /**< NAL unit user pointer that will be passed to the NAL unit callback function (optional, can be NULL) */
 
@@ -258,13 +181,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender);
  *
  * @param[in] sender The sender instance
  * @param[in] nalu Pointer to a NAL unit descriptor
- * @param[in] inputTime Optional input timestamp in microseconds
  *
  * @return ARSTREAM2_OK if no error happened
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, uint64_t inputTime);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu);
 
 
 /**
@@ -274,13 +196,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
  * @param[in] sender The sender instance
  * @param[in] nalu Pointer to a NAL unit descriptor array
  * @param[in] naluCount Number of NAL units in the array
- * @param[in] inputTime Optional input timestamp in microseconds
  *
  * @return ARSTREAM2_OK if no error happened
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if a naluSize or auTimestamp is zero
  * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount);
 
 
 /**
@@ -295,13 +216,23 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 
 
 /**
- * @brief Runs the main loop of the RtpSender
+ * @brief Runs the stream loop of the RtpSender
  * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
  * @post Stop the Sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
+void* ARSTREAM2_RtpSender_RunStreamThread(void *ARSTREAM2_RtpSender_t_Param);
+
+
+/**
+ * @brief Runs the control loop of the RtpSender
+ * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
+ * @post Stop the sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
+ *
+ * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
+ */
+void* ARSTREAM2_RtpSender_RunControlThread(void *ARSTREAM2_RtpSender_t_Param);
 
 
 /**
@@ -338,13 +269,24 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
  * @param[in] sender The sender instance
  * @param[in] startTime Monitoring start time in microseconds (0 means current time)
  * @param[in] timeIntervalUs Monitoring time interval (back from startTime) in microseconds
- * @param[out] monitoringData Pointer to a monitoring data structure to fill
+ * @param[out] realTimeIntervalUs Real monitoring time interval in microseconds (optional, can be NULL)
+ * @param[out] meanAcqToNetworkTime Mean acquisition to network time during realTimeIntervalUs in microseconds (optional, can be NULL)
+ * @param[out] acqToNetworkJitter Acquisition to network time jitter during realTimeIntervalUs in microseconds (optional, can be NULL)
+ * @param[out] meanNetworkTime Mean network time during realTimeIntervalUs in microseconds (optional, can be NULL)
+ * @param[out] networkJitter Network time jitter during realTimeIntervalUs in microseconds (optional, can be NULL)
+ * @param[out] bytesSent Bytes sent during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] meanPacketSize Mean packet size during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] packetSizeStdDev Packet size standard deviation during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] packetsSent Packets sent during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] bytesDropped Bytes dropped during realTimeIntervalUs (optional, can be NULL)
+ * @param[out] naluDropped NAL units dropped during realTimeIntervalUs (optional, can be NULL)
  *
  * @return ARSTREAM2_OK if no error occured.
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender is invalid or if timeIntervalUs is 0.
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
-                                                   ARSTREAM2_RtpSender_MonitoringData_t *monitoringData);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs, uint32_t *realTimeIntervalUs, uint32_t *meanAcqToNetworkTime,
+                                                   uint32_t *acqToNetworkJitter, uint32_t *meanNetworkTime, uint32_t *networkJitter, uint32_t *bytesSent, uint32_t *meanPacketSize,
+                                                   uint32_t *packetSizeStdDev, uint32_t *packetsSent, uint32_t *bytesDropped, uint32_t *naluDropped);
 
 
 #ifdef __cplusplus

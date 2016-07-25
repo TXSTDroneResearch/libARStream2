@@ -7,7 +7,8 @@ public class ARStream2Resender
 {
     private static final String TAG = ARStream2Resender.class.getSimpleName();
     private final long nativeRef;
-    private final Thread resenderThread;
+    private final Thread streamThread;
+    private final Thread controlThread;
 
     public ARStream2Resender(ARStream2Manager manager, String clientAddress,
                           int serverStreamPort, int serverControlPort,
@@ -18,15 +19,24 @@ public class ARStream2Resender
                 serverStreamPort, serverControlPort,
                 clientStreamPort, clientControlPort,
                 maxPacketSize, targetPacketSize, maxLatency, maxNetworkLatency);
-        this.resenderThread = new Thread(new Runnable()
+        this.streamThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunThread(nativeRef);
+                nativeRunStreamThread(nativeRef);
             }
-        }, "ARStream2Resender");
+        }, "ARStream2ResenderStream");
+        this.controlThread = new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
+                nativeRunControlThread(nativeRef);
+            }
+        }, "ARStream2ResenderControl");
     }
 
     private boolean isValid()
@@ -38,7 +48,8 @@ public class ARStream2Resender
     {
         if (isValid())
         {
-            resenderThread.start();
+            streamThread.start();
+            controlThread.start();
         }
         else
         {
@@ -60,7 +71,8 @@ public class ARStream2Resender
         {
             try
             {
-                resenderThread.join();
+                streamThread.join();
+                controlThread.join();
             } catch (InterruptedException e)
             {
             }
@@ -77,6 +89,8 @@ public class ARStream2Resender
 
     private native boolean nativeFree(long nativeRef);
 
-    private native void nativeRunThread(long nativeRef);
+    private native void nativeRunStreamThread(long nativeRef);
+
+    private native void nativeRunControlThread(long nativeRef);
 
 }
