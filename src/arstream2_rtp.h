@@ -12,7 +12,6 @@
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#define ARSTREAM2_HAS_MMSG //TODO
 
 #include "arstream2_rtcp.h"
 

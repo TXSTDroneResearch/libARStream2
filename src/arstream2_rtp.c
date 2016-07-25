@@ -20,7 +20,7 @@
 #define ARSTREAM2_RTP_TAG "ARSTREAM2_Rtp"
 
 
-#ifndef ARSTREAM2_HAS_MMSG
+#ifndef HAS_MMSG
 struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of received bytes for header */

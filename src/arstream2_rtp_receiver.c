@@ -15,7 +15,6 @@
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#define ARSTREAM2_HAS_MMSG //TODO
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -93,7 +92,7 @@
     } while (0)
 
 
-#ifndef ARSTREAM2_HAS_MMSG
+#ifndef HAS_MMSG
 struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of received bytes for header */
@@ -961,7 +960,7 @@ static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, 
 }
 
 
-#ifndef ARSTREAM2_HAS_MMSG
+#ifndef HAS_MMSG
 static int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen,
                     unsigned int flags, struct timespec *timeout)
 {

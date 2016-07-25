@@ -49,4 +49,10 @@ LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_stream_recorder.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/
 
+ifeq ("$(TARGET_OS)","linux")
+	ifneq ("$(TARGET_OS_FLAVOUR)","android")
+		LOCAL_CFLAGS += -DHAS_MMSG
+	endif
+endif
+
 include $(BUILD_LIBRARY)

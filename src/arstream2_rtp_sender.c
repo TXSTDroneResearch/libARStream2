@@ -13,7 +13,6 @@
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#define ARSTREAM2_HAS_MMSG //TODO
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -437,7 +436,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
 }
 
 
-#ifndef ARSTREAM2_HAS_MMSG
+#ifndef HAS_MMSG
 struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of received bytes for header */
