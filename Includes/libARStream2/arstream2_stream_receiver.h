@@ -14,29 +14,27 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
-#include <libARStream2/arstream2_rtp_receiver.h>
-#include <libARStream2/arstream2_rtp_sender.h>
 
 
 /**
  * @brief Default client-side stream port
  */
-#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT      ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_STREAM_PORT
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT      (55004)
 
 /**
  * @brief Default client-side control port
  */
-#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT     ARSTREAM2_RTP_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT     (55005)
 
 /**
  * @brief Default server-side resender stream port
  */
-#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_STREAM_PORT      ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_STREAM_PORT
+#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_STREAM_PORT      (5004)
 
 /**
  * @brief Default server-side resender control port
  */
-#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT
+#define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_CONTROL_PORT     (5005)
 
 
 /**

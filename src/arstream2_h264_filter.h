@@ -19,7 +19,6 @@
 #include <libARSAL/ARSAL_Mutex.h>
 #include <libARSAL/ARSAL_Thread.h>
 
-#include <libARStream2/arstream2_rtp_receiver.h>
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
 #include <libARStream2/arstream2_h264_sei.h>
