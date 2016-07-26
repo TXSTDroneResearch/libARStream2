@@ -398,7 +398,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
     resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
 
-    retResender = ARSTREAM2_RtpReceiver_RtpResender_New(streamReceiver->receiver, &resenderConfig, &ret);
+    retResender = ARSTREAM2_RtpReceiverResender_New(streamReceiver->receiver, &resenderConfig, &ret);
     if (ret != ARSTREAM2_OK)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating resender : %s", ARSTREAM2_Error_ToString(ret));
@@ -416,7 +416,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
-    ret = ARSTREAM2_RtpReceiver_RtpResender_Delete((ARSTREAM2_RtpReceiver_RtpResender_t**)resenderHandle);
+    ret = ARSTREAM2_RtpReceiverResender_Delete((ARSTREAM2_RtpReceiver_RtpResender_t**)resenderHandle);
     if (ret != ARSTREAM2_OK)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while deleting resender : %s", ARSTREAM2_Error_ToString(ret));
@@ -428,7 +428,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 
 void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle)
 {
-    return ARSTREAM2_RtpReceiver_RtpResender_RunThread(resenderHandle);
+    return ARSTREAM2_RtpReceiverResender_RunThread(resenderHandle);
 }
 
 
@@ -440,7 +440,7 @@ void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle)
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle)
 {
-    ARSTREAM2_RtpReceiver_RtpResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
+    ARSTREAM2_RtpReceiverResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
 
     return ARSTREAM2_OK;
 }

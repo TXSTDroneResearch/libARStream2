@@ -385,7 +385,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
 
 /**
  * @brief Creates a new RtpReceiver RtpResender
- * @warning This function allocates memory. The resender must be deleted by a call to ARSTREAM2_RtpReceiver_Delete() or ARSTREAM2_RtpReceiver_RtpResender_Delete()
+ * @warning This function allocates memory. The resender must be deleted by a call to ARSTREAM2_RtpReceiver_Delete() or ARSTREAM2_RtpReceiverResender_Delete()
  *
  * @param[in] receiver The receiver instance
  * @param[in] config Pointer to a resender configuration parameters structure
@@ -393,10 +393,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetMonitoring(ARSTREAM2_RtpReceiver_t *re
  *
  * @return A pointer to the new ARSTREAM2_RtpReceiver_RtpResender_t, or NULL if an error occured
  *
- * @see ARSTREAM2_RtpReceiver_RtpResender_Stop()
- * @see ARSTREAM2_RtpReceiver_RtpResender_Delete()
+ * @see ARSTREAM2_RtpReceiverResender_Stop()
+ * @see ARSTREAM2_RtpReceiverResender_Delete()
  */
-ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTREAM2_RtpReceiver_t *receiver, ARSTREAM2_RtpReceiver_RtpResender_Config_t *config, eARSTREAM2_ERROR *error);
+ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiverResender_New(ARSTREAM2_RtpReceiver_t *receiver, ARSTREAM2_RtpReceiver_RtpResender_Config_t *config, eARSTREAM2_ERROR *error);
 
 
 /**
@@ -407,7 +407,7 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiver_RtpResender_New(ARSTR
  *
  * @note Calling this function multiple times has no effect
  */
-void ARSTREAM2_RtpReceiver_RtpResender_Stop(ARSTREAM2_RtpReceiver_RtpResender_t *resender);
+void ARSTREAM2_RtpReceiverResender_Stop(ARSTREAM2_RtpReceiver_RtpResender_t *resender);
 
 
 /**
@@ -417,22 +417,22 @@ void ARSTREAM2_RtpReceiver_RtpResender_Stop(ARSTREAM2_RtpReceiver_RtpResender_t 
  * @param resender Pointer to the ARSTREAM2_RtpReceiver_RtpResender_t* to delete
  *
  * @return ARSTREAM2_OK if the resender was deleted
- * @return ARSTREAM2_ERROR_BUSY if the resender is still busy and can not be stopped now (probably because ARSTREAM2_RtpReceiver_RtpResender_Stop() has not been called yet)
+ * @return ARSTREAM2_ERROR_BUSY if the resender is still busy and can not be stopped now (probably because ARSTREAM2_RtpReceiverResender_Stop() has not been called yet)
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if resender does not point to a valid ARSTREAM2_RtpReceiver_RtpResender_t
  *
  * @note The function uses a double pointer, so it can set *resender to NULL after freeing it
  */
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_RtpResender_Delete(ARSTREAM2_RtpReceiver_RtpResender_t **resender);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiverResender_Delete(ARSTREAM2_RtpReceiver_RtpResender_t **resender);
 
 
 /**
  * @brief Runs the main loop of the RtpReceiver RtpResender
- * @warning This function never returns until ARSTREAM2_RtpReceiver_RtpResender_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the resender by calling ARSTREAM2_RtpReceiver_RtpResender_Stop() before joining the thread calling this function.
+ * @warning This function never returns until ARSTREAM2_RtpReceiverResender_Stop() is called. Thus, it should be called on its own thread.
+ * @post Stop the resender by calling ARSTREAM2_RtpReceiverResender_Stop() before joining the thread calling this function.
  *
  * @param[in] ARSTREAM2_RtpReceiver_RtpResender_t_Param A valid (ARSTREAM2_RtpReceiver_RtpResender_t *) casted as a (void *)
  */
-void* ARSTREAM2_RtpReceiver_RtpResender_RunThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
+void* ARSTREAM2_RtpReceiverResender_RunThread(void *ARSTREAM2_RtpReceiver_RtpResender_t_Param);
 
 
 #endif /* _ARSTREAM2_RTP_RECEIVER_H_ */
