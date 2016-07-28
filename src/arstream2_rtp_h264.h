@@ -37,7 +37,9 @@ typedef struct ARSTREAM2_RTPH264_ReceiverContext_s
     uint32_t startCode;
     int startCodeLength;
     ARSTREAM2_H264_AuFifoItem_t *auItem;
-    int auPipe;
+
+    ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
+    void *auCallbackUserPtr;
 
 } ARSTREAM2_RTPH264_ReceiverContext_t;
 
@@ -58,7 +60,9 @@ int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
 int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverContext_t *context,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                  ARSAL_Mutex_t *naluFifoMutex,
                                                   ARSTREAM2_H264_AuFifo_t *auFifo,
+                                                  ARSAL_Mutex_t *auFifoMutex,
                                                   uint64_t curTime, ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext);
 
 #endif /* _ARSTREAM2_RTPH264_H_ */

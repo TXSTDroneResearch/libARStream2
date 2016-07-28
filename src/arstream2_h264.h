@@ -10,6 +10,7 @@
 #define _ARSTREAM2_H264_H_
 
 #include <inttypes.h>
+#include <libARSAL/ARSAL_Mutex.h>
 
 
 /*
@@ -51,6 +52,17 @@
 /*
  * Types
  */
+
+typedef enum
+{
+    ARSTREAM2_H264_AU_SYNC_TYPE_NONE = 0,    /**< The Access Unit is not a synchronization point */
+    ARSTREAM2_H264_AU_SYNC_TYPE_IDR,         /**< The Access Unit is an IDR picture */
+    ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME,      /**< The Access Unit is an I-frame */
+    ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START,   /**< The Access Unit is a Periodic Intra Refresh start */
+    ARSTREAM2_H264_AU_SYNC_TYPE_MAX,
+
+} eARSTREAM2_H264_AU_SYNC_TYPE;
+
 
 typedef struct ARSTREAM2_H264_SpsContext_s
 {
@@ -209,6 +221,7 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     uint8_t *userDataBuffer;
     unsigned int userDataBufferSize;
     unsigned int userDataSize;
+    eARSTREAM2_H264_AU_SYNC_TYPE syncType;
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
@@ -248,6 +261,9 @@ typedef struct ARSTREAM2_H264_AuFifo_s
     ARSTREAM2_H264_AuFifoItem_t *pool;
 
 } ARSTREAM2_H264_AuFifo_t;
+
+
+typedef int (*ARSTREAM2_H264_ReceiverAuCallback_t)(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);
 
 
 /*

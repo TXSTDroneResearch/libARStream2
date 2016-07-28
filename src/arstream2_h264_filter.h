@@ -32,8 +32,6 @@
  * Macros
  */
 
-#define ARSTREAM2_H264_FILTER_TIMEOUT_US (100 * 1000)
-
 #define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MAX)
 #define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (5)
 #define ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL (1000000)
@@ -66,22 +64,27 @@
 typedef void* ARSTREAM2_H264Filter_Handle;
 
 
+typedef int (*ARSTREAM2_H264Filter_SpsPpsSyncCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+
+
 /**
  * @brief ARSTREAM2 H264Filter configuration for initialization.
  */
 typedef struct
 {
-    int filterPipe[2];                                              /**< Filter signaling pipe file desciptors */
-    int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
+    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;
+    ARSAL_Mutex_t *fifoMutex;
+    ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
+    void *auCallbackUserPtr;
+    ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
+    void *spsPpsCallbackUserPtr;
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
     int filterOutSei;                                               /**< if true, filter out SEI NAL units */
     int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
-    void *auFifo;
-    void *naluFifo;
-    void *mutex;
 
 } ARSTREAM2_H264Filter_Config_t;
 
@@ -103,15 +106,6 @@ typedef struct ARSTREAM2_H264Filter_VideoStats_s
 
 typedef struct ARSTREAM2_H264Filter_s
 {
-    ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback;
-    void* spsPpsCallbackUserPtr;
-    ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback;
-    void* getAuBufferCallbackUserPtr;
-    ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback;
-    void* auReadyCallbackUserPtr;
-    int callbackInProgress;
-
-    int waitForSync;
     int outputIncompleteAu;
     int filterOutSpsPps;
     int filterOutSei;
@@ -122,7 +116,6 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuOutputIndex;
     int currentAuSize;
     int currentAuIncomplete;
-    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE currentAuSyncType;
     int currentAuFrameNum;
     int previousAuFrameNum;
     int currentAuSlicesReceived;
@@ -158,24 +151,22 @@ typedef struct ARSTREAM2_H264Filter_s
     int ppsSync;
     int ppsSize;
     uint8_t* pPps;
+    ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
+    void *spsPpsCallbackUserPtr;
     int firstGrayIFramePending;
+    int resyncPending;
     int mbWidth;
     int mbHeight;
     int mbCount;
     float framerate;
     int maxFrameNum;
 
-    ARSAL_Mutex_t mutex;
-    ARSAL_Cond_t callbackCond;
-    int running;
-    int threadShouldStop;
-    int threadStarted;
-    int pipe[2];
-
     /* NAL unit and access unit FIFO */
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSAL_Mutex_t *fifoMutex;
+    ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
+    void *auCallbackUserPtr;
 
     char *recordFileName;
     int recorderStartPending;
@@ -214,56 +205,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHandle);
-
-
-/**
- * @brief Run an H264Filter main thread.
- *
- * The instance must be correctly allocated using ARSTREAM2_H264Filter_Init().
- * @warning This function never returns until ARSTREAM2_H264Filter_Stop() is called. The tread can then be joined.
- *
- * @param filterHandle Instance handle casted as (void*).
- *
- * @return NULL in all cases.
- */
-void* ARSTREAM2_H264Filter_RunFilterThread(void *filterHandle);
-
-
-/**
- * @brief Start an H264Filter instance.
- *
- * The function starts processing the ARSTREAM2_RtpReceiver input.
- * The processing can be stopped using ARSTREAM2_H264Filter_Pause().
- *
- * @param filterHandle Instance handle.
- * @param spsPpsCallback Optional SPS/PPS callback function.
- * @param spsPpsCallbackUserPtr Optional SPS/PPS callback user pointer.
- * @param getAuBufferCallback Mandatory get access unit buffer callback function.
- * @param getAuBufferCallbackUserPtr Optional get access unit buffer callback user pointer.
- * @param auReadyCallback Mandatory access unit ready callback function.
- * @param auReadyCallbackUserPtr Optional access unit ready callback user pointer.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_Start(ARSTREAM2_H264Filter_Handle filterHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                                            ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                                            ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr);
-
-
-/**
- * @brief Pause an H264Filter instance.
- *
- * The function stops processing the ARSTREAM2_RtpReceiver input.
- * The callback functions provided to ARSTREAM2_H264Filter_Start() will not be called any more.
- * The filter can be started again by a new call to ARSTREAM2_H264Filter_Start().
- *
- * @param filterHandle Instance handle.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_Pause(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 /**
@@ -354,10 +295,16 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle 
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
+int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au);
+
+
 void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter);
 
 
-int ARSTREAM2_H264Filter_OutputAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AuFifoItem_t *auItem, int *auLocked);
+int ARSTREAM2_H264Filter_ForceResync(ARSTREAM2_H264Filter_t *filter);
+
+
+int ARSTREAM2_H264Filter_ForceIdr(ARSTREAM2_H264Filter_t *filter);
 
 
 /*

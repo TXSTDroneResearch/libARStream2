@@ -57,6 +57,7 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->auSize = 0;
     au->metadataSize = 0;
     au->userDataSize = 0;
+    au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_NONE;
     au->inputTimestamp = 0;
     au->timeoutTimestamp = 0;
     au->ntpTimestamp = 0;

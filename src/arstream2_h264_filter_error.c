@@ -126,7 +126,6 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
 
                 /* save the current AU context */
                 int savedAuIncomplete = filter->currentAuIncomplete;
-                eARSTREAM2_H264_FILTER_AU_SYNC_TYPE savedAuSyncType = filter->currentAuSyncType;
                 int savedAuSlicesAllI = filter->currentAuSlicesAllI;
                 int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
                 int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
@@ -142,7 +141,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 }
 
                 ARSTREAM2_H264Filter_ResetAu(filter);
-                filter->currentAuSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
+                auItem->au.syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IDR;
                 auItem->au.rtpTimestamp = nextAu->rtpTimestamp - ((nextAu->rtpTimestamp >= 90) ? 90 : ((nextAu->rtpTimestamp >= 1) ? 1 : 0));
                 auItem->au.ntpTimestamp = nextAu->ntpTimestamp - ((nextAu->ntpTimestamp >= 1000) ? 1000 : ((nextAu->ntpTimestamp >= 1) ? 1 : 0));
                 auItem->au.ntpTimestampLocal = nextAu->ntpTimestampLocal - ((nextAu->ntpTimestampLocal >= 1000) ? 1000 : ((nextAu->ntpTimestampLocal >= 1) ? 1 : 0));
@@ -180,44 +179,29 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 if (ret == 0)
                 {
                     /* output the access unit */
-                    int auLocked = 0;
-                    int outRet = ARSTREAM2_H264Filter_OutputAu(filter, auItem, &auLocked);
-                    if (outRet < 0)
+                    if (filter->auCallback)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "ARSTREAM2_H264Filter_OutputAu() failed (%d)", outRet);
+                        int err = filter->auCallback(auItem, filter->auCallbackUserPtr);
+                        if (err != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to output the access unit");
+                            ret = -1;
+                        }
+                        naluItem = NULL;
+                        spsItem = NULL;
+                        ppsItem = NULL;
+                        auItem = NULL;
+                    }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Invalid access unit callback function");
                         ret = -1;
                     }
-
-                    /* free the access unit and associated NAL units */
-                    if (!auLocked)
-                    {
-                        ARSTREAM2_H264_NaluFifoItem_t *tmpItem;
-                        ARSAL_Mutex_Lock(filter->fifoMutex);
-                        while ((tmpItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
-                        {
-                            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, tmpItem);
-                            if (ret != 0)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
-                            }
-                        }
-                        ret = ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
-                        if (ret != 0)
-                        {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
-                        }
-                        ARSAL_Mutex_Unlock(filter->fifoMutex);
-                    }
-                    naluItem = NULL;
-                    spsItem = NULL;
-                    ppsItem = NULL;
-                    auItem = NULL;
                 }
 
                 /* restore the current AU context */
                 ARSTREAM2_H264Filter_ResetAu(filter);
                 filter->currentAuIncomplete = savedAuIncomplete;
-                filter->currentAuSyncType = savedAuSyncType;
                 filter->currentAuSlicesAllI = savedAuSlicesAllI;
                 filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
                 filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;

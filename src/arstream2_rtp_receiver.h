@@ -112,7 +112,11 @@ typedef struct ARSTREAM2_RtpReceiver_MuxConfig_t
  */
 typedef struct ARSTREAM2_RtpReceiver_Config_t
 {
-    int filterPipe[2];                              /**< Filter signaling pipe file desciptors */
+    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;
+    ARSAL_Mutex_t *fifoMutex;
+    ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
+    void *auCallbackUserPtr;
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
@@ -266,9 +270,9 @@ struct ARSTREAM2_RtpReceiver_t {
     ARSTREAM2_RTP_PacketFifo_t packetFifo;
 
     /* NAL unit and access unit FIFO */
-    ARSTREAM2_H264_NaluFifo_t naluFifo;
-    ARSTREAM2_H264_AuFifo_t auFifo;
-    ARSAL_Mutex_t fifoMutex;
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;
+    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSAL_Mutex_t *fifoMutex;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;
@@ -342,20 +346,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
 void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
-
-
-/**
- * @brief Get the receiver shared context
- *
- * @param[in] receiver The receiver instance
- * @param[out] auFifo Pointer to the access unit FIFO
- * @param[out] naluFifo Pointer to the NAL unit FIFO
- * @param[out] mutex Pointer to the mutex
- *
- * @return ARSTREAM2_OK if no error occured.
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the receiver is invalid or if timeIntervalUs is 0.
- */
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSharedContext(ARSTREAM2_RtpReceiver_t *receiver, void **auFifo, void **naluFifo, void **mutex);
 
 
 /**

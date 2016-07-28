@@ -633,7 +633,7 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
                                                        ARSTREAM2_RTP_Packet_t *packet,
                                                        uint32_t missingPacketsBefore,
                                                        ARSTREAM2_H264_NaluFifo_t *naluFifo,
-                                                       ARSTREAM2_H264_AuFifo_t *auFifo)
+                                                       ARSAL_Mutex_t *naluFifoMutex)
 {
     int ret = 0, err;
 
@@ -651,7 +651,9 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
+    if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
     ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(naluFifo);
+    if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
     if (item)
     {
         ARSTREAM2_H264_NaluReset(&item->nalu);
@@ -659,7 +661,9 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Access unit buffer is too small");
+            if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
             err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
+            if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
             if (err < 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -694,7 +698,9 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to enqueue NALU item in AU");
             context->auItem->au.auSize -= item->nalu.naluSize;
+            if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
             err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
+            if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
             if (err != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -703,7 +709,9 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
     }
     else
     {
+        if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
         int flushRet = ARSTREAM2_H264_NaluFifoFlush(naluFifo);
+        if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full => flush to recover (%d NALU flushed)", flushRet);
         ret = -1;
     }
@@ -716,7 +724,7 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
                                                   ARSTREAM2_RTP_Packet_t *packet,
                                                   uint32_t missingPacketsBefore,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
-                                                  ARSTREAM2_H264_AuFifo_t *auFifo)
+                                                  ARSAL_Mutex_t *naluFifoMutex)
 {
     int ret = 0, err, first;
     uint8_t *packetBuf = packet->payload + 1;
@@ -743,7 +751,9 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
 
     while ((naluSize > 0) && (sizeLeft >= naluSize))
     {
+        if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
         ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(naluFifo);
+        if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
         if (item)
         {
             ARSTREAM2_H264_NaluReset(&item->nalu);
@@ -751,7 +761,9 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
             if (err != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Access unit buffer is too small");
+                if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
                 err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
+                if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
                 if (err < 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -786,7 +798,9 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to enqueue NALU item in AU");
                 context->auItem->au.auSize -= item->nalu.naluSize;
+                if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
                 err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, item);
+                if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
                 if (err != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -795,7 +809,9 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
         }
         else
         {
+            if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
             int flushRet = ARSTREAM2_H264_NaluFifoFlush(naluFifo);
+            if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full => flush to recover (%d NALU flushed)", flushRet);
             ret = -1;
         }
@@ -825,7 +841,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
                                                        ARSTREAM2_RTP_Packet_t *packet,
                                                        uint32_t missingPacketsBefore,
                                                        ARSTREAM2_H264_NaluFifo_t *naluFifo,
-                                                       ARSTREAM2_H264_AuFifo_t *auFifo)
+                                                       ARSAL_Mutex_t *naluFifoMutex)
 {
     int ret = 0;
 
@@ -843,7 +859,9 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
+    if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
     context->fuNaluItem = ARSTREAM2_H264_NaluFifoPopFreeItem(naluFifo);
+    if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
     if (context->fuNaluItem)
     {
         ARSTREAM2_H264_NaluReset(&context->fuNaluItem->nalu);
@@ -869,7 +887,9 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
     }
     else
     {
+        if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
         int flushRet = ARSTREAM2_H264_NaluFifoFlush(naluFifo);
+        if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "NALU FIFO is full => flush to recover (%d NALU flushed)", flushRet);
         ret = -1;
     }
@@ -880,8 +900,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
 
 static int ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(ARSTREAM2_RTPH264_ReceiverContext_t *context,
                                                         ARSTREAM2_RTP_Packet_t *packet,
-                                                        int isFirst, uint8_t headerByte,
-                                                        ARSTREAM2_H264_NaluFifo_t *naluFifo)
+                                                        int isFirst, uint8_t headerByte)
 {
     int ret = 0, err;
     uint8_t *packetBuf = packet->payload + ((isFirst) ? 1 : 2);
@@ -942,7 +961,8 @@ static int ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(ARSTREAM2_RTPH264_Receive
 
 
 static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverContext_t *context,
-                                                     ARSTREAM2_H264_NaluFifo_t *naluFifo)
+                                                     ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                     ARSAL_Mutex_t *naluFifoMutex)
 {
     int ret = 0, err;
 
@@ -963,7 +983,9 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
     }
     context->fuPending = 0;
 
+    if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
     err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, context->fuNaluItem);
+    if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
     if (err < 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
@@ -979,7 +1001,9 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
 int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverContext_t *context,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                  ARSAL_Mutex_t *naluFifoMutex,
                                                   ARSTREAM2_H264_AuFifo_t *auFifo,
+                                                  ARSAL_Mutex_t *auFifoMutex,
                                                   uint64_t curTime, ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext)
 {
     ARSTREAM2_RTP_PacketFifoItem_t *packetItem;
@@ -1013,45 +1037,61 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 {
                     /* drop the previous incomplete FU-A */
                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
-                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                     if (err != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
                     }
 
                     /* change of RTP timestamp without the marker bit set on previous packet => output the access unit */
-                    err = ARSTREAM2_H264_AuFifoEnqueueItem(auFifo, context->auItem);
-                    if (err != 0)
+                    if (context->auCallback)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push the access unit into the FIFO");
-                        err = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        err = context->auCallback(context->auItem, context->auCallbackUserPtr);
                         if (err != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the access unit FIFO");
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to output the access unit");
+                            ret = -1;
                         }
-                        else
-                        {
-                            context->auItem = NULL;
-                        }
-                        ret = -1;
+                        context->auItem = NULL;
                     }
                     else
                     {
-                        context->auItem = NULL;
-                        if (context->auPipe != -1)
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid access unit callback function");
+                        ret = -1;
+
+                        /* free the access unit and associated NAL units */
+                        ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+                        if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
+                        while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&context->auItem->au)) != NULL)
                         {
-                            char * buff = "x";
-                            write(context->auPipe, buff, 1);
+                            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, naluItem);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
+                            }
                         }
+                        if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
+                        if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
+                        ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
+                        if (ret != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
+                        }
+                        context->auItem = NULL;
                     }
                 }
 
                 if ((ret == 0) && (context->auItem == NULL))
                 {
+                    if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
                     context->auItem = ARSTREAM2_H264_AuFifoPopFreeItem(auFifo);
+                    if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
                     if (!context->auItem)
                     {
+                        if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
                         err = ARSTREAM2_H264_AuFifoFlush(auFifo);
+                        if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Access unit FIFO is full => flush to recover (%d AU flushed)", err);
                         ret = -1;
                     }
@@ -1082,7 +1122,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 {
                                     /* drop the previous incomplete FU-A */
                                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
-                                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
@@ -1091,7 +1131,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
 
                                 if (startBit)
                                 {
-                                    err = ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(context, packet, seqNumDelta - 1, naluFifo, auFifo);
+                                    err = ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_BeginFuAPackets() failed (%d)", err);
@@ -1101,7 +1141,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 {
                                     /* drop the FU-A if there is a seqNum discontinuity */
                                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet at extSeqNum %d", packet->extSeqNum);
-                                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                    err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
@@ -1110,11 +1150,11 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
 
                                 if (context->fuPending)
                                 {
-                                    err = ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(context, packet, startBit, (fuIndicator & 0xE0) | (fuHeader & 0x1F), naluFifo);
+                                    err = ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(context, packet, startBit, (fuIndicator & 0xE0) | (fuHeader & 0x1F));
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA() failed (%d)", err);
-                                        err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                        err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                         if (err != 0)
                                         {
                                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
@@ -1127,7 +1167,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                         if (err != 0)
                                         {
                                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_FinishFuAPackets() failed (%d)", err);
-                                            err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                            err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                             if (err != 0)
                                             {
                                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
@@ -1149,7 +1189,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             {
                                 /* drop the previous incomplete FU-A */
                                 //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
-                                err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
@@ -1158,7 +1198,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
 
                             if (packet->payloadSize >= 3)
                             {
-                                err = ARSTREAM2_RTPH264_Receiver_StapAPacket(context, packet, seqNumDelta - 1, naluFifo, auFifo);
+                                err = ARSTREAM2_RTPH264_Receiver_StapAPacket(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_StapAPacket() failed (%d)", err);
@@ -1177,14 +1217,14 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             {
                                 /* drop the previous incomplete FU-A */
                                 //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
-                                err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo);
+                                err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_DropFuAPacket() failed (%d)", err);
                                 }
                             }
 
-                            err = ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(context, packet, seqNumDelta - 1, naluFifo, auFifo);
+                            err = ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
                             if (err != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_SingleNaluPacket() failed (%d)", err);
@@ -1200,29 +1240,41 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 if ((ret == 0) && (context->auItem != NULL) && (packet->markerBit))
                 {
                     /* the marker bit is set => output the access unit */
-                    err = ARSTREAM2_H264_AuFifoEnqueueItem(auFifo, context->auItem);
-                    if (err != 0)
+                    if (context->auCallback)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push the access unit into the FIFO");
-                        err = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        err = context->auCallback(context->auItem, context->auCallbackUserPtr);
                         if (err != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the access unit FIFO");
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to output the access unit");
+                            ret = -1;
                         }
-                        else
-                        {
-                            context->auItem = NULL;
-                        }
-                        ret = -1;
+                        context->auItem = NULL;
                     }
                     else
                     {
-                        context->auItem = NULL;
-                        if (context->auPipe != -1)
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid access unit callback function");
+                        ret = -1;
+
+                        /* free the access unit and associated NAL units */
+                        ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+                        if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
+                        while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&context->auItem->au)) != NULL)
                         {
-                            char * buff = "x";
-                            write(context->auPipe, buff, 1);
+                            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, naluItem);
+                            if (ret != 0)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
+                            }
                         }
+                        if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
+                        if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
+                        ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
+                        if (ret != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
+                        }
+                        context->auItem = NULL;
                     }
                 }
 
@@ -1254,7 +1306,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
         }
     }
 
-    //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Processed %d packets", packetCount); //TODO: debug
+    //ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTPH264_TAG, "Processed %d packets", packetCount); //TODO: debug
 
     return ret;
 }
