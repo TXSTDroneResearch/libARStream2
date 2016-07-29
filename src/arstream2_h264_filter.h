@@ -22,7 +22,6 @@
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
 #include <libARStream2/arstream2_h264_sei.h>
-#include <libARStream2/arstream2_stream_recorder.h>
 #include <libARStream2/arstream2_stream_receiver.h>
 
 #include "arstream2_h264.h"
@@ -168,11 +167,6 @@ typedef struct ARSTREAM2_H264Filter_s
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
 
-    char *recordFileName;
-    int recorderStartPending;
-    ARSTREAM2_StreamRecorder_Handle recorder;
-    ARSAL_Thread_t recorderThread;
-
 } ARSTREAM2_H264Filter_t;
 
 
@@ -208,20 +202,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
 
 
 /**
- * @brief Stop an H264Filter instance.
- *
- * The function ends the filter thread before it can be joined.
- * A stopped filter cannot be restarted.
- *
- * @param filterHandle Instance handle.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle);
-
-
-/**
  * @brief Get the SPS and PPS buffers.
  *
  * The buffers are filled by the function and must be provided by the user. The size of the buffers are given
@@ -239,6 +219,9 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHan
  * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+
+
+int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *width, int *height, float *framerate);
 
 
 /**
@@ -262,37 +245,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
  * @return an eARSTREAM2_ERROR error code if another error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
-
-
-/**
- * @brief Start a stream recorder.
- *
- * The function starts recording the received stream to a file.
- * The recording can be stopped using ARSTREAM2_H264Filter_StopRecording().
- * The filter must be previously started using ARSTREAM2_H264Filter_Start().
- * @note Only one recording can be done at a time.
- *
- * @param filterHandle Instance handle.
- * @param recordFileName Record file absolute path.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle filterHandle, const char *recordFileName);
-
-
-/**
- * @brief Stop a stream recorder.
- *
- * The function stops the current recording.
- * If no recording is in progress nothing happens.
- *
- * @param filterHandle Instance handle.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle);
 
 
 int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au);

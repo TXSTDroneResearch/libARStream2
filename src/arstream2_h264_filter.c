@@ -11,173 +11,16 @@
 #define ARSTREAM2_H264_FILTER_TAG "ARSTREAM2_H264Filter"
 
 
-static void ARSTREAM2_H264Filter_StreamRecorderAuCallback(eARSTREAM2_STREAM_RECORDER_AU_STATUS status, void *auUserPtr, void *userPtr)
-{
-    ARSTREAM2_H264Filter_t *filter = (ARSTREAM2_H264Filter_t*)userPtr;
-    ARSTREAM2_H264_AuFifoItem_t *auItem = (ARSTREAM2_H264_AuFifoItem_t*)auUserPtr;
-    ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-    int ret;
-
-    if (!filter)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid recorder auCallback user pointer");
-        return;
-    }
-    if (!auItem)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid recorder access unit user pointer");
-        return;
-    }
-
-    /* free the access unit and associated NAL units */
-    ARSAL_Mutex_Lock(filter->fifoMutex);
-    while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
-    {
-        ret = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, naluItem);
-        if (ret != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
-        }
-    }
-    ret = ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
-    ARSAL_Mutex_Unlock(filter->fifoMutex);
-    if (ret != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
-    }
-}
-
-
-static int ARSTREAM2_H264Filter_StreamRecorderInit(ARSTREAM2_H264Filter_t *filter)
-{
-    int ret = -1;
-
-    if ((!filter->recorder) && (filter->recordFileName))
-    {
-        eARSTREAM2_ERROR recErr;
-        ARSTREAM2_StreamRecorder_Config_t recConfig;
-        memset(&recConfig, 0, sizeof(ARSTREAM2_StreamRecorder_Config_t));
-        recConfig.mediaFileName = filter->recordFileName;
-        recConfig.videoFramerate = filter->framerate;
-        recConfig.videoWidth = filter->mbWidth * 16; //TODO
-        recConfig.videoHeight = filter->mbHeight * 16; //TODO
-        recConfig.sps = filter->pSps;
-        recConfig.spsSize = filter->spsSize;
-        recConfig.pps = filter->pPps;
-        recConfig.ppsSize = filter->ppsSize;
-        recConfig.serviceType = 0; //TODO
-        recConfig.auFifoSize = filter->auFifo->size;
-        recConfig.auCallback = ARSTREAM2_H264Filter_StreamRecorderAuCallback;
-        recConfig.auCallbackUserPtr = filter;
-        recErr = ARSTREAM2_StreamRecorder_Init(&filter->recorder, &recConfig);
-        if (recErr != ARSTREAM2_OK)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Init() failed (%d): %s",
-                        recErr, ARSTREAM2_Error_ToString(recErr));
-        }
-        else
-        {
-            int thErr = ARSAL_Thread_Create(&filter->recorderThread, ARSTREAM2_StreamRecorder_RunThread, (void*)filter->recorder);
-            if (thErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Recorder thread creation failed (%d)", thErr);
-            }
-            else
-            {
-                ret = 0;
-            }
-        }
-    }
-
-    return ret;
-}
-
-
-static int ARSTREAM2_H264Filter_StreamRecorderStop(ARSTREAM2_H264Filter_t *filter)
-{
-    int ret = 0;
-
-    if (filter->recorder)
-    {
-        eARSTREAM2_ERROR err;
-        err = ARSTREAM2_StreamRecorder_Stop(filter->recorder);
-        if (err != ARSTREAM2_OK)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Stop() failed: %d (%s)",
-                        err, ARSTREAM2_Error_ToString(err));
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
-
-static int ARSTREAM2_H264Filter_StreamRecorderFree(ARSTREAM2_H264Filter_t *filter)
-{
-    int ret = 0;
-
-    if (filter->recorder)
-    {
-        int thErr;
-        eARSTREAM2_ERROR err;
-        if (filter->recorderThread)
-        {
-            thErr = ARSAL_Thread_Join(filter->recorderThread, NULL);
-            if (thErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSAL_Thread_Join() failed (%d)", thErr);
-                ret = -1;
-            }
-            thErr = ARSAL_Thread_Destroy(&filter->recorderThread);
-            if (thErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSAL_Thread_Destroy() failed (%d)", thErr);
-                ret = -1;
-            }
-            filter->recorderThread = NULL;
-        }
-        err = ARSTREAM2_StreamRecorder_Free(&filter->recorder);
-        if (err != ARSTREAM2_OK)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_StreamRecorder_Free() failed (%d): %s",
-                        err, ARSTREAM2_Error_ToString(err));
-            ret = -1;
-        }
-    }
-
-    return ret;
-}
-
-
 static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
 {
     int ret = 0;
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
-    ARSTREAM2_H264_SpsContext_t *spsContext = NULL;
-    ARSTREAM2_H264_PpsContext_t *ppsContext = NULL;
-
-    filter->sync = 1;
-
-    if (filter->generateFirstGrayIFrame)
-    {
-        filter->firstGrayIFramePending = 1;
-    }
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK"); //TODO: debug
-
-    /* SPS/PPS callback */
-    if (filter->spsPpsCallback)
-    {
-        int cbRet = filter->spsPpsCallback(filter->pSps, filter->spsSize, filter->pPps, filter->ppsSize, filter->spsPpsCallbackUserPtr);
-        if (cbRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
-        }
-    }
 
     /* Configure the writer */
     if (ret == 0)
     {
+        ARSTREAM2_H264_SpsContext_t *spsContext = NULL;
+        ARSTREAM2_H264_PpsContext_t *ppsContext = NULL;
         err = ARSTREAM2_H264Parser_GetSpsPpsContext(filter->parser, (void**)&spsContext, (void**)&ppsContext);
         if (err != ARSTREAM2_OK)
         {
@@ -200,18 +43,6 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
         }
     }
 
-    /* stream recording */
-    if ((ret == 0) && (filter->recorderStartPending))
-    {
-        int recRet;
-        recRet = ARSTREAM2_H264Filter_StreamRecorderInit(filter);
-        if (recRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderInit() failed (%d)", recRet);
-        }
-        filter->recorderStartPending = 0;
-    }
-
     if (ret == 0)
     {
         filter->currentAuMacroblockStatus = realloc(filter->currentAuMacroblockStatus, filter->mbCount * sizeof(uint8_t));
@@ -225,6 +56,27 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
             memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
         }
         filter->previousAuFrameNum = -1;
+    }
+
+    if (ret == 0)
+    {
+        /* SPS/PPS callback */
+        if (filter->spsPpsCallback)
+        {
+            int cbRet = filter->spsPpsCallback(filter->pSps, filter->spsSize, filter->pPps, filter->ppsSize, filter->spsPpsCallbackUserPtr);
+            if (cbRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
+            }
+        }
+
+        filter->sync = 1;
+        if (filter->generateFirstGrayIFrame)
+        {
+            filter->firstGrayIFramePending = 1;
+        }
+
+        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK");
     }
 
     return ret;
@@ -747,87 +599,6 @@ int ARSTREAM2_H264Filter_ForceIdr(ARSTREAM2_H264Filter_t *filter)
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_StartRecorder(ARSTREAM2_H264Filter_Handle filterHandle, const char *recordFileName)
-{
-    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
-    int ret = ARSTREAM2_OK;
-
-    if (!filterHandle)
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if ((!recordFileName) || (!strlen(recordFileName)))
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if (filter->recorder)
-    {
-        return ARSTREAM2_ERROR_INVALID_STATE;
-    }
-
-    filter->recordFileName = strdup(recordFileName);
-    if (!filter->recordFileName)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "String allocation failed");
-        ret = ARSTREAM2_ERROR_ALLOC;
-    }
-    else
-    {
-        if (filter->sync)
-        {
-            filter->recorderStartPending = 0;
-            int recRet;
-            recRet = ARSTREAM2_H264Filter_StreamRecorderInit(filter);
-            if (recRet != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderInit() failed (%d)", recRet);
-            }
-        }
-        else
-        {
-            filter->recorderStartPending = 1;
-        }
-    }
-
-    return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_StopRecorder(ARSTREAM2_H264Filter_Handle filterHandle)
-{
-    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
-    int ret = ARSTREAM2_OK;
-
-    if (!filterHandle)
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if (!filter->recorder)
-    {
-        return ARSTREAM2_ERROR_INVALID_STATE;
-    }
-
-    int recRet = ARSTREAM2_H264Filter_StreamRecorderStop(filter);
-    if (recRet != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStop() failed (%d)", recRet);
-        ret = ARSTREAM2_ERROR_INVALID_STATE;
-    }
-
-    recRet = ARSTREAM2_H264Filter_StreamRecorderFree(filter);
-    if (recRet != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderFree() failed (%d)", recRet);
-        ret = ARSTREAM2_ERROR_INVALID_STATE;
-    }
-
-    if (filter->recordFileName) free(filter->recordFileName);
-    filter->recordFileName = NULL;
-
-    return ret;
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
@@ -875,6 +646,34 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
 }
 
 
+int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *width, int *height, float *framerate)
+{
+    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
+    int ret = 0;
+
+    if (!filterHandle)
+    {
+        return -1;
+    }
+
+    if ((!width) || (!height) || (!framerate))
+    {
+        return -1;
+    }
+
+    if (!filter->sync)
+    {
+        return -1;
+    }
+
+    *width = filter->mbWidth; //TODO
+    *height = filter->mbHeight; //TODO
+    *framerate = filter->framerate;
+
+    return ret;
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
@@ -905,28 +704,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Fil
         *macroblocks = filter->currentAuMacroblockStatus;
         *mbWidth = filter->mbWidth;
         *mbHeight = filter->mbHeight;
-    }
-
-    return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_Stop(ARSTREAM2_H264Filter_Handle filterHandle)
-{
-    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
-    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-
-    if (!filterHandle)
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "Stopping Filter...");
-    int recRet = ARSTREAM2_H264Filter_StreamRecorderStop(filter);
-    if (recRet != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderStop() failed (%d)", recRet);
-        ret = ARSTREAM2_ERROR_INVALID_STATE;
     }
 
     return ret;
@@ -1141,17 +918,11 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
 
     ARSTREAM2_H264Parser_Free(filter->parser);
     ARSTREAM2_H264Writer_Free(filter->writer);
-    int recErr = ARSTREAM2_H264Filter_StreamRecorderFree(filter);
-    if (recErr != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_StreamRecorderFree() failed (%d)", recErr);
-    }
 
     if (filter->currentAuMacroblockStatus) free(filter->currentAuMacroblockStatus);
     if (filter->currentAuRefMacroblockStatus) free(filter->currentAuRefMacroblockStatus);
     if (filter->pSps) free(filter->pSps);
     if (filter->pPps) free(filter->pPps);
-    if (filter->recordFileName) free(filter->recordFileName);
 #ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
     if (filter->fStatsOut) fclose(filter->fStatsOut);
 #endif
