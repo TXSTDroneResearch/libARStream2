@@ -226,7 +226,8 @@ struct ARSTREAM2_RtpReceiver_Ops_t {
                              int *);
     int (*streamChannelRecvMmsg)(ARSTREAM2_RtpReceiver_t *,
                                  struct mmsghdr *,
-                                 unsigned int);
+                                 unsigned int,
+                                 int);
 
 
     /* Control channel */

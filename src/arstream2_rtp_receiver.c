@@ -517,7 +517,7 @@ unref_buffer:
 #endif
 }
 
-static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, struct mmsghdr *msgvec, unsigned int vlen)
+static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, struct mmsghdr *msgvec, unsigned int vlen, int blocking)
 {
 #if BUILD_LIBMUX
     int ret = 0;
@@ -537,7 +537,14 @@ static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, 
         const void *pb_data;
         size_t pb_len, left, offset;
 
-        ret2 = mux_queue_try_get_buf(receiver->mux.data, &buffer);
+        if ((blocking) && (i == 0))
+        {
+            ret2 = mux_queue_get_buf(receiver->mux.data, &buffer);
+        }
+        else
+        {
+            ret2 = mux_queue_try_get_buf(receiver->mux.data, &buffer);
+        }
         if (ret2 != 0)
         {
             if (ret2 == -EPIPE)
@@ -618,8 +625,9 @@ static int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen,
 }
 #endif
 
-static int ARSTREAM2_RtpReceiver_NetRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, struct mmsghdr *msgvec, unsigned int vlen)
+static int ARSTREAM2_RtpReceiver_NetRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, struct mmsghdr *msgvec, unsigned int vlen, int blocking)
 {
+    //TODO: blocking does not work, but should not be needed
     int ret;
 
     if ((!receiver) || (!msgvec))
@@ -1501,13 +1509,10 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
 {
     /* Local declarations */
     ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
-    int shouldStop, ret, selectRet;
+    int shouldStop, ret;
     struct timespec t1;
     uint64_t curTime;
     uint32_t nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL, rrDelay = 0;
-    fd_set readSet, readSetSaved;
-    int maxFd;
-    struct timeval tv;
 
     /* Parameters check */
     if (receiver == NULL)
@@ -1522,25 +1527,10 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
     shouldStop = receiver->threadShouldStop;
     ARSAL_Mutex_Unlock(&(receiver->streamMutex));
 
-    FD_ZERO(&readSetSaved);
-    FD_SET(receiver->pipe[0], &readSetSaved);
-    maxFd = receiver->pipe[0];
-    maxFd++;
-    readSet = readSetSaved;
-    tv.tv_sec = 0;
-    tv.tv_usec = ARSTREAM2_RTP_RECEIVER_MUX_TIMEOUT_US;
-
     while (shouldStop == 0)
     {
-        selectRet = select(maxFd, &readSet, NULL, NULL, &tv);
-
         ARSAL_Time_GetTime(&t1);
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-        if (selectRet < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Select error (%d): %s", errno, strerror(errno));
-        }
 
         /* RTCP sender reports */
         ssize_t bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize, 0);
@@ -1587,7 +1577,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
         {
             unsigned int msgCount = (unsigned  int)ret;
 
-            ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->packetFifo.msgVec, msgCount);
+            ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->packetFifo.msgVec, msgCount, 1);
             if (ret < 0)
             {
                 if (ret == -EPIPE && receiver->useMux == 1)
@@ -1604,6 +1594,9 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
             else if (ret > 0)
             {
                 unsigned int recvMsgCount = (unsigned int)ret;
+
+                ARSAL_Time_GetTime(&t1);
+                curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
                 ret = ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(&receiver->rtpReceiverContext, &receiver->packetFifo,
                                                                recvMsgCount, curTime, &receiver->rtcpReceiverContext);
@@ -1649,31 +1642,9 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
             }
         }
 
-        if ((selectRet >= 0) && (FD_ISSET(receiver->pipe[0], &readSet)))
-        {
-            /* Dump bytes (so it won't be ready next time) */
-            char dump[10];
-            read(receiver->pipe[0], &dump, 10);
-        }
-
         ARSAL_Mutex_Lock(&(receiver->streamMutex));
         shouldStop = receiver->threadShouldStop;
         ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-        if (!shouldStop)
-        {
-            /* Prepare the next select */
-            readSet = readSetSaved;
-            tv.tv_sec = 0;
-            if (receiver->generateReceiverReports)
-            {
-                tv.tv_usec = (nextRrDelay - rrDelay < ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) ? nextRrDelay - rrDelay : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-            }
-            else
-            {
-                tv.tv_usec = ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-            }
-        }
     }
 
     ARSAL_Mutex_Lock(&(receiver->streamMutex));
@@ -1803,7 +1774,7 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
             {
                 unsigned int msgCount = (unsigned  int)ret;
 
-                ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->packetFifo.msgVec, msgCount);
+                ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->packetFifo.msgVec, msgCount, 0);
                 if (ret < 0)
                 {
                     if (ret == -EPIPE && receiver->useMux == 1)
