@@ -187,9 +187,9 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                                     filter->currentAuInferredSliceMbCount = filter->currentAuStreamingSliceMbCount[0];
                                 }
                             }
-                            else if (userDataSeiSize <= au->userDataBufferSize)
+                            else if (userDataSeiSize <= au->buffer->userDataBufferSize)
                             {
-                                memcpy(au->userDataBuffer, pUserDataSei, userDataSeiSize);
+                                memcpy(au->buffer->userDataBuffer, pUserDataSei, userDataSeiSize);
                                 au->userDataSize = userDataSeiSize;
                             }
                         }
@@ -524,11 +524,11 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             if (filter->fStatsOut)
             {
                 int rssi = 0;
-                if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->metadataBuffer)) == 0x5031))
+                if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5031))
                 {
                     /* get the RSSI from the streaming metadata */
                     //TODO: remove this hack once we have a better way of getting the RSSI
-                    rssi = (int8_t)au->metadataBuffer[26];
+                    rssi = (int8_t)au->buffer->metadataBuffer[26];
                 }
                 fprintf(filter->fStatsOut, "%llu %i %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
                         (long unsigned int)filter->stats.totalFrameCount, (long unsigned int)filter->stats.outputFrameCount,

@@ -17,6 +17,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
     ARSTREAM2_H264_SliceContext_t *sliceContextNext = NULL;
     ARSTREAM2_H264_SliceContext_t sliceContext;
+    ARSTREAM2_H264_AuFifoBuffer_t *buffer = NULL;
     ARSTREAM2_H264_AuFifoItem_t *auItem = NULL;
     ARSTREAM2_H264_NaluFifoItem_t *naluItem = NULL, *spsItem = NULL, *ppsItem = NULL;
 
@@ -42,20 +43,35 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
     if (ret == 0)
     {
         ARSAL_Mutex_Lock(filter->fifoMutex);
+        buffer = ARSTREAM2_H264_AuFifoGetBuffer(filter->auFifo);
         auItem = ARSTREAM2_H264_AuFifoPopFreeItem(filter->auFifo);
         ARSAL_Mutex_Unlock(filter->fifoMutex);
-        if (auItem)
+        if ((!buffer) || (!auItem))
         {
-            ARSTREAM2_H264_AuReset(&auItem->au);
+            ARSAL_Mutex_Lock(filter->fifoMutex);
+            if (buffer)
+            {
+                ARSTREAM2_H264_AuFifoUnrefBuffer(filter->auFifo, buffer);
+                buffer = NULL;
+            }
+            if (auItem)
+            {
+                ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
+                auItem = NULL;
+            }
+            err = ARSTREAM2_H264_AuFifoFlush(filter->auFifo);
+            ARSAL_Mutex_Unlock(filter->fifoMutex);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "AU FIFO is full, cannot generate gray I-frame => flush to recover (%d AU flushed)", err);
+            ret = -1;
         }
         else
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "AU FIFO is full, cannot generate gray I-frame");
-            ret = -1;
+            ARSTREAM2_H264_AuReset(&auItem->au);
+            auItem->au.buffer = buffer;
         }
     }
 
-    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->spsSize <= auItem->au.bufferSize))
+    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->spsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert SPS before the I-frame */
         ARSAL_Mutex_Lock(filter->fifoMutex);
@@ -64,8 +80,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         if (spsItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
-            spsItem->nalu.nalu = auItem->au.buffer + auItem->au.auSize;
-            memcpy(auItem->au.buffer + auItem->au.auSize, filter->pSps, filter->spsSize);
+            spsItem->nalu.nalu = auItem->au.buffer->auBuffer + auItem->au.auSize;
+            memcpy(auItem->au.buffer->auBuffer + auItem->au.auSize, filter->pSps, filter->spsSize);
             spsItem->nalu.naluSize = filter->spsSize;
             auItem->au.auSize += filter->spsSize;
         }
@@ -76,7 +92,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
     }
 
-    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->ppsSize <= auItem->au.bufferSize))
+    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->ppsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert PPS before the I-frame */
         ARSAL_Mutex_Lock(filter->fifoMutex);
@@ -85,8 +101,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         if (ppsItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
-            ppsItem->nalu.nalu = auItem->au.buffer + auItem->au.auSize;
-            memcpy(auItem->au.buffer + auItem->au.auSize, filter->pPps, filter->ppsSize);
+            ppsItem->nalu.nalu = auItem->au.buffer->auBuffer + auItem->au.auSize;
+            memcpy(auItem->au.buffer->auBuffer + auItem->au.auSize, filter->pPps, filter->ppsSize);
             ppsItem->nalu.naluSize = filter->ppsSize;
             auItem->au.auSize += filter->ppsSize;
         }
@@ -105,14 +121,14 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         if (naluItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
-            naluItem->nalu.nalu = auItem->au.buffer + auItem->au.auSize;
+            naluItem->nalu.nalu = auItem->au.buffer->auBuffer + auItem->au.auSize;
             naluItem->nalu.naluSize = 0;
 
             unsigned int outputSize;
 
             err = ARSTREAM2_H264Writer_WriteGrayISliceNalu(filter->writer, 0, filter->mbCount, (void*)&sliceContext,
-                                                           auItem->au.buffer + auItem->au.auSize,
-                                                           auItem->au.bufferSize - auItem->au.auSize, &outputSize);
+                                                           auItem->au.buffer->auBuffer + auItem->au.auSize,
+                                                           auItem->au.buffer->auBufferSize - auItem->au.auSize, &outputSize);
             if (err != ARSTREAM2_OK)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "ARSTREAM2_H264Writer_WriteGrayISliceNalu() failed (%d)", err);
@@ -250,6 +266,14 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
             if (ret2 != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret2);
+            }
+        }
+        if (buffer)
+        {
+            ret2 = ARSTREAM2_H264_AuFifoUnrefBuffer(filter->auFifo, buffer);
+            if (ret2 != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to unref buffer (%d)", ret2);
             }
         }
         if (auItem)
@@ -442,12 +466,12 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 if (ret == 0)
                 {
                     /* NALU data */
-                    item->nalu.nalu = au->buffer + au->auSize;
+                    item->nalu.nalu = au->buffer->auBuffer + au->auSize;
                     item->nalu.naluSize = 0;
 
                     unsigned int outputSize;
                     err = ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext,
-                                                                      au->buffer + au->auSize, au->bufferSize - au->auSize, &outputSize);
+                                                                      au->buffer->auBuffer + au->auSize, au->buffer->auBufferSize - au->auSize, &outputSize);
                     if (err != ARSTREAM2_OK)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "ARSTREAM2_H264Writer_WriteSkippedPSliceNalu() failed (%d)", err);
@@ -653,12 +677,12 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                 if (ret == 0)
                 {
                     /* NALU data */
-                    item->nalu.nalu = au->buffer + au->auSize;
+                    item->nalu.nalu = au->buffer->auBuffer + au->auSize;
                     item->nalu.naluSize = 0;
 
                     unsigned int outputSize;
                     err = ARSTREAM2_H264Writer_WriteSkippedPSliceNalu(filter->writer, firstMbInSlice, missingMb, sliceContext,
-                                                                      au->buffer + au->auSize, au->bufferSize - au->auSize, &outputSize);
+                                                                      au->buffer->auBuffer + au->auSize, au->buffer->auBufferSize - au->auSize, &outputSize);
                     if (err != ARSTREAM2_OK)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "ARSTREAM2_H264Writer_WriteSkippedPSliceNalu() failed (%d)", err);

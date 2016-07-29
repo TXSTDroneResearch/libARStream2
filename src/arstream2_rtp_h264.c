@@ -645,9 +645,9 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
 
     /* metadata as RTP header extension */
     if ((packet->headerExtension) && (packet->headerExtensionSize > 0)
-            && (packet->headerExtensionSize <= context->auItem->au.metadataBufferSize))
+            && (packet->headerExtensionSize <= context->auItem->au.buffer->metadataBufferSize))
     {
-        memcpy(context->auItem->au.metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
+        memcpy(context->auItem->au.buffer->metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
@@ -672,15 +672,15 @@ static int ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(ARSTREAM2_RTPH264_Receive
         }
 
         /* NALU data */
-        item->nalu.nalu = context->auItem->au.buffer + context->auItem->au.auSize;
+        item->nalu.nalu = context->auItem->au.buffer->auBuffer + context->auItem->au.auSize;
         item->nalu.naluSize = 0;
         if (context->startCodeLength > 0)
         {
-            memcpy(context->auItem->au.buffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
+            memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
             item->nalu.naluSize += context->startCodeLength;
             context->auItem->au.auSize += context->startCodeLength;
         }
-        memcpy(context->auItem->au.buffer + context->auItem->au.auSize, packet->payload, packet->payloadSize);
+        memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, packet->payload, packet->payloadSize);
         item->nalu.naluSize += packet->payloadSize;
         context->auItem->au.auSize += packet->payloadSize;
 
@@ -738,9 +738,9 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
 
     /* metadata as RTP header extension */
     if ((packet->headerExtension) && (packet->headerExtensionSize > 0)
-            && (packet->headerExtensionSize <= context->auItem->au.metadataBufferSize))
+            && (packet->headerExtensionSize <= context->auItem->au.buffer->metadataBufferSize))
     {
-        memcpy(context->auItem->au.metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
+        memcpy(context->auItem->au.buffer->metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
@@ -772,15 +772,15 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
             }
 
             /* NALU data */
-            item->nalu.nalu = context->auItem->au.buffer + context->auItem->au.auSize;
+            item->nalu.nalu = context->auItem->au.buffer->auBuffer + context->auItem->au.auSize;
             item->nalu.naluSize = 0;
             if (context->startCodeLength > 0)
             {
-                memcpy(context->auItem->au.buffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
+                memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
                 item->nalu.naluSize += context->startCodeLength;
                 context->auItem->au.auSize += context->startCodeLength;
             }
-            memcpy(context->auItem->au.buffer + context->auItem->au.auSize, packetBuf, naluSize);
+            memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, packetBuf, naluSize);
             item->nalu.naluSize += naluSize;
             context->auItem->au.auSize += naluSize;
 
@@ -853,9 +853,9 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
 
     /* metadata as RTP header extension */
     if ((packet->headerExtension) && (packet->headerExtensionSize > 0)
-            && (packet->headerExtensionSize <= context->auItem->au.metadataBufferSize))
+            && (packet->headerExtensionSize <= context->auItem->au.buffer->metadataBufferSize))
     {
-        memcpy(context->auItem->au.metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
+        memcpy(context->auItem->au.buffer->metadataBuffer, packet->headerExtension, packet->headerExtensionSize);
         context->auItem->au.metadataSize = packet->headerExtensionSize;
     }
 
@@ -865,7 +865,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
     if (context->fuNaluItem)
     {
         ARSTREAM2_H264_NaluReset(&context->fuNaluItem->nalu);
-        context->fuNaluItem->nalu.nalu = context->auItem->au.buffer + context->auItem->au.auSize;
+        context->fuNaluItem->nalu.nalu = context->auItem->au.buffer->auBuffer + context->auItem->au.auSize;
         context->fuNaluItem->nalu.naluSize = 0;
 
         context->fuNaluItem->nalu.inputTimestamp = packet->inputTimestamp;
@@ -878,7 +878,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
 
         if (context->startCodeLength > 0)
         {
-            memcpy(context->auItem->au.buffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
+            memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, &context->startCode, context->startCodeLength);
             context->fuNaluItem->nalu.naluSize += context->startCodeLength;
             context->auItem->au.auSize += context->startCodeLength;
         }
@@ -920,11 +920,11 @@ static int ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(ARSTREAM2_RTPH264_Receiv
     }
 
     /* NALU data */
-    memcpy(context->auItem->au.buffer + context->auItem->au.auSize, packetBuf, packetSize);
+    memcpy(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize, packetBuf, packetSize);
     if (isFirst)
     {
         /* restore the NALU header byte */
-        *(context->auItem->au.buffer + context->auItem->au.auSize) = headerByte;
+        *(context->auItem->au.buffer->auBuffer + context->auItem->au.auSize) = headerByte;
     }
     context->fuNaluItem->nalu.naluSize += packetSize;
     context->auItem->au.auSize += packetSize;
@@ -1072,11 +1072,18 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         }
                         if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
                         if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
-                        ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        int ret1 = ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, context->auItem->au.buffer);
+                        int ret2 = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
                         if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
-                        if (ret != 0)
+                        if (ret1 != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to unref buffer (%d)", ret1);
+                            ret = ret1;
+                        }
+                        if (ret2 != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret2);
+                            ret = ret2;
                         }
                         context->auItem = NULL;
                     }
@@ -1085,11 +1092,14 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 if ((ret == 0) && (context->auItem == NULL))
                 {
                     if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
+                    ARSTREAM2_H264_AuFifoBuffer_t *buffer = ARSTREAM2_H264_AuFifoGetBuffer(auFifo);
                     context->auItem = ARSTREAM2_H264_AuFifoPopFreeItem(auFifo);
                     if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
-                    if (!context->auItem)
+                    if ((!buffer) || (!context->auItem))
                     {
                         if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
+                        if (buffer) ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, buffer);
+                        if (context->auItem) ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
                         err = ARSTREAM2_H264_AuFifoFlush(auFifo);
                         if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Access unit FIFO is full => flush to recover (%d AU flushed)", err);
@@ -1098,6 +1108,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                     else
                     {
                         ARSTREAM2_H264_AuReset(&context->auItem->au);
+                        context->auItem->au.buffer = buffer;
                     }
                 }
 
@@ -1268,11 +1279,18 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         }
                         if (naluFifoMutex) ARSAL_Mutex_Unlock(naluFifoMutex);
                         if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
-                        ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
+                        int ret1 = ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, context->auItem->au.buffer);
+                        int ret2 = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
                         if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
-                        if (ret != 0)
+                        if (ret1 != 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to unref buffer (%d)", ret1);
+                            ret = ret1;
+                        }
+                        if (ret2 != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the AU FIFO (%d)", ret2);
+                            ret = ret2;
                         }
                         context->auItem = NULL;
                     }

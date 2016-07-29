@@ -275,89 +275,117 @@ int ARSTREAM2_H264_NaluFifoFlush(ARSTREAM2_H264_NaluFifo_t *fifo)
 }
 
 
-int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int maxCount, int bufferSize,
-                              int metadataBufferSize, int userDataBufferSize)
+int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, int bufferMaxCount,
+                              int auBufferSize, int metadataBufferSize, int userDataBufferSize)
 {
     int i;
-    ARSTREAM2_H264_AuFifoItem_t* cur;
+    ARSTREAM2_H264_AuFifoItem_t* curItem;
+    ARSTREAM2_H264_AuFifoBuffer_t* curBuffer;
 
     if (!fifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
-
-    if (maxCount <= 0)
+    if (itemMaxCount <= 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid FIFO size (%d)", maxCount);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid item max count (%d)", itemMaxCount);
+        return -1;
+    }
+    if (bufferMaxCount <= 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid buffer max count (%d)", bufferMaxCount);
         return -1;
     }
 
     memset(fifo, 0, sizeof(ARSTREAM2_H264_AuFifo_t));
-    fifo->size = maxCount;
-    fifo->pool = malloc(maxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
-    if (!fifo->pool)
+
+    fifo->itemPoolSize = itemMaxCount;
+    fifo->itemPool = malloc(itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
+    if (!fifo->itemPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
-        fifo->size = 0;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
+        fifo->itemPoolSize = 0;
         return -1;
     }
-    memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
+    memset(fifo->itemPool, 0, itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
 
-    for (i = 0; i < maxCount; i++)
+    for (i = 0; i < itemMaxCount; i++)
     {
-        cur = &fifo->pool[i];
-        if (fifo->free)
+        curItem = &fifo->itemPool[i];
+        if (fifo->itemFree)
         {
-            fifo->free->prev = cur;
+            fifo->itemFree->prev = curItem;
         }
-        cur->next = fifo->free;
-        cur->prev = NULL;
-        fifo->free = cur;
+        curItem->next = fifo->itemFree;
+        curItem->prev = NULL;
+        fifo->itemFree = curItem;
     }
 
-    if (bufferSize > 0)
+    fifo->bufferPoolSize = bufferMaxCount;
+    fifo->bufferPool = malloc(bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
+    if (!fifo->bufferPool)
     {
-        for (i = 0; i < maxCount; i++)
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
+        fifo->bufferPoolSize = 0;
+        return -1;
+    }
+    memset(fifo->bufferPool, 0, bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
+
+    for (i = 0; i < bufferMaxCount; i++)
+    {
+        curBuffer = &fifo->bufferPool[i];
+        if (fifo->bufferFree)
         {
-            fifo->pool[i].au.buffer = malloc(bufferSize);
-            if (!fifo->pool[i].au.buffer)
+            fifo->bufferFree->prev = curBuffer;
+        }
+        curBuffer->next = fifo->bufferFree;
+        curBuffer->prev = NULL;
+        fifo->bufferFree = curBuffer;
+    }
+
+    if (auBufferSize > 0)
+    {
+        for (i = 0; i < bufferMaxCount; i++)
+        {
+            fifo->bufferPool[i].auBuffer = malloc(auBufferSize);
+            if (!fifo->bufferPool[i].auBuffer)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO buffer allocation failed (size %d)", bufferSize);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO buffer allocation failed (size %d)", auBufferSize);
                 ARSTREAM2_H264_AuFifoFree(fifo);
                 return -1;
             }
-            fifo->pool[i].au.bufferSize = bufferSize;
+            fifo->bufferPool[i].auBufferSize = auBufferSize;
         }
     }
 
     if (metadataBufferSize > 0)
     {
-        for (i = 0; i < maxCount; i++)
+        for (i = 0; i < bufferMaxCount; i++)
         {
-            fifo->pool[i].au.metadataBuffer = malloc(metadataBufferSize);
-            if (!fifo->pool[i].au.metadataBuffer)
+            fifo->bufferPool[i].metadataBuffer = malloc(metadataBufferSize);
+            if (!fifo->bufferPool[i].metadataBuffer)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO buffer allocation failed (size %d)", metadataBufferSize);
                 ARSTREAM2_H264_AuFifoFree(fifo);
                 return -1;
             }
-            fifo->pool[i].au.metadataBufferSize = metadataBufferSize;
+            fifo->bufferPool[i].metadataBufferSize = metadataBufferSize;
         }
     }
 
     if (userDataBufferSize > 0)
     {
-        for (i = 0; i < maxCount; i++)
+        for (i = 0; i < bufferMaxCount; i++)
         {
-            fifo->pool[i].au.userDataBuffer = malloc(userDataBufferSize);
-            if (!fifo->pool[i].au.userDataBuffer)
+            fifo->bufferPool[i].userDataBuffer = malloc(userDataBufferSize);
+            if (!fifo->bufferPool[i].userDataBuffer)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO buffer allocation failed (size %d)", userDataBufferSize);
                 ARSTREAM2_H264_AuFifoFree(fifo);
                 return -1;
             }
-            fifo->pool[i].au.userDataBufferSize = userDataBufferSize;
+            fifo->bufferPool[i].userDataBufferSize = userDataBufferSize;
         }
     }
 
@@ -375,30 +403,168 @@ int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo)
         return -1;
     }
 
-    if (fifo->pool)
+    if (fifo->itemPool)
     {
-        for (i = 0; i < fifo->size; i++)
+        free(fifo->itemPool);
+    }
+
+    if (fifo->bufferPool)
+    {
+        for (i = 0; i < fifo->bufferPoolSize; i++)
         {
-            if (fifo->pool[i].au.buffer)
+            if (fifo->bufferPool[i].auBuffer)
             {
-                free(fifo->pool[i].au.buffer);
-                fifo->pool[i].au.buffer = NULL;
+                free(fifo->bufferPool[i].auBuffer);
+                fifo->bufferPool[i].auBuffer = NULL;
             }
-            if (fifo->pool[i].au.metadataBuffer)
+            if (fifo->bufferPool[i].metadataBuffer)
             {
-                free(fifo->pool[i].au.metadataBuffer);
-                fifo->pool[i].au.metadataBuffer = NULL;
+                free(fifo->bufferPool[i].metadataBuffer);
+                fifo->bufferPool[i].metadataBuffer = NULL;
             }
-            if (fifo->pool[i].au.userDataBuffer)
+            if (fifo->bufferPool[i].userDataBuffer)
             {
-                free(fifo->pool[i].au.userDataBuffer);
-                fifo->pool[i].au.userDataBuffer = NULL;
+                free(fifo->bufferPool[i].userDataBuffer);
+                fifo->bufferPool[i].userDataBuffer = NULL;
             }
         }
 
-        free(fifo->pool);
+        free(fifo->bufferPool);
     }
+
     memset(fifo, 0, sizeof(ARSTREAM2_H264_AuFifo_t));
+
+    return 0;
+}
+
+
+int ARSTREAM2_H264_AuFifoAddQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoQueue_t *queue)
+{
+    if ((!fifo) || (!queue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    queue->count = 0;
+    queue->head = NULL;
+    queue->tail = NULL;
+
+    queue->prev = NULL;
+    queue->next = fifo->queue;
+    if (queue->next)
+    {
+        queue->next->prev = queue;
+    }
+    fifo->queue = queue;
+    fifo->queueCount++;
+
+    return 0;
+}
+
+
+int ARSTREAM2_H264_AuFifoRemoveQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoQueue_t *queue)
+{
+    if ((!fifo) || (!queue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (queue->prev)
+    {
+        queue->prev->next = queue->next;
+    }
+    if (queue->next)
+    {
+        queue->next->prev = queue->prev;
+    }
+    if ((!queue->prev) && (!queue->next))
+    {
+        fifo->queue = NULL;
+    }
+    fifo->queueCount--;
+    queue->prev = NULL;
+    queue->next = NULL;
+    queue->count = 0;
+    queue->head = NULL;
+    queue->tail = NULL;
+
+    return 0;
+}
+
+
+ARSTREAM2_H264_AuFifoBuffer_t* ARSTREAM2_H264_AuFifoGetBuffer(ARSTREAM2_H264_AuFifo_t *fifo)
+{
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return NULL;
+    }
+
+    if (fifo->bufferFree)
+    {
+        ARSTREAM2_H264_AuFifoBuffer_t* cur = fifo->bufferFree;
+        fifo->bufferFree = cur->next;
+        if (cur->next) cur->next->prev = NULL;
+        cur->prev = NULL;
+        cur->next = NULL;
+        cur->refCount = 1;
+        return cur;
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "No free buffer in pool");
+        return NULL;
+    }
+}
+
+
+int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifoBuffer_t *buffer)
+{
+    if (!buffer)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    buffer->refCount++;
+
+    return 0;
+}
+
+
+int ARSTREAM2_H264_AuFifoUnrefBuffer(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoBuffer_t *buffer)
+{
+    if ((!fifo) || (!buffer))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (buffer->refCount != 0)
+    {
+        buffer->refCount--;
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_TAG, "Ref count is already null, this should not happen!");
+    }
+
+    if (buffer->refCount == 0)
+    {
+        if (fifo->bufferFree)
+        {
+            fifo->bufferFree->prev = buffer;
+            buffer->next = fifo->bufferFree;
+        }
+        else
+        {
+            buffer->next = NULL;
+        }
+        fifo->bufferFree = buffer;
+        buffer->prev = NULL;
+    }
 
     return 0;
 }
@@ -412,10 +578,10 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoPopFreeItem(ARSTREAM2_H264_AuF
         return NULL;
     }
 
-    if (fifo->free)
+    if (fifo->itemFree)
     {
-        ARSTREAM2_H264_AuFifoItem_t* cur = fifo->free;
-        fifo->free = cur->next;
+        ARSTREAM2_H264_AuFifoItem_t* cur = fifo->itemFree;
+        fifo->itemFree = cur->next;
         if (cur->next) cur->next->prev = NULL;
         cur->prev = NULL;
         cur->next = NULL;
@@ -437,85 +603,79 @@ int ARSTREAM2_H264_AuFifoPushFreeItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H
         return -1;
     }
 
-    if (fifo->free)
+    if (fifo->itemFree)
     {
-        fifo->free->prev = item;
-        item->next = fifo->free;
+        fifo->itemFree->prev = item;
+        item->next = fifo->itemFree;
     }
     else
     {
         item->next = NULL;
     }
-    fifo->free = item;
+    fifo->itemFree = item;
     item->prev = NULL;
 
     return 0;
 }
 
 
-int ARSTREAM2_H264_AuFifoEnqueueItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoItem_t *item)
+int ARSTREAM2_H264_AuFifoEnqueueItem(ARSTREAM2_H264_AuFifoQueue_t *queue, ARSTREAM2_H264_AuFifoItem_t *item)
 {
-    if ((!fifo) || (!item))
+    if ((!queue) || (!item))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
 
-    if (fifo->count >= fifo->size)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO is full");
-        return -2;
-    }
-
     item->next = NULL;
-    if (fifo->tail)
+    if (queue->tail)
     {
-        fifo->tail->next = item;
-        item->prev = fifo->tail;
+        queue->tail->next = item;
+        item->prev = queue->tail;
     }
     else
     {
         item->prev = NULL;
     }
-    fifo->tail = item;
-    if (!fifo->head)
+    queue->tail = item;
+    if (!queue->head)
     {
-        fifo->head = item;
+        queue->head = item;
     }
-    fifo->count++;
+    queue->count++;
 
     return 0;
 }
 
 
-ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuFifo_t *fifo)
+ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuFifoQueue_t *queue)
 {
     ARSTREAM2_H264_AuFifoItem_t* cur;
 
-    if (!fifo)
+    if (!queue)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return NULL;
     }
 
-    if ((!fifo->head) || (!fifo->count))
+    if ((!queue->head) || (!queue->count))
     {
         //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "FIFO is empty");
         return NULL;
     }
 
-    cur = fifo->head;
+    cur = queue->head;
     if (cur->next)
     {
         cur->next->prev = NULL;
-        fifo->head = cur->next;
-        fifo->count--;
+        queue->head = cur->next;
+        queue->count--;
     }
     else
     {
-        fifo->head = NULL;
-        fifo->count = 0;
-        fifo->tail = NULL;
+        queue->head = NULL;
+        queue->count = 0;
+        queue->tail = NULL;
     }
     cur->prev = NULL;
     cur->next = NULL;
@@ -524,17 +684,31 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuF
 }
 
 
-int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo)
+int ARSTREAM2_H264_AuFifoFlushQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoQueue_t *queue)
 {
     ARSTREAM2_H264_AuFifoItem_t* item;
-    int count = 0;
+    int count = 0, fifoErr;
+
+    if ((!fifo) || (!queue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
 
     do
     {
-        item = ARSTREAM2_H264_AuFifoDequeueItem(fifo);
+        item = ARSTREAM2_H264_AuFifoDequeueItem(queue);
         if (item)
         {
-            int fifoErr = ARSTREAM2_H264_AuFifoPushFreeItem(fifo, item);
+            if (item->au.buffer)
+            {
+                fifoErr = ARSTREAM2_H264_AuFifoUnrefBuffer(fifo, item->au.buffer);
+                if (fifoErr != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoUnrefBuffer() failed (%d)", fifoErr);
+                }
+            }
+            fifoErr = ARSTREAM2_H264_AuFifoPushFreeItem(fifo, item);
             if (fifoErr != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoPushFreeItem() failed (%d)", fifoErr);
@@ -543,6 +717,53 @@ int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo)
         }
     }
     while (item);
+
+    return count;
+}
+
+
+int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo)
+{
+    ARSTREAM2_H264_AuFifoQueue_t *queue;
+    ARSTREAM2_H264_AuFifoItem_t* item;
+    int count = 0, fifoErr;
+
+    if (!fifo)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (!fifo->queue)
+    {
+        return 0;
+    }
+
+    for (queue = fifo->queue; queue; queue = queue->next)
+    {
+        do
+        {
+            item = ARSTREAM2_H264_AuFifoDequeueItem(queue);
+            if (item)
+            {
+                if (item->au.buffer)
+                {
+                    fifoErr = ARSTREAM2_H264_AuFifoUnrefBuffer(fifo, item->au.buffer);
+                    if (fifoErr != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoUnrefBuffer() failed (%d)", fifoErr);
+                    }
+                }
+                int fifoErr = ARSTREAM2_H264_AuFifoPushFreeItem(fifo, item);
+                if (fifoErr != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoPushFreeItem() failed (%d)", fifoErr);
+                }
+                count++;
+            }
+        }
+        while (item);
+    }
 
     return count;
 }
@@ -650,12 +871,12 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_Acces
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size)
 {
-    if (au->auSize + size > au->bufferSize)
+    if (au->auSize + size > au->buffer->auBufferSize)
     {
         unsigned int newSize = au->auSize + size;
-        if (newSize < au->bufferSize + ARSTREAM2_H264_AU_MIN_REALLOC_SIZE) newSize = au->bufferSize + ARSTREAM2_H264_AU_MIN_REALLOC_SIZE;
-        au->buffer = realloc(au->buffer, newSize);
-        if (au->buffer == NULL)
+        if (newSize < au->buffer->auBufferSize + ARSTREAM2_H264_AU_MIN_REALLOC_SIZE) newSize = au->buffer->auBufferSize + ARSTREAM2_H264_AU_MIN_REALLOC_SIZE;
+        au->buffer->auBuffer = realloc(au->buffer->auBuffer, newSize);
+        if (au->buffer->auBuffer == NULL)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Access unit realloc failed (size %u)", newSize);
             return -1;
