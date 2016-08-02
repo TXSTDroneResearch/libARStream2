@@ -56,3 +56,10 @@ ifeq ("$(TARGET_OS)","linux")
 endif
 
 include $(BUILD_LIBRARY)
+
+
+ifeq ("$(TARGET_OS_FLAVOUR)","native")
+
+include $(LOCAL_PATH)/test/atom.mk
+
+endif
