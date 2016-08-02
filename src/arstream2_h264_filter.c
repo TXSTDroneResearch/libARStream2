@@ -60,6 +60,14 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
 
     if (ret == 0)
     {
+        filter->sync = 1;
+        if (filter->generateFirstGrayIFrame)
+        {
+            filter->firstGrayIFramePending = 1;
+        }
+
+        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK");
+
         /* SPS/PPS callback */
         if (filter->spsPpsCallback)
         {
@@ -69,14 +77,6 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "spsPpsCallback failed: %s", ARSTREAM2_Error_ToString(cbRet));
             }
         }
-
-        filter->sync = 1;
-        if (filter->generateFirstGrayIFrame)
-        {
-            filter->firstGrayIFramePending = 1;
-        }
-
-        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK");
     }
 
     return ret;
