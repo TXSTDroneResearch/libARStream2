@@ -384,6 +384,17 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
 
     if (ret == 0)
     {
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
+
+        if (!filter->sync)
+        {
+            //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu No sync, abort", filter->currentAuOutputIndex, au->ntpTimestamp);
+            ret = -2;
+        }
+    }
+
+    if (ret == 0)
+    {
         if (!filter->generateSkippedPSlices)
         {
             //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
@@ -393,17 +404,6 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
                        ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
-            ret = -2;
-        }
-    }
-
-    if (ret == 0)
-    {
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
-
-        if (!filter->sync)
-        {
-            //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu No sync, abort", filter->currentAuOutputIndex, au->ntpTimestamp);
             ret = -2;
         }
     }
@@ -595,6 +595,17 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 
     if (ret == 0)
     {
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
+
+        if (!filter->sync)
+        {
+            //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu No sync, abort", filter->currentAuOutputIndex, au->ntpTimestamp);
+            ret = -2;
+        }
+    }
+
+    if (ret == 0)
+    {
         if (!filter->generateSkippedPSlices)
         {
             //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
@@ -604,17 +615,6 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
                        ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
-            ret = -2;
-        }
-    }
-
-    if (ret == 0)
-    {
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
-
-        if (!filter->sync)
-        {
-            //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu No sync, abort", filter->currentAuOutputIndex, au->ntpTimestamp);
             ret = -2;
         }
     }

@@ -140,7 +140,7 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                             filter->currentAuSlicesAllI = 0;
                         }
                         filter->currentAuCurrentSliceFirstMb = sliceInfo.first_mb_in_slice;
-                        if (filter->currentAuFrameNum == -1)
+                        if ((filter->sync) && (filter->currentAuFrameNum == -1))
                         {
                             filter->currentAuFrameNum = sliceInfo.frame_num;
                             if ((filter->currentAuIsRef) && (filter->previousAuFrameNum != -1) && (filter->currentAuFrameNum != (filter->previousAuFrameNum + 1) % filter->maxFrameNum))
@@ -260,7 +260,7 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuInferredPreviousSliceFirstMb = 0;
     filter->currentAuCurrentSliceFirstMb = -1;
     filter->previousSliceType = ARSTREAM2_H264_SLICE_TYPE_NON_VCL;
-    if (filter->currentAuMacroblockStatus)
+    if ((filter->sync) && (filter->currentAuMacroblockStatus))
     {
         memset(filter->currentAuMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
     }
@@ -300,7 +300,7 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
             sliceFirstMb = filter->currentAuInferredPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
             sliceMbCount = (filter->currentAuInferredSliceMbCount > 0) ? filter->currentAuInferredSliceMbCount : 0;
         }
-        if ((filter->currentAuMacroblockStatus) && (sliceMbCount > 0))
+        if ((filter->sync) && (filter->currentAuMacroblockStatus) && (sliceFirstMb > 0) && (sliceMbCount > 0))
         {
             int i, idx;
             uint8_t status;
