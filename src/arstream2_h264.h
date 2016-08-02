@@ -303,7 +303,11 @@ typedef int (*ARSTREAM2_H264_ReceiverAuCallback_t)(ARSTREAM2_H264_AuFifoItem_t *
 
 void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu);
 
+void ARSTREAM2_H264_NaluCopy(ARSTREAM2_H264_NalUnit_t *dst, const ARSTREAM2_H264_NalUnit_t *src);
+
 void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au);
+
+void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H264_AccessUnit_t *src);
 
 int ARSTREAM2_H264_NaluFifoInit(ARSTREAM2_H264_NaluFifo_t *fifo, int maxCount);
 
@@ -352,6 +356,10 @@ int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM
                                        ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem);
 
 ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au);
+
+ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_AuFifo_t *auFifo,
+                                                                ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                                ARSTREAM2_H264_AuFifoItem_t *auItem);
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size);
 

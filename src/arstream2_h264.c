@@ -47,6 +47,35 @@ void ARSTREAM2_H264_NaluReset(ARSTREAM2_H264_NalUnit_t *nalu)
 }
 
 
+void ARSTREAM2_H264_NaluCopy(ARSTREAM2_H264_NalUnit_t *dst, const ARSTREAM2_H264_NalUnit_t *src)
+{
+    if ((!src) || (!dst))
+    {
+        return;
+    }
+
+    dst->inputTimestamp = src->inputTimestamp;
+    dst->timeoutTimestamp = src->timeoutTimestamp;
+    dst->ntpTimestamp = src->ntpTimestamp;
+    dst->ntpTimestampLocal = src->ntpTimestampLocal;
+    dst->extRtpTimestamp = src->extRtpTimestamp;
+    dst->rtpTimestamp = src->rtpTimestamp;
+    dst->isLastInAu = src->isLastInAu;
+    dst->seqNumForcedDiscontinuity = src->seqNumForcedDiscontinuity;
+    dst->missingPacketsBefore = src->missingPacketsBefore;
+    dst->importance = src->importance;
+    dst->priority = src->priority;
+    dst->metadata = src->metadata;
+    dst->metadataSize = src->metadataSize;
+    dst->nalu = src->nalu;
+    dst->naluSize = src->naluSize;
+    dst->auUserPtr = src->auUserPtr;
+    dst->naluUserPtr = src->naluUserPtr;
+    dst->naluType = src->naluType;
+    dst->sliceType = src->sliceType;
+}
+
+
 void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
 {
     if (!au)
@@ -67,6 +96,27 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->naluCount = 0;
     au->naluHead = NULL;
     au->naluTail = NULL;
+}
+
+
+void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H264_AccessUnit_t *src)
+{
+    if ((!src) || (!dst))
+    {
+        return;
+    }
+
+    dst->auSize = src->auSize;
+    dst->metadataSize = src->metadataSize;
+    dst->userDataSize = src->userDataSize;
+    dst->syncType = src->syncType;
+    dst->inputTimestamp = src->inputTimestamp;
+    dst->timeoutTimestamp = src->timeoutTimestamp;
+    dst->ntpTimestamp = src->ntpTimestamp;
+    dst->ntpTimestampLocal = src->ntpTimestampLocal;
+    dst->extRtpTimestamp = src->extRtpTimestamp;
+    dst->rtpTimestamp = src->rtpTimestamp;
+    dst->naluCount = 0;
 }
 
 
@@ -866,6 +916,75 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_Acces
     cur->next = NULL;
 
     return cur;
+}
+
+
+ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_AuFifo_t *auFifo,
+                                                                ARSTREAM2_H264_NaluFifo_t *naluFifo,
+                                                                ARSTREAM2_H264_AuFifoItem_t *auItem)
+{
+    int ret = 0, needFree = 0;
+    ARSTREAM2_H264_AuFifoItem_t *auCopyItem;
+
+    auCopyItem = ARSTREAM2_H264_AuFifoPopFreeItem(auFifo);
+    if (auCopyItem)
+    {
+        ARSTREAM2_H264_AuCopy(&auCopyItem->au, &auItem->au);
+        ARSTREAM2_H264_NaluFifoItem_t *naluItem, *naluCopyItem;
+        for (naluItem = auItem->au.naluHead; naluItem; naluItem = naluItem->next)
+        {
+            naluCopyItem = ARSTREAM2_H264_NaluFifoPopFreeItem(naluFifo);
+            if (naluCopyItem)
+            {
+                ARSTREAM2_H264_NaluCopy(&naluCopyItem->nalu, &naluItem->nalu);
+                ret = ARSTREAM2_H264_AuEnqueueNalu(&auCopyItem->au, naluCopyItem);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to enqueue NALU item in AU");
+                    ret = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, naluCopyItem);
+                    if (ret != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to push free FIFO item");
+                    }
+                    needFree = 1;
+                }
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to pop free item from the NALU FIFO");
+                ret = -1;
+                needFree = 1;
+            }
+        }
+        auCopyItem->au.buffer = auItem->au.buffer;
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to pop free item from the AU FIFO");
+        ret = -1;
+    }
+
+    if (needFree)
+    {
+        ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+        while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auCopyItem->au)) != NULL)
+        {
+            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, naluItem);
+            if (ret != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
+            }
+        }
+        ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, auCopyItem);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
+        }
+        needFree = 0;
+        auCopyItem = NULL;
+    }
+
+    return auCopyItem;
 }
 
 
