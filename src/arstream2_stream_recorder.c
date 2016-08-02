@@ -781,6 +781,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Free(ARSTREAM2_StreamRecorder_Handle *
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_STREAM_RECORDER_TAG, "Thread is stopped");
         canDelete = 1;
     }
+    ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
 
     if (canDelete == 1)
     {
@@ -797,7 +798,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Free(ARSTREAM2_StreamRecorder_Handle *
     }
     else
     {
-        ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Call ARSTREAM2_StreamRecorder_Stop before calling this function");
     }
 
