@@ -221,30 +221,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
 
 
-int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *width, int *height, float *framerate);
-
-
-/**
- * @brief Get the frame macroblocks status.
- *
- * This function returns pointers to a macroblock status array for the current frame and image
- * macroblock width and height.
- * Macroblock statuses are of type eARSTREAM2_H264_FILTER_MACROBLOCK_STATUS.
- * This function must be called only within the ARSTREAM2_H264Filter_AuReadyCallback_t function.
- * The valididy of the data returned is only during the call to ARSTREAM2_H264Filter_AuReadyCallback_t
- * and the user must copy the macroblock status array to its own buffer for further use.
- *
- * @param filterHandle Instance handle.
- * @param macroblocks Pointer to the macroblock status array.
- * @param mbWidth pointer to the image macroblock-width.
- * @param mbHeight pointer to the image macroblock-height.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS have not been received (no sync).
- * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if macroblocks status is not available.
- * @return an eARSTREAM2_ERROR error code if another error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
+int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *mbWidth, int *mbHeight, int *width, int *height, float *framerate);
 
 
 int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au);

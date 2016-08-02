@@ -197,6 +197,19 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                     /* output the access unit */
                     if (filter->auCallback)
                     {
+                        if (filter->currentAuMacroblockStatus)
+                        {
+                            err = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(&auItem->au, filter->mbCount);
+                            if (err == 0)
+                            {
+                                memcpy(auItem->au.buffer->mbStatusBuffer, filter->currentAuMacroblockStatus, filter->mbCount);
+                                auItem->au.mbStatusAvailable = 1;
+                            }
+                            else
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "MB status buffer is too small");
+                            }
+                        }
                         int err = filter->auCallback(auItem, filter->auCallbackUserPtr);
                         if (err != 0)
                         {

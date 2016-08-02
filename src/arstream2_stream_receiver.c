@@ -64,6 +64,9 @@ typedef struct ARSTREAM2_StreamReceiver_s
         void *getAuBufferCallbackUserPtr;
         ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback;
         void *auReadyCallbackUserPtr;
+        uint8_t *mbStatus;
+        int mbWidth;
+        int mbHeight;
 
     } appOutput;
 
@@ -876,7 +879,7 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_
         ARSTREAM2_StreamRecorder_Config_t recConfig;
         memset(&recConfig, 0, sizeof(ARSTREAM2_StreamRecorder_Config_t));
         recConfig.mediaFileName = streamReceiver->recorder.fileName;
-        int err = ARSTREAM2_H264Filter_GetVideoParams(streamReceiver->filter, &width, &height, &framerate);
+        int err = ARSTREAM2_H264Filter_GetVideoParams(streamReceiver->filter, NULL, NULL, &width, &height, &framerate);
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264Filter_GetVideoParams() failed (%d)",err);
@@ -1028,6 +1031,18 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
         {
             ARSTREAM2_H264_NaluFifoItem_t *naluItem;
 
+            if ((streamReceiver->appOutput.mbWidth == 0) || (streamReceiver->appOutput.mbHeight == 0))
+            {
+                int mbWidth = 0, mbHeight = 0;
+                int err = ARSTREAM2_H264Filter_GetVideoParams(streamReceiver->filter, &mbWidth, &mbHeight, NULL, NULL, NULL);
+                if (err != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264Filter_GetVideoParams() failed (%d)",err);
+                }
+                streamReceiver->appOutput.mbWidth = mbWidth;
+                streamReceiver->appOutput.mbHeight = mbHeight;
+            }
+
             if (running)
             {
                 eARSTREAM2_ERROR cbRet = ARSTREAM2_OK;
@@ -1059,6 +1074,8 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
                     ARSTREAM2_H264_AccessUnit_t *au = &auItem->au;
                     ARSTREAM2_H264_NaluFifoItem_t *naluItem;
                     unsigned int auSize = 0;
+
+                    streamReceiver->appOutput.mbStatus = au->buffer->mbStatusBuffer;
 
                     for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
                     {
@@ -1410,10 +1427,21 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_Str
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
+    ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
+    int appOutputRunning = streamReceiver->appOutput.running;
+    int callbackInProgress = streamReceiver->appOutput.callbackInProgress;
+    ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
+    if ((!appOutputRunning) || (!callbackInProgress))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid state");
+        return ARSTREAM2_ERROR_INVALID_STATE;
+    }
 
-    //TODO
+    if (macroblocks) *macroblocks = streamReceiver->appOutput.mbStatus;
+    if (mbWidth) *mbWidth = streamReceiver->appOutput.mbWidth;
+    if (mbHeight) *mbHeight = streamReceiver->appOutput.mbHeight;
 
-    return ARSTREAM2_H264Filter_GetFrameMacroblockStatus(streamReceiver->filter, macroblocks, mbWidth, mbHeight);
+    return ARSTREAM2_OK;
 }
 
 

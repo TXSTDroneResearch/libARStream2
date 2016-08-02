@@ -86,6 +86,7 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->auSize = 0;
     au->metadataSize = 0;
     au->userDataSize = 0;
+    au->mbStatusAvailable = 0;
     au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_NONE;
     au->inputTimestamp = 0;
     au->timeoutTimestamp = 0;
@@ -462,6 +463,8 @@ int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo)
             fifo->bufferPool[i].metadataBuffer = NULL;
             free(fifo->bufferPool[i].userDataBuffer);
             fifo->bufferPool[i].userDataBuffer = NULL;
+            free(fifo->bufferPool[i].mbStatusBuffer);
+            fifo->bufferPool[i].mbStatusBuffer = NULL;
         }
 
         free(fifo->bufferPool);
@@ -975,6 +978,11 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size)
 {
+    if ((!au) || (!au->buffer))
+    {
+        return -1;
+    }
+
     if (au->auSize + size > au->buffer->auBufferSize)
     {
         unsigned int newSize = au->auSize + size;
@@ -984,6 +992,36 @@ int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned 
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Access unit realloc failed (size %u)", newSize);
             return -1;
+        }
+        else
+        {
+            au->buffer->auBufferSize = newSize;
+        }
+    }
+
+    return 0;
+}
+
+
+int ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int mbCount)
+{
+    if ((!au) || (!au->buffer))
+    {
+        return -1;
+    }
+
+    if (mbCount * sizeof(uint8_t) > au->buffer->mbStatusBufferSize)
+    {
+        unsigned int newSize = mbCount * sizeof(uint8_t);
+        au->buffer->mbStatusBuffer = realloc(au->buffer->mbStatusBuffer, newSize);
+        if (au->buffer->mbStatusBuffer == NULL)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Access unit realloc failed (size %u)", newSize);
+            return -1;
+        }
+        else
+        {
+            au->buffer->mbStatusBufferSize = newSize;
         }
     }
 

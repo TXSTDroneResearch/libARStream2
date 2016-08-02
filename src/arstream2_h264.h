@@ -218,6 +218,8 @@ typedef struct ARSTREAM2_H264_AuFifoBuffer_s
     unsigned int metadataBufferSize;
     uint8_t *userDataBuffer;
     unsigned int userDataBufferSize;
+    uint8_t *mbStatusBuffer;
+    unsigned int mbStatusBufferSize;
 
     unsigned int refCount;
     struct ARSTREAM2_H264_AuFifoBuffer_s* prev;
@@ -235,6 +237,7 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     unsigned int auSize;
     unsigned int metadataSize;
     unsigned int userDataSize;
+    unsigned int mbStatusAvailable;
     eARSTREAM2_H264_AU_SYNC_TYPE syncType;
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
@@ -362,6 +365,8 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
                                                                 ARSTREAM2_H264_AuFifoItem_t *auItem);
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size);
+
+int ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int mbCount);
 
 
 #endif /* #ifndef _ARSTREAM2_H264_H_ */

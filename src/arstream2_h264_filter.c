@@ -452,6 +452,20 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
 
     if (!cancelAuOutput)
     {
+        if (filter->currentAuMacroblockStatus)
+        {
+            err = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(au, filter->mbCount);
+            if (err == 0)
+            {
+                memcpy(au->buffer->mbStatusBuffer, filter->currentAuMacroblockStatus, filter->mbCount);
+                au->mbStatusAvailable = 1;
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "MB status buffer is too small");
+            }
+        }
+
         ret = 1;
         filter->currentAuOutputIndex++;
     }
@@ -646,7 +660,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filt
 }
 
 
-int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *width, int *height, float *framerate)
+int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle, int *mbWidth, int *mbHeight, int *width, int *height, float *framerate)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
     int ret = 0;
@@ -656,55 +670,16 @@ int ARSTREAM2_H264Filter_GetVideoParams(ARSTREAM2_H264Filter_Handle filterHandle
         return -1;
     }
 
-    if ((!width) || (!height) || (!framerate))
-    {
-        return -1;
-    }
-
     if (!filter->sync)
     {
         return -1;
     }
 
-    *width = filter->mbWidth; //TODO
-    *height = filter->mbHeight; //TODO
-    *framerate = filter->framerate;
-
-    return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetFrameMacroblockStatus(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight)
-{
-    ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
-    int ret = ARSTREAM2_OK;
-
-    if (!filterHandle)
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    if ((!macroblocks) || (!mbWidth) || (!mbHeight))
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    if (!filter->sync)
-    {
-        ret = ARSTREAM2_ERROR_WAITING_FOR_SYNC;
-    }
-
-    if (!filter->currentAuMacroblockStatus)
-    {
-        ret = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
-    }
-
-    if (ret == ARSTREAM2_OK)
-    {
-        *macroblocks = filter->currentAuMacroblockStatus;
-        *mbWidth = filter->mbWidth;
-        *mbHeight = filter->mbHeight;
-    }
+    if (mbWidth) *mbWidth = filter->mbWidth; //TODO
+    if (mbHeight) *mbHeight = filter->mbHeight; //TODO
+    if (width) *width = filter->mbWidth * 16; //TODO
+    if (height) *height = filter->mbHeight * 16; //TODO
+    if (framerate) *framerate = filter->framerate;
 
     return ret;
 }
