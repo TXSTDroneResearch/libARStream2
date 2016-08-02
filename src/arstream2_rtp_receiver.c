@@ -1334,26 +1334,14 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             ARSAL_Mutex_Destroy(&(retReceiver->naluBufferMutex));
         }
-        if (retReceiver->rtcpMsgBuffer)
-        {
-            free(retReceiver->rtcpMsgBuffer);
-        }
         if (packetFifoWasCreated == 1)
         {
             ARSTREAM2_RTP_PacketFifoFree(&retReceiver->packetFifo);
         }
-        if ((retReceiver) && (retReceiver->net.serverAddr))
-        {
-            free(retReceiver->net.serverAddr);
-        }
-        if ((retReceiver) && (retReceiver->net.mcastAddr))
-        {
-            free(retReceiver->net.mcastAddr);
-        }
-        if ((retReceiver) && (retReceiver->net.mcastIfaceAddr))
-        {
-            free(retReceiver->net.mcastIfaceAddr);
-        }
+        free(retReceiver->rtcpMsgBuffer);
+        free(retReceiver->net.serverAddr);
+        free(retReceiver->net.mcastAddr);
+        free(retReceiver->net.mcastIfaceAddr);
 
 #if BUILD_LIBMUX
         if ((retReceiver) && (retReceiver->mux.mux))
@@ -1429,10 +1417,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             for (i = 0; i < (*receiver)->naluBufferCount; i++)
             {
                 ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = &(*receiver)->naluBuffer[i];
-                if (naluBuf->naluBuffer)
-                {
-                    free(naluBuf->naluBuffer);
-                }
+                free(naluBuf->naluBuffer);
             }
 
 #ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
@@ -1467,22 +1452,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
             ARSTREAM2_RTP_PacketFifoFree(&(*receiver)->packetFifo);
-            if ((*receiver)->rtcpMsgBuffer)
-            {
-                free((*receiver)->rtcpMsgBuffer);
-            }
-            if ((*receiver)->net.serverAddr)
-            {
-                free((*receiver)->net.serverAddr);
-            }
-            if ((*receiver)->net.mcastAddr)
-            {
-                free((*receiver)->net.mcastAddr);
-            }
-            if ((*receiver)->net.mcastIfaceAddr)
-            {
-                free((*receiver)->net.mcastIfaceAddr);
-            }
+            free((*receiver)->rtcpMsgBuffer);
+            free((*receiver)->net.serverAddr);
+            free((*receiver)->net.mcastAddr);
+            free((*receiver)->net.mcastIfaceAddr);
 
 #if BUILD_LIBMUX
             if ((*receiver)->mux.mux)

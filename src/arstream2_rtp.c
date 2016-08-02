@@ -135,19 +135,13 @@ int ARSTREAM2_RTP_PacketFifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo)
     {
         for (i = 0; i < fifo->size; i++)
         {
-            if (fifo->pool[i].packet.buffer)
-            {
-                free(fifo->pool[i].packet.buffer);
-                fifo->pool[i].packet.buffer = NULL;
-            }
+            free(fifo->pool[i].packet.buffer);
+            fifo->pool[i].packet.buffer = NULL;
         }
 
         free(fifo->pool);
     }
-    if (fifo->msgVec)
-    {
-        free(fifo->msgVec);
-    }
+    free(fifo->msgVec);
     memset(fifo, 0, sizeof(ARSTREAM2_RTP_PacketFifo_t));
 
     return 0;

@@ -3791,10 +3791,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHan
 
     for (i = 0; i < ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT; i++)
     {
-        if (parser->pUserDataBuf[i])
-        {
-            free(parser->pUserDataBuf[i]);
-        }
+        free(parser->pUserDataBuf[i]);
     }
 
     free(parser);

@@ -949,30 +949,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             ARSAL_Mutex_Destroy(&(retSender->naluFifoMutex));
         }
-        if (retSender->rtcpMsgBuffer)
-        {
-            free(retSender->rtcpMsgBuffer);
-        }
-        if (retSender->canonicalName)
-        {
-            free(retSender->canonicalName);
-        }
-        if (retSender->friendlyName)
-        {
-            free(retSender->friendlyName);
-        }
-        if (retSender->clientAddr)
-        {
-            free(retSender->clientAddr);
-        }
-        if (retSender->mcastAddr)
-        {
-            free(retSender->mcastAddr);
-        }
-        if (retSender->mcastIfaceAddr)
-        {
-            free(retSender->mcastIfaceAddr);
-        }
+        free(retSender->rtcpMsgBuffer);
+        free(retSender->canonicalName);
+        free(retSender->friendlyName);
+        free(retSender->clientAddr);
+        free(retSender->mcastAddr);
+        free(retSender->mcastIfaceAddr);
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
         if (retSender->fMonitorOut)
         {
@@ -1046,26 +1028,11 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
                 close((*sender)->controlSocket);
                 (*sender)->controlSocket = -1;
             }
-            if ((*sender)->rtcpMsgBuffer)
-            {
-                free((*sender)->rtcpMsgBuffer);
-            }
-            if ((*sender)->friendlyName)
-            {
-                free((*sender)->friendlyName);
-            }
-            if ((*sender)->clientAddr)
-            {
-                free((*sender)->clientAddr);
-            }
-            if ((*sender)->mcastAddr)
-            {
-                free((*sender)->mcastAddr);
-            }
-            if ((*sender)->mcastIfaceAddr)
-            {
-                free((*sender)->mcastIfaceAddr);
-            }
+            free((*sender)->rtcpMsgBuffer);
+            free((*sender)->friendlyName);
+            free((*sender)->clientAddr);
+            free((*sender)->mcastAddr);
+            free((*sender)->mcastIfaceAddr);
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
             if ((*sender)->fMonitorOut)
             {

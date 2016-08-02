@@ -171,10 +171,7 @@ int ARSTREAM2_H264_NaluFifoFree(ARSTREAM2_H264_NaluFifo_t *fifo)
         return -1;
     }
 
-    if (fifo->pool)
-    {
-        free(fifo->pool);
-    }
+    free(fifo->pool);
     memset(fifo, 0, sizeof(ARSTREAM2_H264_NaluFifo_t));
 
     return 0;
@@ -453,30 +450,18 @@ int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo)
         return -1;
     }
 
-    if (fifo->itemPool)
-    {
-        free(fifo->itemPool);
-    }
+    free(fifo->itemPool);
 
     if (fifo->bufferPool)
     {
         for (i = 0; i < fifo->bufferPoolSize; i++)
         {
-            if (fifo->bufferPool[i].auBuffer)
-            {
-                free(fifo->bufferPool[i].auBuffer);
-                fifo->bufferPool[i].auBuffer = NULL;
-            }
-            if (fifo->bufferPool[i].metadataBuffer)
-            {
-                free(fifo->bufferPool[i].metadataBuffer);
-                fifo->bufferPool[i].metadataBuffer = NULL;
-            }
-            if (fifo->bufferPool[i].userDataBuffer)
-            {
-                free(fifo->bufferPool[i].userDataBuffer);
-                fifo->bufferPool[i].userDataBuffer = NULL;
-            }
+            free(fifo->bufferPool[i].auBuffer);
+            fifo->bufferPool[i].auBuffer = NULL;
+            free(fifo->bufferPool[i].metadataBuffer);
+            fifo->bufferPool[i].metadataBuffer = NULL;
+            free(fifo->bufferPool[i].userDataBuffer);
+            fifo->bufferPool[i].userDataBuffer = NULL;
         }
 
         free(fifo->bufferPool);

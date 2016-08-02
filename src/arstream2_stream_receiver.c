@@ -398,9 +398,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
     ARSAL_Mutex_Destroy(&(streamReceiver->recorder.mutex));
     ARSAL_Mutex_Destroy(&(streamReceiver->fifoMutex));
-    if (streamReceiver->recorder.fileName) free(streamReceiver->recorder.fileName);
-    if (streamReceiver->pSps) free(streamReceiver->pSps);
-    if (streamReceiver->pPps) free(streamReceiver->pPps);
+    free(streamReceiver->recorder.fileName);
+    free(streamReceiver->pSps);
+    free(streamReceiver->pPps);
 
     free(streamReceiver);
     *streamReceiverHandle = NULL;
@@ -1583,7 +1583,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_
         ret = ARSTREAM2_ERROR_INVALID_STATE;
     }
 
-    if (streamReceiver->recorder.fileName) free(streamReceiver->recorder.fileName);
+    free(streamReceiver->recorder.fileName);
     streamReceiver->recorder.fileName = NULL;
 
     return ret;

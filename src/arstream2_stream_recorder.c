@@ -409,10 +409,7 @@ static int ARSTREAM2_StreamRecorder_FifoFree(ARSTREAM2_StreamRecorder_AuFifo_t *
         return -1;
     }
 
-    if (fifo->pool)
-    {
-        free(fifo->pool);
-    }
+    free(fifo->pool);
     memset(fifo, 0, sizeof(ARSTREAM2_StreamRecorder_AuFifo_t));
 
     return 0;
@@ -790,8 +787,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Free(ARSTREAM2_StreamRecorder_Handle *
         ARSAL_Mutex_Destroy(&(streamRecorder->fifoMutex));
         ARSAL_Mutex_Destroy(&(streamRecorder->mutex));
         if (streamRecorder->outputFile) fclose(streamRecorder->outputFile);
-        if (streamRecorder->recordingMetadata) free(streamRecorder->recordingMetadata);
-        if (streamRecorder->savedMetadata) free(streamRecorder->savedMetadata);
+        free(streamRecorder->recordingMetadata);
+        free(streamRecorder->savedMetadata);
 
         free(streamRecorder);
         *streamRecorderHandle = NULL;
@@ -1017,10 +1014,10 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                         }
                         if (ret != 0)
                         {
-                            if (streamRecorder->recordingMetadata) free(streamRecorder->recordingMetadata);
+                            free(streamRecorder->recordingMetadata);
                             streamRecorder->recordingMetadata = NULL;
                             streamRecorder->recordingMetadataSize = 0;
-                            if (streamRecorder->savedMetadata) free(streamRecorder->savedMetadata);
+                            free(streamRecorder->savedMetadata);
                             streamRecorder->savedMetadata = NULL;
                             streamRecorder->savedMetadataSize = 0;
                         }

@@ -919,10 +919,10 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
     ARSTREAM2_H264Parser_Free(filter->parser);
     ARSTREAM2_H264Writer_Free(filter->writer);
 
-    if (filter->currentAuMacroblockStatus) free(filter->currentAuMacroblockStatus);
-    if (filter->currentAuRefMacroblockStatus) free(filter->currentAuRefMacroblockStatus);
-    if (filter->pSps) free(filter->pSps);
-    if (filter->pPps) free(filter->pPps);
+    free(filter->currentAuMacroblockStatus);
+    free(filter->currentAuRefMacroblockStatus);
+    free(filter->pSps);
+    free(filter->pPps);
 #ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
     if (filter->fStatsOut) fclose(filter->fStatsOut);
 #endif
