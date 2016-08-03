@@ -26,7 +26,7 @@
 #include <math.h>
 
 #include <libARStream2/arstream2_error.h>
-#include <libARStream2/arstream2_rtp_sender.h>
+#include "arstream2_rtp_sender.h"
 #include "arstream2_rtp.h"
 #include "arstream2_rtp_h264.h"
 #include "arstream2_rtcp.h"

@@ -38,6 +38,7 @@ LOCAL_SRC_FILES := \
 	src/arstream2_rtp_h264.c \
 	src/arstream2_rtcp.c \
 	src/arstream2_stream_recorder.c \
+	src/arstream2_stream_sender.c \
 	src/arstream2_stream_receiver.c
 
 LOCAL_INSTALL_HEADERS := \
@@ -45,7 +46,7 @@ LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_h264_parser.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_sei.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_writer.h:usr/include/libARStream2/ \
-	Includes/libARStream2/arstream2_rtp_sender.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_stream_sender.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/
 
 ifeq ("$(TARGET_OS)","linux")

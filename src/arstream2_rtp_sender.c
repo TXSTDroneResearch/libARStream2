@@ -18,7 +18,7 @@
 #include <fcntl.h>
 #include <math.h>
 
-#include <libARStream2/arstream2_rtp_sender.h>
+#include "arstream2_rtp_sender.h"
 #include "arstream2_rtp.h"
 #include "arstream2_rtp_h264.h"
 #include "arstream2_rtcp.h"
@@ -120,9 +120,9 @@ struct ARSTREAM2_RtpSender_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
-    ARSTREAM2_RtpSender_ReceiverReportCallback_t receiverReportCallback;
+    ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;
     void *receiverReportCallbackUserPtr;
-    ARSTREAM2_RtpSender_DisconnectionCallback_t disconnectionCallback;
+    ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;
     void *disconnectionCallbackUserPtr;
     int naluFifoSize;
     int maxBitrate;
@@ -1010,7 +1010,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, uint64_t inputTime)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, uint64_t inputTime)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int res;
@@ -1086,7 +1086,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int k, res;
@@ -1287,8 +1287,8 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 
                 if ((gotReceiverReport) && (sender->receiverReportCallback != NULL))
                 {
-                    ARSTREAM2_RtpSender_ReceiverReportData_t report;
-                    memset(&report, 0, sizeof(ARSTREAM2_RtpSender_ReceiverReportData_t));
+                    ARSTREAM2_StreamSender_ReceiverReportData_t report;
+                    memset(&report, 0, sizeof(ARSTREAM2_StreamSender_ReceiverReportData_t));
                     report.lastReceiverReportReceptionTimestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
                     report.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
                     report.interarrivalJitter = sender->rtcpSenderContext.interarrivalJitter;
@@ -1458,7 +1458,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             sender->rtpSenderContext.lastAuCallbackTimestamp = sender->rtpSenderContext.previousTimestamp;
 
             /* call the auCallback */
-            ((ARSTREAM2_RtpSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, sender->rtpSenderContext.previousAuUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
+            ((ARSTREAM2_StreamSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_STREAM_SENDER_STATUS_CANCELLED, sender->rtpSenderContext.previousAuUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
         }
     }
 
@@ -1555,7 +1555,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 
 
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
-                                                   ARSTREAM2_RtpSender_MonitoringData_t *monitoringData)
+                                                   ARSTREAM2_StreamSender_MonitoringData_t *monitoringData)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     uint64_t endTime, curTime, previousTime, acqToNetworkSum = 0, networkSum = 0, acqToNetworkVarSum = 0, networkVarSum = 0, packetSizeVarSum = 0;

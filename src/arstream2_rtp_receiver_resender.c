@@ -25,7 +25,7 @@
     } while (0)
 
 
-static void ARSTREAM2_RtpReceiverResender_NaluCallback(eARSTREAM2_RTP_SENDER_STATUS status, void *naluUserPtr, void *userPtr)
+static void ARSTREAM2_RtpReceiverResender_NaluCallback(eARSTREAM2_STREAM_SENDER_STATUS status, void *naluUserPtr, void *userPtr)
 {
     ARSTREAM2_RtpReceiver_RtpResender_t *resender = (ARSTREAM2_RtpReceiver_RtpResender_t *)userPtr;
     ARSTREAM2_RtpReceiver_t *receiver;
@@ -125,8 +125,8 @@ static int ARSTREAM2_RtpReceiver_ResendNalu(ARSTREAM2_RtpReceiver_t *receiver, u
 {
     int ret = 0, i;
     ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = NULL;
-    ARSTREAM2_RtpSender_H264NaluDesc_t nalu;
-    memset(&nalu, 0, sizeof(ARSTREAM2_RtpSender_H264NaluDesc_t));
+    ARSTREAM2_StreamSender_H264NaluDesc_t nalu;
+    memset(&nalu, 0, sizeof(ARSTREAM2_StreamSender_H264NaluDesc_t));
 
     /* remove the byte stream format start code */
     if (receiver->insertStartCodes)

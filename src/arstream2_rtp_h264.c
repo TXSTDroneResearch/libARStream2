@@ -11,7 +11,7 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <libARSAL/ARSAL_Print.h>
-#include <libARStream2/arstream2_rtp_sender.h>
+#include <libARStream2/arstream2_stream_sender.h>
 
 
 /**
@@ -449,7 +449,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                     context->lastAuCallbackTimestamp = context->previousTimestamp;
 
                     /* call the auCallback */
-                    ((ARSTREAM2_RtpSender_AuCallback_t)context->auCallback)(ARSTREAM2_RTP_SENDER_STATUS_SENT, context->previousAuUserPtr, context->auCallbackUserPtr);
+                    ((ARSTREAM2_StreamSender_AuCallback_t)context->auCallback)(ARSTREAM2_STREAM_SENDER_STATUS_SENT, context->previousAuUserPtr, context->auCallbackUserPtr);
                 }
             }
         }
@@ -546,7 +546,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
             /* call the naluCallback */
             if (context->naluCallback != NULL)
             {
-                ((ARSTREAM2_RtpSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.naluUserPtr, context->naluCallbackUserPtr);
+                ((ARSTREAM2_StreamSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_STREAM_SENDER_STATUS_SENT, nalu.naluUserPtr, context->naluCallbackUserPtr);
             }
         }
         else
@@ -571,7 +571,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
             /* call the naluCallback */
             if (context->naluCallback != NULL)
             {
-                ((ARSTREAM2_RtpSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, context->naluCallbackUserPtr);
+                ((ARSTREAM2_StreamSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_STREAM_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, context->naluCallbackUserPtr);
             }
         }
 
@@ -583,7 +583,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                 context->lastAuCallbackTimestamp = nalu.ntpTimestamp;
 
                 /* call the auCallback */
-                ((ARSTREAM2_RtpSender_AuCallback_t)context->auCallback)(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.auUserPtr, context->auCallbackUserPtr);
+                ((ARSTREAM2_StreamSender_AuCallback_t)context->auCallback)(ARSTREAM2_STREAM_SENDER_STATUS_SENT, nalu.auUserPtr, context->auCallbackUserPtr);
             }
         }
 
@@ -626,7 +626,7 @@ int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
         /* call the naluCallback */
         if (context->naluCallback != NULL)
         {
-            ((ARSTREAM2_RtpSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_RTP_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, context->naluCallbackUserPtr);
+            ((ARSTREAM2_StreamSender_NaluCallback_t)context->naluCallback)(ARSTREAM2_STREAM_SENDER_STATUS_CANCELLED, nalu.naluUserPtr, context->naluCallbackUserPtr);
         }
 
         /* last NALU in the Access Unit: call the auCallback */
@@ -637,7 +637,7 @@ int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
                 context->lastAuCallbackTimestamp = nalu.ntpTimestamp;
 
                 /* call the auCallback */
-                ((ARSTREAM2_RtpSender_AuCallback_t)context->auCallback)(ARSTREAM2_RTP_SENDER_STATUS_SENT, nalu.auUserPtr, context->auCallbackUserPtr);
+                ((ARSTREAM2_StreamSender_AuCallback_t)context->auCallback)(ARSTREAM2_STREAM_SENDER_STATUS_SENT, nalu.auUserPtr, context->auCallbackUserPtr);
             }
         }
     }
