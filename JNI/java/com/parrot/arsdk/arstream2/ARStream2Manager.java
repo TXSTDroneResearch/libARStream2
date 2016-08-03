@@ -2,6 +2,7 @@ package com.parrot.arsdk.arstream2;
 
 import com.parrot.mux.Mux;
 import android.os.Process;
+import android.os.Build;
 import android.util.Log;
 
 public class ARStream2Manager
@@ -11,10 +12,11 @@ public class ARStream2Manager
     private final Thread networkThread;
     private final Thread outputThread;
 
-    public ARStream2Manager(Mux mux, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
+    public ARStream2Manager(Mux mux, String canonicalName, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
+        String friendlyName = Build.MODEL + " " + Build.DEVICE + " " + canonicalName;
         Mux.Ref muxRef = mux.newMuxRef();
-        this.nativeRef = nativeMuxInit(muxRef.getCPtr(), maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
+        this.nativeRef = nativeMuxInit(muxRef.getCPtr(), canonicalName, friendlyName, maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
         muxRef.release();
         this.networkThread = new Thread(new Runnable()
         {
@@ -37,10 +39,11 @@ public class ARStream2Manager
     }
 
     public ARStream2Manager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
-                         int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
+                         String canonicalName, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
+        String friendlyName = Build.MODEL + " " + Build.DEVICE + " " + canonicalName;
         this.nativeRef = nativeNetInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
-                maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
+                canonicalName, friendlyName, maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
         this.networkThread = new Thread(new Runnable()
         {
             @Override
@@ -109,11 +112,11 @@ public class ARStream2Manager
 
     private native long nativeNetInit(String serverAddress, int serverStreamPort, int serverControlPort,
                                       int clientStreamPort, int clientControlPort,
-                                      int maxPacketSize, int maxBitrate, int maxLatency,
-                                      int maxNetworkLatency);
+                                      String canonicalName, String friendlyName, int maxPacketSize,
+                                      int maxBitrate, int maxLatency, int maxNetworkLatency);
 
-    private native long nativeMuxInit(long mux, int maxPacketSize, int maxBitrate, int maxLatency,
-                                      int maxNetworkLatency);
+    private native long nativeMuxInit(long mux, String canonicalName, String friendlyName, int maxPacketSize,
+                                      int maxBitrate, int maxLatency, int maxNetworkLatency);
 
     private native boolean nativeStop(long nativeRef);
 

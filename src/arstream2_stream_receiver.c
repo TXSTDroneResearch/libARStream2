@@ -272,6 +272,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         memset(&receiver_mux_config, 0, sizeof(receiver_mux_config));
 
 
+        receiverConfig.canonicalName = config->canonicalName;
+        receiverConfig.friendlyName = config->friendlyName;
         receiverConfig.auFifo = &(streamReceiver->auFifo);
         receiverConfig.naluFifo = &(streamReceiver->naluFifo);
         receiverConfig.fifoMutex = &(streamReceiver->fifoMutex);

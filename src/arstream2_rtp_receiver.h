@@ -108,6 +108,8 @@ typedef struct ARSTREAM2_RtpReceiver_MuxConfig_t
  */
 typedef struct ARSTREAM2_RtpReceiver_Config_t
 {
+    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
+    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSAL_Mutex_t *fifoMutex;
@@ -242,6 +244,8 @@ struct ARSTREAM2_RtpReceiver_t {
     ARSTREAM2_RTPH264_ReceiverContext_t rtph264ReceiverContext;
     ARSTREAM2_RTCP_ReceiverContext_t rtcpReceiverContext;
 
+    char *canonicalName;
+    char *friendlyName;
     int maxBitrate;
     int maxLatencyMs;
     int maxNetworkLatencyMs;

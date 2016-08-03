@@ -17,19 +17,6 @@
 #define ARSTREAM2_RTCP_TAG "ARSTREAM2_Rtcp"
 
 
-static const char *ARSTREAM2_RTCP_SdesItemName[8] =
-{
-    "CNAME",
-    "NAME",
-    "EMAIL",
-    "PHONE",
-    "LOC",
-    "TOOL",
-    "NOTE",
-    "PRIV",
-};
-
-
 int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize, int *receptionReportCount, unsigned int *size)
 {
     if (!buffer)
@@ -397,8 +384,6 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsign
 
 int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
 {
-    uint32_t ssrc;
-    const uint8_t *ptr = (uint8_t*)sdes + 4;
 
     if (!sdes)
     {
@@ -421,7 +406,6 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
 
     uint8_t sc = sdes->flags & 0x1F;
     uint16_t length = ntohs(sdes->length);
-    int remLength = length * 4, i;
 
     if (length < sc)
     {
@@ -429,6 +413,22 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
         return -1;
     }
 
+#if 0 // uncomment to log the SDES values received
+    static const char *ARSTREAM2_RTCP_SdesItemName[8] =
+    {
+        "CNAME",
+        "NAME",
+        "EMAIL",
+        "PHONE",
+        "LOC",
+        "TOOL",
+        "NOTE",
+        "PRIV",
+    };
+
+    const uint8_t *ptr = (uint8_t*)sdes + 4;
+    uint32_t ssrc;
+    int remLength = length * 4, i;
     for (i = 0; i < sc; i++)
     {
         // read the SSRC
@@ -458,6 +458,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
             ptr += align;
         }
     }
+#endif
 
     return 0;
 }

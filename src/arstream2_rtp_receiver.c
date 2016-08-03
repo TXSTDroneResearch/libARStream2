@@ -946,6 +946,12 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retReceiver;
     }
+    if ((config->canonicalName == NULL) || (!strlen(config->canonicalName)))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Config: no canonical name provided");
+        SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
+        return retReceiver;
+    }
     if (!config->auFifo)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No access unit FIFO provided");
@@ -1031,6 +1037,14 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         memset(retReceiver, 0, sizeof(ARSTREAM2_RtpReceiver_t));
         retReceiver->pipe[0] = -1;
         retReceiver->pipe[1] = -1;
+        if (config->canonicalName)
+        {
+            retReceiver->canonicalName = strndup(config->canonicalName, 40);
+        }
+        if (config->friendlyName)
+        {
+            retReceiver->friendlyName = strndup(config->friendlyName, 40);
+        }
         retReceiver->auFifo = config->auFifo;
         retReceiver->naluFifo = config->naluFifo;
         retReceiver->fifoMutex = config->fifoMutex;
@@ -1051,8 +1065,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->rtph264ReceiverContext.startCodeLength = (retReceiver->insertStartCodes) ? ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH : 0;
         retReceiver->rtcpReceiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
         retReceiver->rtcpReceiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
-        retReceiver->rtcpReceiverContext.cname = ARSTREAM2_RTP_RECEIVER_CNAME;
-        retReceiver->rtcpReceiverContext.name = NULL;
+        retReceiver->rtcpReceiverContext.cname = retReceiver->canonicalName;
+        retReceiver->rtcpReceiverContext.name = retReceiver->friendlyName;
 
         if (retReceiver->rtpReceiverContext.maxPacketSize < sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t))
         {
@@ -1371,6 +1385,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
         free(retReceiver->msgVec);
         free(retReceiver->rtcpMsgBuffer);
+        free(retReceiver->canonicalName);
+        free(retReceiver->friendlyName);
         free(retReceiver->net.serverAddr);
         free(retReceiver->net.mcastAddr);
         free(retReceiver->net.mcastIfaceAddr);
@@ -1486,6 +1502,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             ARSTREAM2_RTP_PacketFifoFree(&(*receiver)->packetFifo);
             free((*receiver)->msgVec);
             free((*receiver)->rtcpMsgBuffer);
+            free((*receiver)->canonicalName);
+            free((*receiver)->friendlyName);
             free((*receiver)->net.serverAddr);
             free((*receiver)->net.mcastAddr);
             free((*receiver)->net.mcastIfaceAddr);

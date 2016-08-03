@@ -35,7 +35,7 @@ static JavaVM *g_vm = NULL;
 
 JNIEXPORT jlong JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobject thizz, jstring serverAddress, jint serverStreamPort, jint serverControlPort,
-    jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
+    jint clientStreamPort, jint clientControlPort, jstring canonicalName, jstring friendlyName, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Manager_nativeInit");
     ARSTREAM2_StreamReceiver_Config_t config;
@@ -44,6 +44,8 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     memset(&net_config, 0, sizeof(ARSTREAM2_StreamReceiver_NetConfig_t));
 
     const char *c_serverAddress = (*env)->GetStringUTFChars(env, serverAddress, NULL);
+    const char *c_canonicalName = (*env)->GetStringUTFChars(env, canonicalName, NULL);
+    const char *c_friendlyName = (*env)->GetStringUTFChars(env, friendlyName, NULL);
 
     net_config.serverAddr = c_serverAddress;
     net_config.mcastAddr = NULL;
@@ -52,6 +54,8 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     net_config.serverControlPort = serverControlPort;
     net_config.clientStreamPort = clientStreamPort;
     net_config.clientControlPort = clientControlPort;
+    config.canonicalName = c_canonicalName;
+    config.friendlyName = c_friendlyName;
     config.maxPacketSize = maxPacketSize;
     config.maxBitrate = maxBitrate;
     config.maxLatencyMs = maxLatency;
@@ -69,6 +73,8 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, &net_config, NULL);
 
     (*env)->ReleaseStringUTFChars(env, serverAddress, c_serverAddress);
+    (*env)->ReleaseStringUTFChars(env, canonicalName, c_canonicalName);
+    (*env)->ReleaseStringUTFChars(env, friendlyName, c_friendlyName);
 
     if (result != ARSTREAM2_OK)
     {
@@ -122,7 +128,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobject thizz, jlong mux, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
+Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobject thizz, jlong mux, jstring canonicalName, jstring friendlyName, jint maxPacketSize, jint maxBitrate, jint maxLatency, jint maxNetworkLatency)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Manager_nativeInit");
     ARSTREAM2_StreamReceiver_Config_t config;
@@ -130,7 +136,12 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
     memset(&config, 0, sizeof(ARSTREAM2_StreamReceiver_Config_t));
     memset(&mux_config, 0, sizeof(ARSTREAM2_StreamReceiver_MuxConfig_t));
 
+    const char *c_canonicalName = (*env)->GetStringUTFChars(env, canonicalName, NULL);
+    const char *c_friendlyName = (*env)->GetStringUTFChars(env, friendlyName, NULL);
+
     mux_config.mux = (struct mux_ctx *)(intptr_t)mux;
+    config.canonicalName = c_canonicalName;
+    config.friendlyName = c_friendlyName;
     config.maxPacketSize = maxPacketSize;
     config.maxBitrate = maxBitrate;
     config.maxLatencyMs = maxLatency;
@@ -146,6 +157,9 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, NULL, &mux_config);
+
+    (*env)->ReleaseStringUTFChars(env, canonicalName, c_canonicalName);
+    (*env)->ReleaseStringUTFChars(env, friendlyName, c_friendlyName);
 
     if (result != ARSTREAM2_OK)
     {

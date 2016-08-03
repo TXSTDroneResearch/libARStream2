@@ -192,6 +192,8 @@ typedef struct
  */
 typedef struct
 {
+    const char *canonicalName;                                      /**< RTP participant canonical name (CNAME SDES item) */
+    const char *friendlyName;                                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     int maxPacketSize;                                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int maxBitrate;                                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
