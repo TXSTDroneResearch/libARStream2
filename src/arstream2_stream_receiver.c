@@ -96,9 +96,9 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
-                                               ARSTREAM2_StreamReceiver_Config_t *config,
-                                               ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
-                                               ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config)
+                                               const ARSTREAM2_StreamReceiver_Config_t *config,
+                                               const ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
+                                               const ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     ARSTREAM2_StreamReceiver_t *streamReceiver = NULL;
@@ -1442,7 +1442,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_Str
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
                                                         ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
-                                                        ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
+                                                        const ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     ARSTREAM2_RtpReceiver_RtpResender_t* retResender = NULL;

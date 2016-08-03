@@ -98,7 +98,7 @@ typedef enum
  *
  * @warning ARSTREAM2_StreamReceiver_* functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_SpsPpsCallback_t)(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 
 
 /**
@@ -152,8 +152,9 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_GetAuBufferCallback_t)(uint8
 typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp,
                                                                    uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
                                                                    eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
-                                                                   void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize,
-                                                                   void *auBufferUserPtr, void *userPtr);
+                                                                   const void *auMetadata, int auMetadataSize,
+                                                                   const void *auUserData, int auUserDataSize,
+                                                                   const void *auBufferUserPtr, void *userPtr);
 
 
 /**
@@ -243,9 +244,9 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
-                                               ARSTREAM2_StreamReceiver_Config_t *config,
-                                               ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
-                                               ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config);
+                                               const ARSTREAM2_StreamReceiver_Config_t *config,
+                                               const ARSTREAM2_StreamReceiver_NetConfig_t *net_config,
+                                               const ARSTREAM2_StreamReceiver_MuxConfig_t *mux_config);
 
 
 /**
@@ -387,7 +388,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
                                                         ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
-                                                        ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
+                                                        const ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
 
 
 /**
