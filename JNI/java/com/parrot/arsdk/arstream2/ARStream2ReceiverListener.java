@@ -28,6 +28,6 @@ public interface ARStream2ReceiverListener
      * Called when a buffer is ready to be sent to the decoder
      * 
      */
-    void onBufferReady(int bufferIdx, long auTimestamp, long auTimestampShifted, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM auSyncType);
+    void onBufferReady(int bufferIdx, long auExtRtpTimestamp, long auNtpTimestamp, long auTimestampLocal, ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM auSyncType);
 }
 

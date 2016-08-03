@@ -565,6 +565,7 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverConfig.maxBitrate = deviceManager->arstream2MaxBitrate;
         streamReceiverConfig.maxLatencyMs = deviceManager->arstream2MaxLatency;
         streamReceiverConfig.maxNetworkLatencyMs = deviceManager->arstream2MaxNetworkLatency;
+        streamReceiverConfig.generateReceiverReports = 1;
         streamReceiverConfig.waitForSync = 1;
         streamReceiverConfig.outputIncompleteAu = 0;
         streamReceiverConfig.filterOutSpsPps = 0;
@@ -583,42 +584,32 @@ int startVideo(BD_MANAGER_t *deviceManager)
 
     if (ret == 0)
     {
-        int thErr = ARSAL_Thread_Create(&deviceManager->streamThread, ARSTREAM2_StreamReceiver_RunStreamThread, (void*)deviceManager->streamReceiver);
+        int thErr = ARSAL_Thread_Create(&deviceManager->streamNetworkThread, ARSTREAM2_StreamReceiver_RunNetworkThread, (void*)deviceManager->streamReceiver);
         if (thErr != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Stream thread creation failed (%d)", thErr);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Stream network thread creation failed (%d)", thErr);
             ret = -1;
         }
     }
 
     if (ret == 0)
     {
-        int thErr = ARSAL_Thread_Create(&deviceManager->controlThread, ARSTREAM2_StreamReceiver_RunControlThread, (void*)deviceManager->streamReceiver);
+        int thErr = ARSAL_Thread_Create(&deviceManager->streamOutputThread, ARSTREAM2_StreamReceiver_RunAppOutputThread, (void*)deviceManager->streamReceiver);
         if (thErr != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Control thread creation failed (%d)", thErr);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Stream output thread creation failed (%d)", thErr);
             ret = -1;
         }
     }
 
     if (ret == 0)
     {
-        int thErr = ARSAL_Thread_Create(&deviceManager->filterThread, ARSTREAM2_StreamReceiver_RunFilterThread, (void*)deviceManager->streamReceiver);
-        if (thErr != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Filter thread creation failed (%d)", thErr);
-            ret = -1;
-        }
-    }
-
-    if (ret == 0)
-    {
-        err = ARSTREAM2_StreamReceiver_StartFilter(deviceManager->streamReceiver, spsPpsCallback, deviceManager,
-                                                   getAuBufferCallback, deviceManager,
-                                                   auReadyCallback, deviceManager);
+        err = ARSTREAM2_StreamReceiver_StartAppOutput(deviceManager->streamReceiver, spsPpsCallback, deviceManager,
+                                                      getAuBufferCallback, deviceManager,
+                                                      auReadyCallback, deviceManager);
         if (err != ARSTREAM2_OK)
         {
-            ARSAL_PRINT (ARSAL_PRINT_ERROR, TAG, "ARSTREAM2_StreamReceiver_StartFilter() failed: %s", ARSTREAM2_Error_ToString(err));
+            ARSAL_PRINT (ARSAL_PRINT_ERROR, TAG, "ARSTREAM2_StreamReceiver_StartAppOutput() failed: %s", ARSTREAM2_Error_ToString(err));
             ret = -1;
         }
     }
@@ -637,11 +628,11 @@ void stopVideo(BD_MANAGER_t *deviceManager)
 
     if (ret == 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "ARSTREAM2_StreamReceiver_PauseFilter");
-        err = ARSTREAM2_StreamReceiver_PauseFilter(deviceManager->streamReceiver);
+        ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "ARSTREAM2_StreamReceiver_StopAppOutput");
+        err = ARSTREAM2_StreamReceiver_StopAppOutput(deviceManager->streamReceiver);
         if (err != ARSTREAM2_OK)
         {
-            ARSAL_PRINT (ARSAL_PRINT_ERROR, TAG, "ARSTREAM2_StreamReceiver_PauseFilter() failed: %s", ARSTREAM2_Error_ToString(err));
+            ARSAL_PRINT (ARSAL_PRINT_ERROR, TAG, "ARSTREAM2_StreamReceiver_StopAppOutput() failed: %s", ARSTREAM2_Error_ToString(err));
             ret = -1;
         }
     }
@@ -660,45 +651,32 @@ void stopVideo(BD_MANAGER_t *deviceManager)
     if (ret == 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Threads delete");
-        thErr = ARSAL_Thread_Join(deviceManager->streamThread, NULL);
+        thErr = ARSAL_Thread_Join(deviceManager->streamNetworkThread, NULL);
         if (thErr != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Join() failed (%d)", thErr);
             ret = -1;
         }
-        thErr = ARSAL_Thread_Destroy(&deviceManager->streamThread);
+        thErr = ARSAL_Thread_Destroy(&deviceManager->streamNetworkThread);
         if (thErr != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Destroy() failed (%d)", thErr);
             ret = -1;
         }
-        deviceManager->streamThread = NULL;
-        thErr = ARSAL_Thread_Join(deviceManager->controlThread, NULL);
+        deviceManager->streamNetworkThread = NULL;
+        thErr = ARSAL_Thread_Join(deviceManager->streamOutputThread, NULL);
         if (thErr != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Join() failed (%d)", thErr);
             ret = -1;
         }
-        thErr = ARSAL_Thread_Destroy(&deviceManager->controlThread);
+        thErr = ARSAL_Thread_Destroy(&deviceManager->streamOutputThread);
         if (thErr != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Destroy() failed (%d)", thErr);
             ret = -1;
         }
-        deviceManager->controlThread = NULL;
-        thErr = ARSAL_Thread_Join(deviceManager->filterThread, NULL);
-        if (thErr != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Join() failed (%d)", thErr);
-            ret = -1;
-        }
-        thErr = ARSAL_Thread_Destroy(&deviceManager->filterThread);
-        if (thErr != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "ARSAL_Thread_Destroy() failed (%d)", thErr);
-            ret = -1;
-        }
-        deviceManager->filterThread = NULL;
+        deviceManager->streamOutputThread = NULL;
     }
 
     if (ret == 0)
@@ -734,8 +712,8 @@ eARSTREAM2_ERROR getAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void
 }
 
 
-eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp, uint64_t auNtpTimestamp,
-                                 uint64_t auNtpTimestampLocal, eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType,
+eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp, uint64_t auNtpTimestamp,
+                                 uint64_t auNtpTimestampLocal, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
                                  void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize, void *auBufferUserPtr, void *userPtr)
 {
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Frame received: TS=%llu, size=%d", auNtpTimestamp, auSize);

@@ -38,31 +38,35 @@ package com.parrot.arsdk.arstream2;
 import java.util.HashMap;
 
 /**
- * Java copy of the eARSTREAM2_RTP_RECEIVER_CAUSE enum
+ * Java copy of the eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS enum
  */
-public enum ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM {
+public enum ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM {
    /** Dummy value for all unknown cases */
-    eARSTREAM2_RTP_RECEIVER_CAUSE_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
-   /** NAL unit is complete (no error) */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COMPLETE (0, "NAL unit is complete (no error)"),
-   /** NAL unit buffer is too small */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL (1, "NAL unit buffer is too small"),
-   /** The copy of the previous NAL unit buffer is complete (used only after ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL) */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_COPY_COMPLETE (2, "The copy of the previous NAL unit buffer is complete (used only after ARSTREAM2_RTP_RECEIVER_CAUSE_NALU_BUFFER_TOO_SMALL)"),
-   /** The receiver is closing, so buffer is no longer used */
-    ARSTREAM2_RTP_RECEIVER_CAUSE_CANCEL (3, "The receiver is closing, so buffer is no longer used"),
-   ARSTREAM2_RTP_RECEIVER_CAUSE_MAX (4);
+    eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
+   /** The macroblock status is unknown */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN (0, "The macroblock status is unknown"),
+   /** The macroblock is valid and contained in an I-slice */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE (1, "The macroblock is valid and contained in an I-slice"),
+   /** The macroblock is valid and contained in a P-slice */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE (2, "The macroblock is valid and contained in a P-slice"),
+   /** The macroblock is missing and concealed */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING_CONCEALED (3, "The macroblock is missing and concealed"),
+   /** The macroblock is missing and not concealed */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING (4, "The macroblock is missing and not concealed"),
+   /** The macroblock is valid but within an error propagation */
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ERROR_PROPAGATION (5, "The macroblock is valid but within an error propagation"),
+   ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MAX (6);
 
     private final int value;
     private final String comment;
-    static HashMap<Integer, ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM> valuesList;
+    static HashMap<Integer, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM> valuesList;
 
-    ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM (int value) {
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM (int value) {
         this.value = value;
         this.comment = null;
     }
 
-    ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM (int value, String comment) {
+    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM (int value, String comment) {
         this.value = value;
         this.comment = comment;
     }
@@ -76,21 +80,21 @@ public enum ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM {
     }
 
     /**
-     * Gets the ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM instance from a C enum value
+     * Gets the ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM instance from a C enum value
      * @param value C value of the enum
-     * @return The ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM instance, or null if the C enum value was not valid
+     * @return The ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM instance, or null if the C enum value was not valid
      */
-    public static ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM getFromValue (int value) {
+    public static ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM getFromValue (int value) {
         if (null == valuesList) {
-            ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM [] valuesArray = ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM.values ();
-            valuesList = new HashMap<Integer, ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM> (valuesArray.length);
-            for (ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM entry : valuesArray) {
+            ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM [] valuesArray = ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM.values ();
+            valuesList = new HashMap<Integer, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM> (valuesArray.length);
+            for (ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM entry : valuesArray) {
                 valuesList.put (entry.getValue (), entry);
             }
         }
-        ARSTREAM2_RTP_RECEIVER_CAUSE_ENUM retVal = valuesList.get (value);
+        ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ENUM retVal = valuesList.get (value);
         if (retVal == null) {
-            retVal = eARSTREAM2_RTP_RECEIVER_CAUSE_UNKNOWN_ENUM_VALUE;
+            retVal = eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN_ENUM_VALUE;
         }
         return retVal;    }
 

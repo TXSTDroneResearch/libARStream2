@@ -939,7 +939,7 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                     {
                         fwrite(item->au.auData, item->au.auSize, 1, streamRecorder->outputFile);
                     }
-                    if ((item->au.auSyncType != ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE)
+                    if ((item->au.auSyncType != ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE)
                             || (item->au.index >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
                     {
                         fflush(streamRecorder->outputFile);
@@ -961,7 +961,7 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 frameHeader.width = streamRecorder->videoWidth;
                 frameHeader.height = streamRecorder->videoHeight;
                 frameHeader.timestamp = item->au.timestamp;
-                frameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
+                frameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
                 frameHeader.frame = item->au.auData;
                 frameHeader.avc_insert_ps = 0;
                 frameHeader.avc_nalu_count = item->au.naluCount;

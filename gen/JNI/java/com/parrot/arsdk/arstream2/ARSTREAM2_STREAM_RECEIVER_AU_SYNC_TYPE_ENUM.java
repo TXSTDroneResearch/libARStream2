@@ -38,31 +38,31 @@ package com.parrot.arsdk.arstream2;
 import java.util.HashMap;
 
 /**
- * Java copy of the eARSTREAM2_H264_FILTER_AU_SYNC_TYPE enum
+ * Java copy of the eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE enum
  */
-public enum ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM {
+public enum ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM {
    /** Dummy value for all unknown cases */
-    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
+    eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
    /** The Access Unit is not a synchronization point */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE (0, "The Access Unit is not a synchronization point"),
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE (0, "The Access Unit is not a synchronization point"),
    /** The Access Unit is an IDR picture */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR (1, "The Access Unit is an IDR picture"),
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR (1, "The Access Unit is an IDR picture"),
    /** The Access Unit is an I-frame */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME (2, "The Access Unit is an I-frame"),
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME (2, "The Access Unit is an I-frame"),
    /** The Access Unit is a Periodic Intra Refresh start */
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START (3, "The Access Unit is a Periodic Intra Refresh start"),
-   ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_MAX (4);
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START (3, "The Access Unit is a Periodic Intra Refresh start"),
+   ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_MAX (4);
 
     private final int value;
     private final String comment;
-    static HashMap<Integer, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM> valuesList;
+    static HashMap<Integer, ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM> valuesList;
 
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM (int value) {
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM (int value) {
         this.value = value;
         this.comment = null;
     }
 
-    ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM (int value, String comment) {
+    ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM (int value, String comment) {
         this.value = value;
         this.comment = comment;
     }
@@ -76,21 +76,21 @@ public enum ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM {
     }
 
     /**
-     * Gets the ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM instance from a C enum value
+     * Gets the ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM instance from a C enum value
      * @param value C value of the enum
-     * @return The ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM instance, or null if the C enum value was not valid
+     * @return The ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM instance, or null if the C enum value was not valid
      */
-    public static ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM getFromValue (int value) {
+    public static ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM getFromValue (int value) {
         if (null == valuesList) {
-            ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM [] valuesArray = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM.values ();
-            valuesList = new HashMap<Integer, ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM> (valuesArray.length);
-            for (ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM entry : valuesArray) {
+            ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM [] valuesArray = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM.values ();
+            valuesList = new HashMap<Integer, ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM> (valuesArray.length);
+            for (ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM entry : valuesArray) {
                 valuesList.put (entry.getValue (), entry);
             }
         }
-        ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM retVal = valuesList.get (value);
+        ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM retVal = valuesList.get (value);
         if (retVal == null) {
-            retVal = eARSTREAM2_H264_FILTER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE;
+            retVal = eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_UNKNOWN_ENUM_VALUE;
         }
         return retVal;    }
 

@@ -8,40 +8,30 @@ public class ARStream2Manager
 {
     private static final String TAG = ARStream2Manager.class.getSimpleName();
     private final long nativeRef;
-    private final Thread streamThread;
-    private final Thread controlThread;
-    private final Thread filterThread;
+    private final Thread networkThread;
+    private final Thread outputThread;
 
     public ARStream2Manager(Mux mux, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
     {
         Mux.Ref muxRef = mux.newMuxRef();
         this.nativeRef = nativeMuxInit(muxRef.getCPtr(), maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
         muxRef.release();
-        this.streamThread = new Thread(new Runnable()
+        this.networkThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunStreamThread(nativeRef);
+                nativeRunNetworkThread(nativeRef);
             }
         }, "ARStream2Stream");
-        this.controlThread = new Thread(new Runnable()
+        this.outputThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunControlThread(nativeRef);
-            }
-        }, "ARStream2Control");
-        this.filterThread = new Thread(new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunFilterThread(nativeRef);
+                nativeRunOutputThread(nativeRef);
             }
         }, "ARStream2Filter");
     }
@@ -51,31 +41,22 @@ public class ARStream2Manager
     {
         this.nativeRef = nativeNetInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
                 maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
-        this.streamThread = new Thread(new Runnable()
+        this.networkThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunStreamThread(nativeRef);
+                nativeRunNetworkThread(nativeRef);
             }
         }, "ARStream2Stream");
-        this.controlThread = new Thread(new Runnable()
+        this.outputThread = new Thread(new Runnable()
         {
             @Override
             public void run()
             {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunControlThread(nativeRef);
-            }
-        }, "ARStream2Control");
-        this.filterThread = new Thread(new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunFilterThread(nativeRef);
+                nativeRunOutputThread(nativeRef);
             }
         }, "ARStream2Filter");
     }
@@ -89,9 +70,8 @@ public class ARStream2Manager
     {
         if (isValid())
         {
-            streamThread.start();
-            controlThread.start();
-            filterThread.start();
+            networkThread.start();
+            outputThread.start();
         }
         else
         {
@@ -113,9 +93,8 @@ public class ARStream2Manager
         {
             try
             {
-                streamThread.join();
-                controlThread.join();
-                filterThread.join();
+                networkThread.join();
+                outputThread.join();
             } catch (InterruptedException e)
             {
             }
@@ -140,9 +119,7 @@ public class ARStream2Manager
 
     private native boolean nativeFree(long nativeRef);
 
-    private native void nativeRunFilterThread(long nativeRef);
+    private native void nativeRunNetworkThread(long nativeRef);
 
-    private native void nativeRunStreamThread(long nativeRef);
-
-    private native void nativeRunControlThread(long nativeRef);
+    private native void nativeRunOutputThread(long nativeRef);
 }

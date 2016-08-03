@@ -84,7 +84,7 @@ typedef struct
     uint32_t naluCount;                     /**< NAL unit count */
     uint32_t naluSize[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];    /**< NAL unit size array */
     uint8_t *naluData[ARSTREAM2_STREAM_RECORDER_NALU_MAX_COUNT];    /**< NAL unit data pointer array */
-    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType;                 /**< Access unit sync type */
+    eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType;             /**< Access unit sync type */
     uint8_t *auMetadata;                    /**< Access unit metadata pointer (optional, can be NULL) */
     uint32_t auMetadataSize;                /**< Access unit metadata size (bytes) (optional, can be NULL) */
     void *auUserPtr;                        /**< Access unit user pointer for the access unit callback function (optional, can be NULL) */

@@ -163,7 +163,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 auItem->au.ntpTimestampLocal = nextAu->ntpTimestampLocal - ((nextAu->ntpTimestampLocal >= 1000) ? 1000 : ((nextAu->ntpTimestampLocal >= 1) ? 1 : 0));
                 if (filter->currentAuMacroblockStatus)
                 {
-                    memset(filter->currentAuMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE, filter->mbCount);
+                    memset(filter->currentAuMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE, filter->mbCount);
                 }
 
                 /* associate the NAL units with the access unit */
@@ -389,7 +389,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 {
                     if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                     memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                           ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                           ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
                 }
             }
         }
@@ -415,7 +415,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -430,7 +430,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -445,7 +445,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -516,7 +516,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                         {
                             if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                             memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                                   ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING_CONCEALED, missingMb);
+                                   ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING_CONCEALED, missingMb);
                         }
                     }
                 }
@@ -543,7 +543,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
         {
             if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
             memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                   ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                   ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
         }
     }
 
@@ -600,7 +600,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                 {
                     if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                     memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                           ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                           ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
                 }
             }
         }
@@ -626,7 +626,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -641,7 +641,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -656,7 +656,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                 memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                       ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                       ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
             }
             ret = -2;
         }
@@ -728,7 +728,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                         {
                             if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
                             memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                                   ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING_CONCEALED, missingMb);
+                                   ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING_CONCEALED, missingMb);
                         }
                     }
                 }
@@ -755,7 +755,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
         {
             if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
             memset(filter->currentAuMacroblockStatus + firstMbInSlice,
-                   ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, missingMb);
+                   ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, missingMb);
         }
     }
 

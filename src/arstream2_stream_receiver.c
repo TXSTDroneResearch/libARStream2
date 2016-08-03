@@ -58,11 +58,11 @@ typedef struct ARSTREAM2_StreamReceiver_s
         ARSAL_Mutex_t callbackMutex;
         ARSAL_Cond_t callbackCond;
         int callbackInProgress;
-        ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback;
+        ARSTREAM2_StreamReceiver_SpsPpsCallback_t spsPpsCallback;
         void *spsPpsCallbackUserPtr;
-        ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback;
+        ARSTREAM2_StreamReceiver_GetAuBufferCallback_t getAuBufferCallback;
         void *getAuBufferCallbackUserPtr;
-        ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback;
+        ARSTREAM2_StreamReceiver_AuReadyCallback_t auReadyCallback;
         void *auReadyCallbackUserPtr;
         uint8_t *mbStatus;
         int mbWidth;
@@ -547,16 +547,16 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
         {
             default:
             case ARSTREAM2_H264_AU_SYNC_TYPE_NONE:
-                accessUnit.auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE;
+                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_IDR:
-                accessUnit.auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
+                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME:
-                accessUnit.auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME;
+                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START:
-                accessUnit.auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START;
+                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START;
                 break;
         }
         accessUnit.auMetadata = au->buffer->metadataBuffer;
@@ -994,7 +994,7 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
+void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     int shouldStop, running, ret;
@@ -1109,21 +1109,21 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
                     }
 
                     /* map the access unit sync type */
-                    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType;
+                    eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType;
                     switch (au->syncType)
                     {
                         default:
                         case ARSTREAM2_H264_AU_SYNC_TYPE_NONE:
-                            auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_NONE;
+                            auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE;
                             break;
                         case ARSTREAM2_H264_AU_SYNC_TYPE_IDR:
-                            auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IDR;
+                            auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR;
                             break;
                         case ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME:
-                            auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_IFRAME;
+                            auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME;
                             break;
                         case ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START:
-                            auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_PIR_START;
+                            auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START;
                             break;
                     }
 
@@ -1135,7 +1135,7 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
                         /* call the auReadyCallback */
                         ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
-                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, au->rtpTimestamp, au->ntpTimestamp,
+                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, au->extRtpTimestamp, au->ntpTimestamp,
                                                         au->ntpTimestampLocal, auSyncType,
                                                         (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL, au->metadataSize,
                                                         (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL, au->userDataSize,
@@ -1207,7 +1207,7 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunStreamThread(void *streamReceiverHandle)
+void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
 
@@ -1221,15 +1221,10 @@ void* ARSTREAM2_StreamReceiver_RunStreamThread(void *streamReceiverHandle)
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunControlThread(void *streamReceiverHandle)
-{
-    return (void*)0;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_H264Filter_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
-                                                      ARSTREAM2_H264Filter_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
-                                                      ARSTREAM2_H264Filter_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartAppOutput(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                         ARSTREAM2_StreamReceiver_SpsPpsCallback_t spsPpsCallback, void* spsPpsCallbackUserPtr,
+                                                         ARSTREAM2_StreamReceiver_GetAuBufferCallback_t getAuBufferCallback, void* getAuBufferCallbackUserPtr,
+                                                         ARSTREAM2_StreamReceiver_AuReadyCallback_t auReadyCallback, void* auReadyCallbackUserPtr)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
@@ -1291,7 +1286,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartFilter(ARSTREAM2_StreamReceiver_H
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopAppOutput(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
@@ -1333,7 +1328,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_PauseFilter(ARSTREAM2_StreamReceiver_H
     }
     ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
 
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "App output is paused");
+    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "App output is stopped");
 
     return ret;
 }
@@ -1445,7 +1440,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_Str
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle, ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                        ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
+                                                        ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     ARSTREAM2_RtpReceiver_RtpResender_t* retResender = NULL;
@@ -1498,6 +1495,14 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_InitResender(ARSTREAM2_StreamReceiver_
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle)
+{
+    ARSTREAM2_RtpReceiverResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
+
+    return ARSTREAM2_OK;
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
@@ -1515,14 +1520,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle)
 {
     return ARSTREAM2_RtpReceiverResender_RunThread(resenderHandle);
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle)
-{
-    ARSTREAM2_RtpReceiverResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
-
-    return ARSTREAM2_OK;
 }
 
 

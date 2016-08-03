@@ -49,11 +49,11 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
         filter->currentAuRefMacroblockStatus = realloc(filter->currentAuRefMacroblockStatus, filter->mbCount * sizeof(uint8_t));
         if (filter->currentAuMacroblockStatus)
         {
-            memset(filter->currentAuMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
+            memset(filter->currentAuMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
         }
         if (filter->currentAuRefMacroblockStatus)
         {
-            memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
+            memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
         }
         filter->previousAuFrameNum = -1;
     }
@@ -150,7 +150,7 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                                 filter->stats.missedFrameCount++;
                                 if (filter->currentAuRefMacroblockStatus)
                                 {
-                                    memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, filter->mbCount);
+                                    memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, filter->mbCount);
                                 }
                             }
                         }
@@ -262,7 +262,7 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
     filter->previousSliceType = ARSTREAM2_H264_SLICE_TYPE_NON_VCL;
     if ((filter->sync) && (filter->currentAuMacroblockStatus))
     {
-        memset(filter->currentAuMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
+        memset(filter->currentAuMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN, filter->mbCount);
     }
     if (filter->currentAuIsRef) filter->previousAuFrameNum = filter->currentAuFrameNum;
     filter->currentAuFrameNum = -1;
@@ -309,18 +309,18 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
             {
                 if (nalu->sliceType == ARSTREAM2_H264_SLICE_TYPE_I)
                 {
-                    status = ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE;
+                    status = ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE;
                 }
                 else
                 {
                     if ((!filter->currentAuRefMacroblockStatus)
-                            || ((filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE) && (filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_PSLICE)))
+                            || ((filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE) && (filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE)))
                     {
-                        status = ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_ERROR_PROPAGATION;
+                        status = ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ERROR_PROPAGATION;
                     }
                     else
                     {
-                        status = ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_PSLICE;
+                        status = ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE;
                     }
                 }
                 filter->currentAuMacroblockStatus[idx] = status;
@@ -480,7 +480,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         if ((filter->currentAuMacroblockStatus) && ((discarded) || (ret != 1)) && (filter->currentAuIsRef))
         {
             /* missed frame (missing non-ref frames are not counted as missing) */
-            memset(filter->currentAuMacroblockStatus, ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_MISSING, filter->mbCount);
+            memset(filter->currentAuMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, filter->mbCount);
         }
         if (filter->currentAuMacroblockStatus)
         {
@@ -492,8 +492,8 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                 {
                     int zone = j * ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT / filter->mbHeight;
                     filter->stats.macroblockStatus[filter->currentAuMacroblockStatus[k]][zone]++;
-                    if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_ISLICE)
-                            && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_H264_FILTER_MACROBLOCK_STATUS_VALID_PSLICE))
+                    if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
+                            && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
                     {
                         //TODO: we should not use curTime but an AU timestamp
                         if (curTime > filter->stats.errorSecondStartTime + 1000000)
