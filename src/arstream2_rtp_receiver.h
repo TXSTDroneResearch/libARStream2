@@ -155,14 +155,6 @@ typedef struct ARSTREAM2_RtpReceiver_t ARSTREAM2_RtpReceiver_t;
 typedef struct ARSTREAM2_RtpReceiver_RtpResender_t ARSTREAM2_RtpReceiver_RtpResender_t;
 
 
-#ifndef HAS_MMSG
-struct mmsghdr {
-    struct msghdr msg_hdr;  /* Message header */
-    unsigned int  msg_len;  /* Number of received bytes for header */
-};
-#endif
-
-
 typedef struct ARSTREAM2_RtpReceiver_MonitoringPoint_s {
     uint64_t recvTimestamp;
     uint64_t ntpTimestamp;

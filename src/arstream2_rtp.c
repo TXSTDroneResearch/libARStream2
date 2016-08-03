@@ -20,14 +20,6 @@
 #define ARSTREAM2_RTP_TAG "ARSTREAM2_Rtp"
 
 
-#ifndef HAS_MMSG
-struct mmsghdr {
-    struct msghdr msg_hdr;  /* Message header */
-    unsigned int  msg_len;  /* Number of received bytes for header */
-};
-#endif
-
-
 void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet)
 {
     if (!packet)

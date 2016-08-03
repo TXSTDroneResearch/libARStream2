@@ -33,6 +33,14 @@
  * Types
  */
 
+#ifndef HAS_MMSG
+struct mmsghdr {
+    struct msghdr msg_hdr;  /* Message header */
+    unsigned int  msg_len;  /* Number of received bytes for header */
+};
+#endif
+
+
 /**
  * @brief RTP Header (see RFC3550)
  */
