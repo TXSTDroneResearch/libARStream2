@@ -11,7 +11,7 @@
 #include <libARSAL/ARSAL_Print.h>
 
 #include <libARStream2/arstream2_stream_receiver.h>
-#include <libARStream2/arstream2_stream_recorder.h>
+#include "arstream2_stream_recorder.h"
 #include "arstream2_rtp_receiver.h"
 #include "arstream2_h264_filter.h"
 #include "arstream2_h264.h"

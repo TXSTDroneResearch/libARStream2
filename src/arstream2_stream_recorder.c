@@ -16,7 +16,7 @@
 #include <libARMedia/ARMedia.h>
 #endif
 
-#include <libARStream2/arstream2_stream_recorder.h>
+#include "arstream2_stream_recorder.h"
 
 
 #define ARSTREAM2_STREAM_RECORDER_TAG "ARSTREAM2_StreamRecorder"
