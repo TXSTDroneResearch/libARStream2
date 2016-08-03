@@ -145,8 +145,8 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_GetAuBufferCallback_t)(uint8_t *
  * @warning This callback function is mandatory.
  * @warning ARSTREAM2_H264Filter functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize,
-                                                                   uint64_t auTimestamp, uint64_t auTimestampShifted,
+typedef eARSTREAM2_ERROR (*ARSTREAM2_H264Filter_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint32_t auRtpTimestamp,
+                                                                   uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
                                                                    eARSTREAM2_H264_FILTER_AU_SYNC_TYPE auSyncType,
                                                                    void *auMetadata, int auMetadataSize, void *auUserData, int auUserDataSize,
                                                                    void *auBufferUserPtr, void *userPtr);
@@ -187,6 +187,7 @@ typedef struct
     int maxBitrate;                                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
     int maxLatencyMs;                                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
     int maxNetworkLatencyMs;                                        /**< Maximum acceptable network latency in milliseconds (should be provided by the server, can be 0) */
+    int generateReceiverReports;                                    /**< if true, generate RTCP receiver reports */
     int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
@@ -416,7 +417,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 
 
 /**
- * @brief Run a resender stream thread.
+ * @brief Run a resender thread.
  *
  * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
  * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
@@ -425,20 +426,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
  *
  * @return NULL in all cases.
  */
-void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle);
-
-
-/**
- * @brief Run a resender control thread.
- *
- * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
- * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
- *
- * @param resenderHandle Resender handle casted as (void*).
- *
- * @return NULL in all cases.
- */
-void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle);
+void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle);
 
 
 /**

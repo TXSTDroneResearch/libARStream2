@@ -282,7 +282,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.maxLatencyMs = config->maxLatencyMs;
         receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
         receiverConfig.insertStartCodes = 1;
-        receiverConfig.generateReceiverReports = 0; //TODO: config->generateReceiverReports;
+        receiverConfig.generateReceiverReports = config->generateReceiverReports;
 
         if (usemux) {
             receiver_mux_config.mux = mux_config->mux;
@@ -1135,7 +1135,7 @@ void* ARSTREAM2_StreamReceiver_RunFilterThread(void *streamReceiverHandle)
                         /* call the auReadyCallback */
                         ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
-                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, /*TODO au->rtpTimestamp,*/ au->ntpTimestamp,
+                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, au->rtpTimestamp, au->ntpTimestamp,
                                                         au->ntpTimestampLocal, auSyncType,
                                                         (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL, au->metadataSize,
                                                         (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL, au->userDataSize,
@@ -1512,15 +1512,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_
 }
 
 
-void* ARSTREAM2_StreamReceiver_RunResenderStreamThread(void *resenderHandle)
+void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle)
 {
     return ARSTREAM2_RtpReceiverResender_RunThread(resenderHandle);
-}
-
-
-void* ARSTREAM2_StreamReceiver_RunResenderControlThread(void *resenderHandle)
-{
-    return (void*)0;
 }
 
 
