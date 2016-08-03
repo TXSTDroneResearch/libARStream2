@@ -60,7 +60,9 @@
 /**
  * Default minimum packet FIFO size
  */
-#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE (100)
+#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT (100)
+#define ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR (1)
+#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT (ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT * ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR)
 
 
 /**
@@ -223,6 +225,9 @@ struct ARSTREAM2_RtpSender_t {
 
     /* Packet FIFO */
     ARSTREAM2_RTP_PacketFifo_t packetFifo;
+    ARSTREAM2_RTP_PacketFifoQueue_t packetFifoQueue;
+    struct mmsghdr *msgVec;
+    unsigned int msgVecCount;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;
@@ -788,18 +793,50 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     /* Setup the packet FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int packetFifoSize = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs > 0))
+        int packetFifoBufferCount = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs > 0))
                 ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
                 : retSender->naluFifoSize;
-        if (packetFifoSize < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE) packetFifoSize = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_SIZE;
-        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retSender->packetFifo, packetFifoSize, retSender->rtpSenderContext.maxPacketSize);
+        if (packetFifoBufferCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT) packetFifoBufferCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
+        retSender->msgVecCount = packetFifoBufferCount;
+        int packetFifoItemCount = packetFifoBufferCount * ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR;
+        if (packetFifoItemCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT) packetFifoItemCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT;
+        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retSender->packetFifo, packetFifoItemCount, packetFifoBufferCount, retSender->rtpSenderContext.maxPacketSize);
         if (packetFifoRet != 0)
         {
             internalError = ARSTREAM2_ERROR_ALLOC;
         }
         else
         {
+            packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&retSender->packetFifo, &retSender->packetFifoQueue);
+            if (packetFifoRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
+                internalError = ARSTREAM2_ERROR_ALLOC;
+            }
             packetFifoWasCreated = 1;
+        }
+    }
+
+    /* MsgVec array */
+    if (internalError == ARSTREAM2_OK)
+    {
+        if (retSender->msgVecCount > 0)
+        {
+            retSender->msgVec = malloc(retSender->msgVecCount * sizeof(struct mmsghdr));
+            if (!retSender->msgVec)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "FIFO allocation failed (size %d)", retSender->msgVecCount * sizeof(struct mmsghdr));
+                internalError = ARSTREAM2_ERROR_ALLOC;
+            }
+            else
+            {
+                memset(retSender->msgVec, 0, retSender->msgVecCount * sizeof(struct mmsghdr));
+            }
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Invalid msgVecCount: %d", retSender->msgVecCount);
+            internalError = ARSTREAM2_ERROR_BAD_PARAMETERS;
         }
     }
 
@@ -949,6 +986,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             ARSAL_Mutex_Destroy(&(retSender->naluFifoMutex));
         }
+        free(retSender->msgVec);
         free(retSender->rtcpMsgBuffer);
         free(retSender->canonicalName);
         free(retSender->friendlyName);
@@ -1028,6 +1066,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
                 close((*sender)->controlSocket);
                 (*sender)->controlSocket = -1;
             }
+            free((*sender)->msgVec);
             free((*sender)->rtcpMsgBuffer);
             free((*sender)->friendlyName);
             free((*sender)->clientAddr);
@@ -1367,7 +1406,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTP packet FIFO cleanup (packets on timeout) */
-        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, curTime);
+        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, &sender->packetFifoQueue, curTime);
         if (ret < 0)
         {
             if (ret != -2)
@@ -1382,7 +1421,8 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 
         /* RTP packets creation */
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-        ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo, &sender->packetFifo, curTime);
+        ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo,
+                                                            &sender->packetFifo, &sender->packetFifoQueue, curTime);
         ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (ret != 0)
         {
@@ -1392,7 +1432,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         /* RTP packets sending */
         if ((!packetsPending) || ((packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, &writeSet)))))
         {
-            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifo);
+            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifoQueue, sender->msgVec, sender->msgVecCount);
             if (ret < 0)
             {
                 if (ret != -2)
@@ -1406,7 +1446,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 int msgVecSentCount = 0;
 
                 packetsPending = 1;
-                ret = sendmmsg(sender->streamSocket, sender->packetFifo.msgVec, msgVecCount, 0);
+                ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0);
                 if (ret < 0)
                 {
                     if (errno == EAGAIN)
@@ -1415,7 +1455,7 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                         int i;
                         for (i = 0, msgVecSentCount = 0; i < msgVecCount; i++)
                         {
-                            if (sender->packetFifo.msgVec[i].msg_len > 0) msgVecSentCount++;
+                            if (sender->msgVec[i].msg_len > 0) msgVecSentCount++;
                         }
                         packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
                         //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d (socket buffer is full)", msgVecSentCount, msgVecCount); //TODO: debug
@@ -1438,7 +1478,9 @@ static void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug
                 }
 
-                ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo, msgVecSentCount, curTime);
+                ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo,
+                                                                     &sender->packetFifoQueue, sender->msgVec,
+                                                                     msgVecSentCount, curTime);
                 if (ret < 0)
                 {
                     if (ret != -2)

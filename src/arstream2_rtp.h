@@ -46,10 +46,31 @@ typedef struct {
 #define ARSTREAM2_RTP_TOTAL_HEADERS_SIZE (sizeof(ARSTREAM2_RTP_Header_t) + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE)
 #define ARSTREAM2_RTP_MAX_PAYLOAD_SIZE (0xFFFF - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE)
 
+
+/**
+ * @brief Access unit FIFO buffer pool item
+ */
+typedef struct ARSTREAM2_RTP_PacketFifoBuffer_s
+{
+    uint8_t *buffer;
+    unsigned int bufferSize;
+    uint8_t *header;
+    unsigned int headerSize;
+    struct iovec msgIov[3];
+
+    unsigned int refCount;
+    struct ARSTREAM2_RTP_PacketFifoBuffer_s* prev;
+    struct ARSTREAM2_RTP_PacketFifoBuffer_s* next;
+
+} ARSTREAM2_RTP_PacketFifoBuffer_t;
+
+
 /**
  * @brief RTP packet data
  */
-typedef struct ARSTREAM2_RTP_Packet_s {
+typedef struct ARSTREAM2_RTP_Packet_s
+{
+    ARSTREAM2_RTP_PacketFifoBuffer_t *buffer;
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
@@ -59,45 +80,68 @@ typedef struct ARSTREAM2_RTP_Packet_s {
     uint16_t seqNum;
     uint32_t extSeqNum;
     uint32_t markerBit;
-    ARSTREAM2_RTP_Header_t header;
+    ARSTREAM2_RTP_Header_t *header;
     uint8_t *headerExtension;
     unsigned int headerExtensionSize;
     uint8_t *payload;
     unsigned int payloadSize;
     uint32_t importance;
     uint32_t priority;
-    struct iovec msgIov[3];
     size_t msgIovLength;
-    uint8_t *buffer;
+
 } ARSTREAM2_RTP_Packet_t;
+
 
 /**
  * @brief RTP packet FIFO item
  */
-typedef struct ARSTREAM2_RTP_PacketFifoItem_s {
+typedef struct ARSTREAM2_RTP_PacketFifoItem_s
+{
     ARSTREAM2_RTP_Packet_t packet;
 
     struct ARSTREAM2_RTP_PacketFifoItem_s* prev;
     struct ARSTREAM2_RTP_PacketFifoItem_s* next;
+
 } ARSTREAM2_RTP_PacketFifoItem_t;
+
+
+/**
+ * @brief Access unit FIFO queue
+ */
+typedef struct ARSTREAM2_RTP_PacketFifoQueue_s
+{
+    int count;
+    ARSTREAM2_RTP_PacketFifoItem_t *head;
+    ARSTREAM2_RTP_PacketFifoItem_t *tail;
+
+    struct ARSTREAM2_RTP_PacketFifoQueue_s* prev;
+    struct ARSTREAM2_RTP_PacketFifoQueue_s* next;
+
+} ARSTREAM2_RTP_PacketFifoQueue_t;
+
 
 /**
  * @brief RTP packet FIFO
  */
-typedef struct ARSTREAM2_RTP_PacketFifo_s {
-    int size;
-    int count;
-    ARSTREAM2_RTP_PacketFifoItem_t *head;
-    ARSTREAM2_RTP_PacketFifoItem_t *tail;
-    ARSTREAM2_RTP_PacketFifoItem_t *free;
-    ARSTREAM2_RTP_PacketFifoItem_t *pool;
-    struct mmsghdr *msgVec;
+typedef struct ARSTREAM2_RTP_PacketFifo_s
+{
+    int queueCount;
+    ARSTREAM2_RTP_PacketFifoQueue_t *queue;
+    int itemPoolSize;
+    ARSTREAM2_RTP_PacketFifoItem_t *itemPool;
+    ARSTREAM2_RTP_PacketFifoItem_t *itemFree;
+    int bufferPoolSize;
+    ARSTREAM2_RTP_PacketFifoBuffer_t *bufferPool;
+    ARSTREAM2_RTP_PacketFifoBuffer_t *bufferFree;
+
 } ARSTREAM2_RTP_PacketFifo_t;
+
 
 typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t inputTimestamp, uint64_t outputTimestamp,
                                                          uint64_t ntpTimestamp, uint32_t rtpTimestamp,
                                                          uint16_t seqNum, uint16_t markerBit,
                                                          uint32_t bytesSent, uint32_t bytesDropped, void *userPtr);
+
 
 /**
  * @brief RTP sender context
@@ -165,32 +209,50 @@ typedef struct ARSTREAM2_RTP_ReceiverContext_s
 
 void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet);
 
-int ARSTREAM2_RTP_PacketFifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int maxCount, int packetBufferSize);
+void ARSTREAM2_RTP_PacketCopy(ARSTREAM2_RTP_Packet_t *dst, const ARSTREAM2_RTP_Packet_t *src);
+
+int ARSTREAM2_RTP_PacketFifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int itemMaxCount, int bufferMaxCount, int packetBufferSize);
 
 int ARSTREAM2_RTP_PacketFifoFree(ARSTREAM2_RTP_PacketFifo_t *fifo);
+
+int ARSTREAM2_RTP_PacketFifoAddQueue(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoQueue_t *queue);
+
+int ARSTREAM2_RTP_PacketFifoRemoveQueue(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoQueue_t *queue);
+
+ARSTREAM2_RTP_PacketFifoBuffer_t* ARSTREAM2_RTP_PacketFifoGetBuffer(ARSTREAM2_RTP_PacketFifo_t *fifo);
+
+int ARSTREAM2_RTP_PacketFifoBufferAddRef(ARSTREAM2_RTP_PacketFifoBuffer_t *buffer);
+
+int ARSTREAM2_RTP_PacketFifoUnrefBuffer(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoBuffer_t *buffer);
 
 ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoPopFreeItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
 
 int ARSTREAM2_RTP_PacketFifoPushFreeItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
-int ARSTREAM2_RTP_PacketFifoEnqueueItem(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
+int ARSTREAM2_RTP_PacketFifoEnqueueItem(ARSTREAM2_RTP_PacketFifoQueue_t *queue, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
-int ARSTREAM2_RTP_PacketFifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoItem_t *item);
+int ARSTREAM2_RTP_PacketFifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifoQueue_t *queue, ARSTREAM2_RTP_PacketFifoItem_t *item);
 
-ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoDequeueItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoDequeueItem(ARSTREAM2_RTP_PacketFifoQueue_t *queue);
 
-ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoPeekItem(ARSTREAM2_RTP_PacketFifo_t *fifo);
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoPeekItem(ARSTREAM2_RTP_PacketFifoQueue_t *queue);
 
-int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo);
+ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoDuplicateItem(ARSTREAM2_RTP_PacketFifo_t *fifo,
+                                                                      ARSTREAM2_RTP_PacketFifoItem_t *item);
+
+int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *queue, struct mmsghdr *msgVec, unsigned int msgVecCount);
 
 int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *context,
-                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime);
+                                                   ARSTREAM2_RTP_PacketFifo_t *fifo,
+                                                   ARSTREAM2_RTP_PacketFifoQueue_t *queue,
+                                                   struct mmsghdr *msgVec, unsigned int msgVecCount, uint64_t curTime);
 
 int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
-                                              ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
+                                                    ARSTREAM2_RTP_PacketFifo_t *fifo,
+                                                    ARSTREAM2_RTP_PacketFifoQueue_t *queue, uint64_t curTime);
 
 int ARSTREAM2_RTP_Sender_PacketFifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
-                                   ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
+                                         ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);
 
 int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, ARSTREAM2_RTP_Packet_t *packet,
                                         uint8_t *payload, unsigned int payloadSize,
@@ -201,13 +263,14 @@ int ARSTREAM2_RTP_Sender_GeneratePacket(ARSTREAM2_RTP_SenderContext_t *context, 
 
 /* WARNING: the call sequence ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec
    must not be broken (no change made to the free items list) */
-int ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context, ARSTREAM2_RTP_PacketFifo_t *fifo);
+int ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo, struct mmsghdr *msgVec, unsigned int msgVecCount);
 
 /* WARNING: the call sequence ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec -> recvmmsg -> ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec
    must not be broken (no change made to the free items list) */
 int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context,
-                                             ARSTREAM2_RTP_PacketFifo_t *fifo, unsigned int msgVecCount, uint64_t curTime,
-                                             ARSTREAM2_RTCP_ReceiverContext_t *rtcpReceiverContext);
+                                                   ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoQueue_t *queue,
+                                                   struct mmsghdr *msgVec, unsigned int msgVecCount, uint64_t curTime,
+                                                   ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext);
 
 int ARSTREAM2_RTP_Receiver_PacketFifoFlush(ARSTREAM2_RTP_PacketFifo_t *fifo);
 

@@ -107,6 +107,7 @@ void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H26
         return;
     }
 
+    dst->buffer = src->buffer;
     dst->auSize = src->auSize;
     dst->metadataSize = src->metadataSize;
     dst->userDataSize = src->userDataSize;
@@ -914,6 +915,12 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
     int ret = 0, needFree = 0;
     ARSTREAM2_H264_AuFifoItem_t *auCopyItem;
 
+    if ((!auFifo) || (!naluFifo) || (!auItem))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return NULL;
+    }
+
     auCopyItem = ARSTREAM2_H264_AuFifoPopFreeItem(auFifo);
     if (auCopyItem)
     {
@@ -944,7 +951,6 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
                 needFree = 1;
             }
         }
-        auCopyItem->au.buffer = auItem->au.buffer;
     }
     else
     {
@@ -980,6 +986,7 @@ int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned 
 {
     if ((!au) || (!au->buffer))
     {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
 
@@ -1007,6 +1014,7 @@ int ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, u
 {
     if ((!au) || (!au->buffer))
     {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
 

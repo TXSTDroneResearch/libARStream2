@@ -59,17 +59,20 @@ static int ARSTREAM2_RTPH264_FifoDequeueNalu(ARSTREAM2_H264_NaluFifo_t *fifo, AR
 
 static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext_t *context,
                                                      ARSTREAM2_H264_NalUnit_t *nalu,
-                                                     ARSTREAM2_RTP_PacketFifo_t *packetFifo, uint64_t curTime)
+                                                     ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                     ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue, uint64_t curTime)
 {
     int ret = 0;
 
+    ARSTREAM2_RTP_PacketFifoBuffer_t *buffer = ARSTREAM2_RTP_PacketFifoGetBuffer(packetFifo);
     ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
-    if (item)
+    if ((item) && (buffer))
     {
         unsigned int offsetInBuffer = 0;
         uint8_t *payload = NULL, *headerExtension = NULL;
         unsigned int payloadSize = 0, headerExtensionSize = 0;
         ARSTREAM2_RTP_PacketReset(&item->packet);
+        item->packet.buffer = buffer;
 
         if ((context->useRtpHeaderExtensions) && (nalu->metadata) && (nalu->metadataSize > 4))
         {
@@ -82,8 +85,8 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
             {
                 if (nalu->metadataSize <= context->maxPacketSize)
                 {
-                    memcpy(item->packet.buffer + offsetInBuffer, nalu->metadata, nalu->metadataSize);
-                    headerExtension = item->packet.buffer + offsetInBuffer;
+                    memcpy(item->packet.buffer->buffer + offsetInBuffer, nalu->metadata, nalu->metadataSize);
+                    headerExtension = item->packet.buffer->buffer + offsetInBuffer;
                     headerExtensionSize = nalu->metadataSize;
                     offsetInBuffer += nalu->metadataSize;
                 }
@@ -95,8 +98,8 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
         }
         if (offsetInBuffer + nalu->naluSize <= context->maxPacketSize)
         {
-            memcpy(item->packet.buffer + offsetInBuffer, nalu->nalu, nalu->naluSize);
-            payload = item->packet.buffer + offsetInBuffer;
+            memcpy(item->packet.buffer->buffer + offsetInBuffer, nalu->nalu, nalu->naluSize);
+            payload = item->packet.buffer->buffer + offsetInBuffer;
             payloadSize = nalu->naluSize;
             offsetInBuffer += nalu->naluSize;
         }
@@ -118,15 +121,18 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 
         if (ret == 0)
         {
-            ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, item);
+            ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, item);
             if (ret != 0)
             {
+                ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, item->packet.buffer);
                 ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
             }
         }
     }
     else
     {
+        if (buffer) ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, buffer);
+        if (item) ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
         int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
         ret = -1;
@@ -139,7 +145,8 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *context,
                                                ARSTREAM2_H264_NalUnit_t *nalu,
                                                unsigned int fragmentCount,
-                                               ARSTREAM2_RTP_PacketFifo_t *packetFifo, uint64_t curTime)
+                                               ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                               ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue, uint64_t curTime)
 {
     int ret, status = 0;
     unsigned int i, offset;
@@ -164,14 +171,16 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
             if (packetSize + 2 <= context->maxPacketSize)
             {
+                ARSTREAM2_RTP_PacketFifoBuffer_t *buffer = ARSTREAM2_RTP_PacketFifoGetBuffer(packetFifo);
                 ARSTREAM2_RTP_PacketFifoItem_t *item = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
-                if (item)
+                if ((item) && (buffer))
                 {
                     unsigned int offsetInBuffer = 0;
                     uint8_t *payload = NULL, *headerExtension = NULL;
                     unsigned int payloadSize = 0, headerExtensionSize = 0;
                     uint8_t startBit = 0, endBit = 0;
                     ARSTREAM2_RTP_PacketReset(&item->packet);
+                    item->packet.buffer = buffer;
 
                     if ((context->useRtpHeaderExtensions) && (offset == 1) && (nalu->metadata) && (nalu->metadataSize > 4) && (nalu->metadataSize < packetSize))
                     {
@@ -184,8 +193,8 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                         {
                             if (nalu->metadataSize <= context->maxPacketSize)
                             {
-                                memcpy(item->packet.buffer + offsetInBuffer, nalu->metadata, nalu->metadataSize);
-                                headerExtension = item->packet.buffer + offsetInBuffer;
+                                memcpy(item->packet.buffer->buffer + offsetInBuffer, nalu->metadata, nalu->metadataSize);
+                                headerExtension = item->packet.buffer->buffer + offsetInBuffer;
                                 headerExtensionSize = nalu->metadataSize;
                                 offsetInBuffer += nalu->metadataSize;
                             }
@@ -197,12 +206,12 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
                     }
                     if (offsetInBuffer + packetSize + 2 <= context->maxPacketSize)
                     {
-                        memcpy(item->packet.buffer + offsetInBuffer + 2, nalu->nalu + offset, packetSize);
-                        *(item->packet.buffer + offsetInBuffer) = fuIndicator;
+                        memcpy(item->packet.buffer->buffer + offsetInBuffer + 2, nalu->nalu + offset, packetSize);
+                        *(item->packet.buffer->buffer + offsetInBuffer) = fuIndicator;
                         startBit = (offset == 1) ? 0x80 : 0;
                         endBit = ((i == fragmentCount - 1) && (fragmentOffset + packetSize == fragmentSize)) ? 0x40 : 0;
-                        *(item->packet.buffer + offsetInBuffer + 1) = fuHeader | startBit | endBit;
-                        payload = item->packet.buffer + offsetInBuffer;
+                        *(item->packet.buffer->buffer + offsetInBuffer + 1) = fuHeader | startBit | endBit;
+                        payload = item->packet.buffer->buffer + offsetInBuffer;
                         payloadSize = packetSize + 2;
                         offsetInBuffer += packetSize + 2;
                     }
@@ -225,15 +234,18 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
                     if (ret == 0)
                     {
-                        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, item);
+                        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, item);
                         if (ret != 0)
                         {
+                            ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, item->packet.buffer);
                             ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
                         }
                     }
                 }
                 else
                 {
+                    if (buffer) ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, buffer);
+                    if (item) ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, item);
                     int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
                     status = -1;
@@ -261,10 +273,12 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
 {
     int ret = 0;
 
+    ARSTREAM2_RTP_PacketFifoBuffer_t *buffer = ARSTREAM2_RTP_PacketFifoGetBuffer(packetFifo);
     context->stapItem = ARSTREAM2_RTP_PacketFifoPopFreeItem(packetFifo);
-    if (context->stapItem)
+    if ((context->stapItem) && (buffer))
     {
         ARSTREAM2_RTP_PacketReset(&context->stapItem->packet);
+        context->stapItem->packet.buffer = buffer;
         context->stapMaxNri = 0;
         context->stapImportance = 0;
         context->stapPriority = 0;
@@ -288,8 +302,8 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
             {
                 if (nalu->metadataSize <= context->maxPacketSize)
                 {
-                    memcpy(context->stapItem->packet.buffer + context->stapOffsetInBuffer, nalu->metadata, nalu->metadataSize);
-                    context->stapHeaderExtension = context->stapItem->packet.buffer + context->stapOffsetInBuffer;
+                    memcpy(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer, nalu->metadata, nalu->metadataSize);
+                    context->stapHeaderExtension = context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer;
                     context->stapHeaderExtensionSize = nalu->metadataSize;
                     context->stapOffsetInBuffer += nalu->metadataSize;
                 }
@@ -301,7 +315,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
         }
         if (context->stapOffsetInBuffer + 1 <= context->maxPacketSize)
         {
-            context->stapPayload = context->stapItem->packet.buffer + context->stapOffsetInBuffer;
+            context->stapPayload = context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer;
             context->stapPayloadSize = 1;
             context->stapOffsetInBuffer++;
             context->stapPending = 1;
@@ -313,6 +327,8 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     }
     else
     {
+        if (buffer) ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, buffer);
+        if (context->stapItem) ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, context->stapItem);
         int flushRet = ARSTREAM2_RTP_Sender_PacketFifoFlush(context, packetFifo, curTime);
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Packet FIFO is full => flush to recover (%d packets flushed)", flushRet);
         ret = -1;
@@ -347,11 +363,11 @@ static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderCont
         {
             if ((nalu->priority != 0) && (nalu->priority < context->stapPriority)) context->stapPriority = nalu->priority;
         }
-        *(context->stapItem->packet.buffer + context->stapOffsetInBuffer) = ((nalu->naluSize >> 8) & 0xFF);
-        *(context->stapItem->packet.buffer + context->stapOffsetInBuffer + 1) = (nalu->naluSize & 0xFF);
+        *(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer) = ((nalu->naluSize >> 8) & 0xFF);
+        *(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer + 1) = (nalu->naluSize & 0xFF);
         context->stapPayloadSize += 2;
         context->stapOffsetInBuffer += 2;
-        memcpy(context->stapItem->packet.buffer + context->stapOffsetInBuffer, nalu->nalu, nalu->naluSize);
+        memcpy(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer, nalu->nalu, nalu->naluSize);
         context->stapPayloadSize += nalu->naluSize;
         context->stapOffsetInBuffer += nalu->naluSize;
     }
@@ -365,7 +381,8 @@ static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderCont
 
 
 static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContext_t *context,
-                                                      ARSTREAM2_RTP_PacketFifo_t *packetFifo, int markerBit)
+                                                      ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                      ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue, int markerBit)
 {
     int ret = 0;
     uint8_t stapHeader;
@@ -385,9 +402,10 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
 
     if (ret == 0)
     {
-        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifo, context->stapItem);
+        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, context->stapItem);
         if (ret != 0)
         {
+            ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, context->stapItem->packet.buffer);
             ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, context->stapItem);
         }
     }
@@ -402,6 +420,7 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
 int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t *context,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                  ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue,
                                                   uint64_t curTime)
 {
     ARSTREAM2_H264_NalUnit_t nalu;
@@ -415,7 +434,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
             if (context->stapPending)
             {
                 /* Finish the previous STAP-A packet */
-                err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, packetFifoQueue, 0); // do not set the marker bit
                 if (err != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
@@ -449,14 +468,14 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                 if (context->stapPending)
                 {
                     /* Finish the previous STAP-A packet */
-                    err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                    err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, packetFifoQueue, 0); // do not set the marker bit
                     if (err != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
                     }
                 }
 
-                err = ARSTREAM2_RTPH264_Sender_FuAPackets(context, &nalu, fragmentCount, packetFifo, curTime);
+                err = ARSTREAM2_RTPH264_Sender_FuAPackets(context, &nalu, fragmentCount, packetFifo, packetFifoQueue, curTime);
                 if (err != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FuAPackets() failed (%d)", err);
@@ -472,7 +491,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                     if (context->stapPending)
                     {
                         /* Finish the previous STAP-A packet */
-                        err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 0); // do not set the marker bit
+                        err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, packetFifoQueue, 0); // do not set the marker bit
                         if (err != 0)
                         {
                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
@@ -484,7 +503,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                         || (context->stapPayloadSize + context->stapHeaderExtensionSize + newStapSize > context->targetPacketSize))
                 {
                     /* Single NAL unit */
-                    err = ARSTREAM2_RTPH264_Sender_SingleNaluPacket(context, &nalu, packetFifo, curTime);
+                    err = ARSTREAM2_RTPH264_Sender_SingleNaluPacket(context, &nalu, packetFifo, packetFifoQueue, curTime);
                     if (err != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_SingleNaluPacket() failed (%d)", err);
@@ -514,7 +533,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                         if (nalu.isLastInAu)
                         {
                             /* Finish the STAP-A packet */
-                            err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, 1); // set the marker bit
+                            err = ARSTREAM2_RTPH264_Sender_FinishStapAPacket(context, packetFifo, packetFifoQueue, 1); // set the marker bit
                             if (err != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Sender_FinishStapAPacket() failed (%d)", err);
@@ -1000,6 +1019,7 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
 
 int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverContext_t *context,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
+                                                  ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                   ARSAL_Mutex_t *naluFifoMutex,
                                                   ARSTREAM2_H264_AuFifo_t *auFifo,
@@ -1009,14 +1029,14 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
     ARSTREAM2_RTP_PacketFifoItem_t *packetItem;
     int ret = 0, packetCount = 0, peekCount = 0, err;
 
-    while ((packetItem = ARSTREAM2_RTP_PacketFifoPeekItem(packetFifo)) != NULL)
+    while ((packetItem = ARSTREAM2_RTP_PacketFifoPeekItem(packetFifoQueue)) != NULL)
     {
         peekCount++;
         if ((context->previousDepayloadExtSeqNum == -1)
                 || (packetItem->packet.extSeqNum == (unsigned)context->previousDepayloadExtSeqNum + 1)
                 || (curTime >= packetItem->packet.timeoutTimestamp))
         {
-            packetItem = ARSTREAM2_RTP_PacketFifoDequeueItem(packetFifo);
+            packetItem = ARSTREAM2_RTP_PacketFifoDequeueItem(packetFifoQueue);
             if (packetItem)
             {
                 ARSTREAM2_RTP_Packet_t *packet = &packetItem->packet;
@@ -1301,6 +1321,11 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 context->previousDepayloadExtRtpTimestamp = packet->extRtpTimestamp;
                 packetCount++;
 
+                err = ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, packetItem->packet.buffer);
+                if (err < 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to unref packet buffer (%d)", err);
+                }
                 err = ARSTREAM2_RTP_PacketFifoPushFreeItem(packetFifo, packetItem);
                 if (err < 0)
                 {
