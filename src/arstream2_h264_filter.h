@@ -120,8 +120,12 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuSlicesReceived;
     int currentAuSlicesAllI;
     int currentAuStreamingInfoAvailable;
-    ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfo;
     uint16_t currentAuStreamingSliceMbCount[ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT];
+    int currentAuStreamingSliceCount;
+    int currentAuStreamingInfoV1Available;
+    ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfoV1;
+    int currentAuStreamingInfoV2Available;
+    ARSTREAM2_H264Sei_ParrotStreamingV2_t currentAuStreamingInfoV2;
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
     int currentAuCurrentSliceFirstMb;

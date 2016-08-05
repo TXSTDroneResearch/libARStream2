@@ -144,6 +144,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 int savedAuIncomplete = filter->currentAuIncomplete;
                 int savedAuSlicesAllI = filter->currentAuSlicesAllI;
                 int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
+                int savedAuStreamingInfoV1Available = filter->currentAuStreamingInfoV1Available;
+                int savedAuStreamingInfoV2Available = filter->currentAuStreamingInfoV2Available;
                 int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
                 int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
                 int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
@@ -233,6 +235,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 filter->currentAuIncomplete = savedAuIncomplete;
                 filter->currentAuSlicesAllI = savedAuSlicesAllI;
                 filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
+                filter->currentAuStreamingInfoV1Available = savedAuStreamingInfoV1Available;
+                filter->currentAuStreamingInfoV2Available = savedAuStreamingInfoV2Available;
                 filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
                 filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
                 filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;

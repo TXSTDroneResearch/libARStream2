@@ -174,9 +174,29 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                         }
                         else
                         {
-                            if (ARSTREAM2_H264Sei_IsUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize) == 1)
+                            if (ARSTREAM2_H264Sei_IsUserDataParrotStreamingV2(pUserDataSei, userDataSeiSize) == 1)
                             {
-                                _err = ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfo, filter->currentAuStreamingSliceMbCount);
+                                _err = ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV2(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfoV2);
+                                if (_err != ARSTREAM2_OK)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV2() failed (%d)", _err);
+                                }
+                                else
+                                {
+                                    filter->currentAuStreamingInfoAvailable = 1;
+                                    filter->currentAuStreamingInfoV2Available = 1;
+                                    filter->currentAuInferredSliceMbCount = filter->currentAuStreamingInfoV2.sliceMbCount;
+                                    filter->currentAuStreamingSliceCount = filter->currentAuStreamingInfoV2.frameSliceCount;
+                                    int k, cnt;
+                                    for (k = 0, cnt = 0; k < filter->currentAuStreamingSliceCount; k++, cnt += filter->currentAuStreamingInfoV2.sliceMbCount)
+                                    {
+                                        filter->currentAuStreamingSliceMbCount[k] = (cnt + filter->currentAuStreamingInfoV2.sliceMbCount <= filter->mbCount) ? filter->currentAuStreamingInfoV2.sliceMbCount : filter->mbCount - count;
+                                    }
+                                }
+                            }
+                            else if (ARSTREAM2_H264Sei_IsUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize) == 1)
+                            {
+                                _err = ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1(pUserDataSei, userDataSeiSize, &filter->currentAuStreamingInfoV1, filter->currentAuStreamingSliceMbCount);
                                 if (_err != ARSTREAM2_OK)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1() failed (%d)", _err);
@@ -184,7 +204,9 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                                 else
                                 {
                                     filter->currentAuStreamingInfoAvailable = 1;
+                                    filter->currentAuStreamingInfoV1Available = 1;
                                     filter->currentAuInferredSliceMbCount = filter->currentAuStreamingSliceMbCount[0];
+                                    filter->currentAuStreamingSliceCount = filter->currentAuStreamingInfoV1.sliceCount;
                                 }
                             }
                             else if (userDataSeiSize <= au->buffer->userDataBufferSize)
@@ -253,8 +275,11 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
     filter->currentAuIncomplete = 0;
     filter->currentAuSlicesAllI = 1;
     filter->currentAuSlicesReceived = 0;
-    filter->currentAuStreamingInfoAvailable = 0;
-    memset(&filter->currentAuStreamingInfo, 0, sizeof(ARSTREAM2_H264Sei_ParrotStreamingV1_t));
+    filter->currentAuStreamingInfoV1Available = 0;
+    if (!filter->currentAuStreamingInfoV2Available)
+    {
+        filter->currentAuStreamingInfoAvailable = 0;
+    }
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuInferredPreviousSliceFirstMb = 0;
@@ -278,7 +303,7 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
     {
         int sliceMbCount = 0, sliceFirstMb = 0;
         filter->currentAuSlicesReceived = 1;
-        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.sliceCount <= ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT))
+        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingSliceCount <= ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT))
         {
             // Update slice index and firstMb
             if (filter->currentAuPreviousSliceIndex < 0)
@@ -286,7 +311,7 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
                 filter->currentAuPreviousSliceFirstMb = 0;
                 filter->currentAuPreviousSliceIndex = 0;
             }
-            while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingInfo.sliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
+            while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingSliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
             {
                 filter->currentAuPreviousSliceFirstMb += filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
                 filter->currentAuPreviousSliceIndex++;
@@ -443,7 +468,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         {
             au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME;
         }
-        else if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingInfo.indexInGop == 0))
+        else if ((filter->currentAuStreamingInfoV1Available) && (filter->currentAuStreamingInfoV1.indexInGop == 0))
         {
             au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START;
         }
