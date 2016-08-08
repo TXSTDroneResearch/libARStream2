@@ -154,7 +154,7 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_AuReadyCallback_t)(uint8_t *
                                                                    eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
                                                                    const void *auMetadata, int auMetadataSize,
                                                                    const void *auUserData, int auUserDataSize,
-                                                                   const void *auBufferUserPtr, void *userPtr);
+                                                                   void *auBufferUserPtr, void *userPtr);
 
 
 /**
