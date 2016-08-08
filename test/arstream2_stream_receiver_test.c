@@ -561,6 +561,8 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverNetConfig.serverControlPort = deviceManager->arstream2ServerControlPort;
         streamReceiverNetConfig.clientStreamPort = deviceManager->arstream2ClientStreamPort;
         streamReceiverNetConfig.clientControlPort = deviceManager->arstream2ClientControlPort;
+        streamReceiverConfig.canonicalName = "StreamReceiverTest";
+        streamReceiverConfig.friendlyName = "StreamReceiverTest";
         streamReceiverConfig.maxPacketSize = deviceManager->arstream2MaxPacketSize;
         streamReceiverConfig.maxBitrate = deviceManager->arstream2MaxBitrate;
         streamReceiverConfig.maxLatencyMs = deviceManager->arstream2MaxLatency;
