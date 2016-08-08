@@ -587,7 +587,7 @@ int ARSTREAM2_H264_AuFifoUnrefBuffer(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
     }
     else
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_TAG, "Ref count is already null, this should not happen!");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_TAG, "FIXME! Ref count is already null, this should not happen!");
     }
 
     if (buffer->refCount == 0)

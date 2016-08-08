@@ -394,6 +394,25 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                     filter->currentAuIncomplete = 1;
                 }
             }
+            else if (filter->sync)
+            {
+                if (filter->currentAuPreviousSliceIndex < 0)
+                {
+                    if (filter->currentAuCurrentSliceFirstMb > 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "FIXME! missingPacketsBefore==0 but currentSliceFirstMb=%d and expectedSliceFirstMb=0, this should not happen!",
+                                    filter->currentAuCurrentSliceFirstMb);
+                    }
+                }
+                else if (filter->currentAuStreamingInfoAvailable)
+                {
+                    if (filter->currentAuCurrentSliceFirstMb != filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex])
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "FIXME! missingPacketsBefore==0 but currentSliceFirstMb=%d and expectedSliceFirstMb=%d, this should not happen!",
+                                    filter->currentAuCurrentSliceFirstMb, filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex]);
+                    }
+                }
+            }
 
             err = ARSTREAM2_H264Filter_ProcessNalu(filter, &naluItem->nalu);
             if (err != 0)

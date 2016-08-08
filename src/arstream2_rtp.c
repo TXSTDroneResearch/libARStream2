@@ -315,7 +315,7 @@ int ARSTREAM2_RTP_PacketFifoUnrefBuffer(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTRE
     }
     else
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Ref count is already null, this should not happen!");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "FIXME! Ref count is already null, this should not happen!");
     }
 
     if (buffer->refCount == 0)
@@ -1092,8 +1092,8 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 }
                 else if (ret == 1)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Out of order RTP packet received (seqNum %d, extSeqNum %d, delta %d)",
-                                item->packet.seqNum, item->packet.extSeqNum, -seqNumDelta); //TODO: debug
+                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Out of order RTP packet received (seqNum %d, extSeqNum %d, delta %d)",
+                                item->packet.seqNum, item->packet.extSeqNum, -seqNumDelta); //TODO: debug */
                     enqueueCount++;
                 }
                 else
