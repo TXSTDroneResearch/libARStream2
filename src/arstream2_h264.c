@@ -111,6 +111,7 @@ void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H26
     dst->auSize = src->auSize;
     dst->metadataSize = src->metadataSize;
     dst->userDataSize = src->userDataSize;
+    dst->mbStatusAvailable = src->mbStatusAvailable;
     dst->syncType = src->syncType;
     dst->inputTimestamp = src->inputTimestamp;
     dst->timeoutTimestamp = src->timeoutTimestamp;
@@ -119,6 +120,8 @@ void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H26
     dst->extRtpTimestamp = src->extRtpTimestamp;
     dst->rtpTimestamp = src->rtpTimestamp;
     dst->naluCount = 0;
+    dst->naluHead = NULL;
+    dst->naluTail = NULL;
 }
 
 
@@ -859,6 +862,7 @@ int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM
     naluItem->next = nextNaluItem;
     if (nextNaluItem->prev)
     {
+        nextNaluItem->prev->next = naluItem;
         naluItem->prev = nextNaluItem->prev;
     }
     else
