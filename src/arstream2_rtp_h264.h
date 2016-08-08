@@ -31,7 +31,9 @@ typedef struct ARSTREAM2_RTPH264_ReceiverContext_s
 {
     int32_t previousDepayloadExtSeqNum;
     uint64_t previousDepayloadExtRtpTimestamp;
+    uint32_t missingBeforePending;
     int fuPending;
+    uint32_t fuPacketCount;
     ARSTREAM2_H264_NaluFifoItem_t *fuNaluItem;
 
     uint32_t startCode;

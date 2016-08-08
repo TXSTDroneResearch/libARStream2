@@ -824,6 +824,7 @@ static int ARSTREAM2_RTPH264_Receiver_StapAPacket(ARSTREAM2_RTPH264_ReceiverCont
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free FIFO item");
                 }
+                return -1;
             }
         }
         else
@@ -903,6 +904,7 @@ static int ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(ARSTREAM2_RTPH264_Receiver
         }
 
         context->fuPending = 1;
+        context->fuPacketCount = 0;
     }
     else
     {
@@ -947,6 +949,7 @@ static int ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA(ARSTREAM2_RTPH264_Receiv
     }
     context->fuNaluItem->nalu.naluSize += packetSize;
     context->auItem->au.auSize += packetSize;
+    context->fuPacketCount++;
 
     return ret;
 }
@@ -973,6 +976,7 @@ static int ARSTREAM2_RTPH264_Receiver_FinishFuAPackets(ARSTREAM2_RTPH264_Receive
     }
 
     context->fuPending = 0;
+    context->fuPacketCount = 0;
     context->fuNaluItem = NULL;
 
     return ret;
@@ -983,24 +987,20 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
                                                      ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                      ARSAL_Mutex_t *naluFifoMutex)
 {
-    int ret = 0, err;
+    int err;
 
     if (!context->fuNaluItem)
     {
-        return ret;
+        return 0;
     }
 
-    if (!context->auItem)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (context->fuNaluItem->nalu.naluSize <= context->auItem->au.auSize)
+    if ((context->auItem) && (context->fuNaluItem->nalu.naluSize <= context->auItem->au.auSize))
     {
         context->auItem->au.auSize -= context->fuNaluItem->nalu.naluSize;
     }
+
     context->fuPending = 0;
+    context->fuPacketCount = 0;
 
     if (naluFifoMutex) ARSAL_Mutex_Lock(naluFifoMutex);
     err = ARSTREAM2_H264_NaluFifoPushFreeItem(naluFifo, context->fuNaluItem);
@@ -1013,7 +1013,7 @@ static int ARSTREAM2_RTPH264_Receiver_DropFuAPackets(ARSTREAM2_RTPH264_ReceiverC
 
     context->fuNaluItem = NULL;
 
-    return ret;
+    return 0;
 }
 
 
@@ -1040,15 +1040,16 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
             if (packetItem)
             {
                 ARSTREAM2_RTP_Packet_t *packet = &packetItem->packet;
-                uint32_t seqNumDelta;
+                uint32_t missingPacketsBefore;
                 if (context->previousDepayloadExtSeqNum == -1)
                 {
-                    seqNumDelta = 1;
+                    missingPacketsBefore = 0;
                 }
                 else
                 {
-                    seqNumDelta = packet->extSeqNum - context->previousDepayloadExtSeqNum;
-                    rtcpContext->packetsLost += seqNumDelta - 1;
+                    missingPacketsBefore = packet->extSeqNum - context->previousDepayloadExtSeqNum - 1 + context->missingBeforePending;
+                    context->missingBeforePending = 0;
+                    rtcpContext->packetsLost += missingPacketsBefore;
                 }
 
                 /* AU change detection */
@@ -1057,6 +1058,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 {
                     /* drop the previous incomplete FU-A */
                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
+                    context->missingBeforePending += context->fuPacketCount;
                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                     if (err != 0)
                     {
@@ -1153,6 +1155,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 {
                                     /* drop the previous incomplete FU-A */
                                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
+                                    context->missingBeforePending += context->fuPacketCount;
                                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
@@ -1162,16 +1165,22 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
 
                                 if (startBit)
                                 {
-                                    err = ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
+                                    err = ARSTREAM2_RTPH264_Receiver_BeginFuAPackets(context, packet, missingPacketsBefore + context->missingBeforePending, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_BeginFuAPackets() failed (%d)", err);
+                                        context->missingBeforePending++;
+                                    }
+                                    else
+                                    {
+                                        context->missingBeforePending = 0;
                                     }
                                 }
-                                else if (seqNumDelta > 1)
+                                else if (missingPacketsBefore + context->missingBeforePending)
                                 {
                                     /* drop the FU-A if there is a seqNum discontinuity */
                                     //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet at extSeqNum %d", packet->extSeqNum);
+                                    context->missingBeforePending += context->fuPacketCount + 1;
                                     err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                     if (err != 0)
                                     {
@@ -1185,6 +1194,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                     if (err != 0)
                                     {
                                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_AppendPacketToFuA() failed (%d)", err);
+                                        context->missingBeforePending += context->fuPacketCount + 1;
                                         err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                         if (err != 0)
                                         {
@@ -1198,6 +1208,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                         if (err != 0)
                                         {
                                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_FinishFuAPackets() failed (%d)", err);
+                                            context->missingBeforePending += context->fuPacketCount;
                                             err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                             if (err != 0)
                                             {
@@ -1220,6 +1231,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             {
                                 /* drop the previous incomplete FU-A */
                                 //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
+                                context->missingBeforePending += context->fuPacketCount;
                                 err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
@@ -1229,10 +1241,15 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
 
                             if (packet->payloadSize >= 3)
                             {
-                                err = ARSTREAM2_RTPH264_Receiver_StapAPacket(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
+                                err = ARSTREAM2_RTPH264_Receiver_StapAPacket(context, packet, missingPacketsBefore + context->missingBeforePending, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
                                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_StapAPacket() failed (%d)", err);
+                                    context->missingBeforePending++;
+                                }
+                                else
+                                {
+                                    context->missingBeforePending = 0;
                                 }
                             }
                             else
@@ -1248,6 +1265,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             {
                                 /* drop the previous incomplete FU-A */
                                 //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Incomplete FU-A packet before extSeqNum %d", packet->extSeqNum);
+                                context->missingBeforePending += context->fuPacketCount;
                                 err = ARSTREAM2_RTPH264_Receiver_DropFuAPackets(context, naluFifo, naluFifoMutex);
                                 if (err != 0)
                                 {
@@ -1255,10 +1273,15 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                 }
                             }
 
-                            err = ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(context, packet, seqNumDelta - 1, naluFifo, naluFifoMutex);
+                            err = ARSTREAM2_RTPH264_Receiver_SingleNaluPacket(context, packet, missingPacketsBefore + context->missingBeforePending, naluFifo, naluFifoMutex);
                             if (err != 0)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "ARSTREAM2_RTPH264_Receiver_SingleNaluPacket() failed (%d)", err);
+                                context->missingBeforePending++;
+                            }
+                            else
+                            {
+                                context->missingBeforePending = 0;
                             }
                         }
                     }
