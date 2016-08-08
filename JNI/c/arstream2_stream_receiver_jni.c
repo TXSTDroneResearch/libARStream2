@@ -62,7 +62,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     config.maxNetworkLatencyMs = maxNetworkLatency;
     config.generateReceiverReports = 1;
     config.waitForSync = 1;
-    config.outputIncompleteAu = 1;
+    config.outputIncompleteAu = 0;
     config.filterOutSpsPps = 1;
     config.filterOutSei = 1;
     config.replaceStartCodesWithNaluSize = 0;
@@ -148,7 +148,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
     config.maxNetworkLatencyMs = maxNetworkLatency;
     config.generateReceiverReports = 1;
     config.waitForSync = 1;
-    config.outputIncompleteAu = 1;
+    config.outputIncompleteAu = 0;
     config.filterOutSpsPps = 1;
     config.filterOutSei = 1;
     config.replaceStartCodesWithNaluSize = 0;
