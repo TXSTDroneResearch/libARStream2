@@ -305,21 +305,11 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
 
 
 int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
-                                                  ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem, int isFirstNaluInAu)
+                                                  ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem)
 {
     int missingMb = 0, firstMbInSlice = 0, ret = 0;
 
-    if (isFirstNaluInAu)
-    {
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably on previous AU => OK", filter->currentAuOutputIndex, au->ntpTimestamp);
-        if (filter->currentAuCurrentSliceFirstMb == 0)
-        {
-            filter->currentAuPreviousSliceFirstMb = 0;
-            filter->currentAuPreviousSliceIndex = 0;
-        }
-        return 0;
-    }
-    else if (((nextNaluItem->nalu.naluType != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR) && (nextNaluItem->nalu.naluType != ARSTREAM2_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
+    if (((nextNaluItem->nalu.naluType != ARSTREAM2_H264_NALU_TYPE_SLICE_IDR) && (nextNaluItem->nalu.naluType != ARSTREAM2_H264_NALU_TYPE_SLICE)) || (filter->currentAuCurrentSliceFirstMb == 0))
     {
         //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a SPS, PPS or SEI or on previous AU => OK", filter->currentAuOutputIndex, au->ntpTimestamp);
         if (filter->currentAuCurrentSliceFirstMb == 0)

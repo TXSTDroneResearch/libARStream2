@@ -336,7 +336,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
 {
     ARSTREAM2_H264_NaluFifoItem_t *naluItem, *prevNaluItem = NULL;
     int cancelAuOutput = 0, discarded = 0;
-    int isFirst = 1;
     int ret = 0, err;
 
     if ((!filter) || (!au))
@@ -384,7 +383,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             if (naluItem->nalu.missingPacketsBefore)
             {
                 /* error concealment: missing slices before the current slice */
-                err = ARSTREAM2_H264FilterError_HandleMissingSlices(filter, au, naluItem, isFirst);
+                err = ARSTREAM2_H264FilterError_HandleMissingSlices(filter, au, naluItem);
                 if (err < 0)
                 {
                     if (err != -2)
@@ -422,7 +421,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         }
 
         prevNaluItem = naluItem;
-        isFirst = 0;
     }
 
     if ((prevNaluItem) && (prevNaluItem->nalu.isLastInAu == 0))

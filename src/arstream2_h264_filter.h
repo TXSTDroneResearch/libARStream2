@@ -244,7 +244,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
 
 
 int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
-                                                  ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem, int isFirstNaluInAu);
+                                                  ARSTREAM2_H264_NaluFifoItem_t *nextNaluItem);
 
 
 int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
