@@ -279,6 +279,7 @@ static int ARSTREAM2_RTPH264_Sender_BeginStapAPacket(ARSTREAM2_RTP_SenderContext
     {
         ARSTREAM2_RTP_PacketReset(&context->stapItem->packet);
         context->stapItem->packet.buffer = buffer;
+        context->stapFirstNalu = 1;
         context->stapMaxNri = 0;
         context->stapImportance = 0;
         context->stapPriority = 0;
@@ -347,21 +348,21 @@ static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderCont
     {
         uint8_t nri = ((uint8_t)(*(nalu->nalu)) >> 5) & 0x3;
         if (nri > context->stapMaxNri) context->stapMaxNri = nri;
-        if (context->stapImportance == 0)
+        if (context->stapFirstNalu)
         {
             context->stapImportance = nalu->importance;
         }
         else
         {
-            if ((nalu->importance != 0) && (nalu->importance < context->stapImportance)) context->stapImportance = nalu->importance;
+            if (nalu->importance < context->stapImportance) context->stapImportance = nalu->importance;
         }
-        if (context->stapPriority == 0)
+        if (context->stapFirstNalu)
         {
             context->stapPriority = nalu->priority;
         }
         else
         {
-            if ((nalu->priority != 0) && (nalu->priority < context->stapPriority)) context->stapPriority = nalu->priority;
+            if (nalu->priority < context->stapPriority) context->stapPriority = nalu->priority;
         }
         *(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer) = ((nalu->naluSize >> 8) & 0xFF);
         *(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer + 1) = (nalu->naluSize & 0xFF);
@@ -370,6 +371,7 @@ static int ARSTREAM2_RTPH264_Sender_AppendToStapAPacket(ARSTREAM2_RTP_SenderCont
         memcpy(context->stapItem->packet.buffer->buffer + context->stapOffsetInBuffer, nalu->nalu, nalu->naluSize);
         context->stapPayloadSize += nalu->naluSize;
         context->stapOffsetInBuffer += nalu->naluSize;
+        context->stapFirstNalu = 0;
     }
     else
     {

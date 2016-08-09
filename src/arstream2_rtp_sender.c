@@ -127,7 +127,7 @@ struct ARSTREAM2_RtpSender_t {
     int naluFifoSize;
     int maxBitrate;
     uint32_t maxLatencyUs;
-    uint32_t maxNetworkLatencyUs;
+    uint32_t maxNetworkLatencyUs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     uint8_t *rtcpMsgBuffer;
 
     ARSTREAM2_RTP_SenderContext_t rtpSenderContext;
@@ -527,6 +527,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     int packetFifoWasCreated = 0;
     int naluFifoWasCreated = 0;
     int naluFifoMutexWasInit = 0;
+    int i;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -616,9 +617,9 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         else
         {
             int totalBufSize = 0;
-            if (config->maxNetworkLatencyMs > 0)
+            if (config->maxNetworkLatencyMs[0] > 0)
             {
-                totalBufSize = retSender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8;
+                totalBufSize = retSender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
             }
             else if (config->maxLatencyMs > 0)
             {
@@ -629,7 +630,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
 
         retSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
-        retSender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
+        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+        {
+            retSender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
+        }
         retSender->rtpSenderContext.useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         retSender->rtpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtpSenderContext.rtpClockRate = 90000;
@@ -711,8 +715,8 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     /* Setup the packet FIFO */
     if (internalError == ARSTREAM2_OK)
     {
-        int packetFifoBufferCount = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs > 0))
-                ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
+        int packetFifoBufferCount = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs[0] > 0))
+                ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs[0] * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
                 : retSender->naluFifoSize;
         if (packetFifoBufferCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT) packetFifoBufferCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
         retSender->msgVecCount = packetFifoBufferCount;
@@ -1047,14 +1051,18 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
         {
             ARSTREAM2_H264_NaluReset(&item->nalu);
             item->nalu.inputTimestamp = inputTime;
-            uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
-            uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;
-            item->nalu.timeoutTimestamp = (timeoutTimestamp1 > timeoutTimestamp2) ? timeoutTimestamp1 : timeoutTimestamp2;
             item->nalu.ntpTimestamp = nalu->auTimestamp;
             item->nalu.isLastInAu = nalu->isLastNaluInAu;
             item->nalu.seqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
-            item->nalu.importance = nalu->importance;
-            item->nalu.priority = nalu->priority;
+            item->nalu.importance = (nalu->importance < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS) ? nalu->importance : 0;
+            item->nalu.priority = (nalu->priority < ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS) ? nalu->priority : 0;
+            uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
+            uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs[item->nalu.importance] > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs[item->nalu.importance] : 0;
+            item->nalu.timeoutTimestamp = timeoutTimestamp1;
+            if ((timeoutTimestamp1 == 0) || ((timeoutTimestamp2 > 0) && (timeoutTimestamp2 < timeoutTimestamp1)))
+            {
+                item->nalu.timeoutTimestamp = timeoutTimestamp2;
+            }
             item->nalu.metadata = nalu->auMetadata;
             item->nalu.metadataSize = nalu->auMetadataSize;
             item->nalu.nalu = nalu->naluBuffer;
@@ -1129,14 +1137,18 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
             {
                 ARSTREAM2_H264_NaluReset(&item->nalu);
                 item->nalu.inputTimestamp = inputTime;
-                uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
-                uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs : 0;
-                item->nalu.timeoutTimestamp = (timeoutTimestamp1 > timeoutTimestamp2) ? timeoutTimestamp1 : timeoutTimestamp2;
                 item->nalu.ntpTimestamp = nalu[k].auTimestamp;
                 item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
                 item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
-                item->nalu.importance = nalu[k].importance;
-                item->nalu.priority = nalu[k].priority;
+                item->nalu.importance = (nalu[k].importance < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS) ? nalu[k].importance : 0;
+                item->nalu.priority = (nalu[k].priority < ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS) ? nalu[k].priority : 0;
+                uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
+                uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs[item->nalu.importance] > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs[item->nalu.importance] : 0;
+                item->nalu.timeoutTimestamp = timeoutTimestamp1;
+                if ((timeoutTimestamp1 == 0) || ((timeoutTimestamp2 > 0) && (timeoutTimestamp2 < timeoutTimestamp1)))
+                {
+                    item->nalu.timeoutTimestamp = timeoutTimestamp2;
+                }
                 item->nalu.metadata = nalu[k].auMetadata;
                 item->nalu.metadataSize = nalu[k].auMetadataSize;
                 item->nalu.nalu = nalu[k].naluBuffer;
@@ -1204,6 +1216,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     /* Local declarations */
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
     int shouldStop, ret, selectRet, packetsPending = 0, previouslySending = 0;
+    unsigned int dropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     struct timespec t1;
     uint64_t curTime;
     uint32_t nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
@@ -1314,7 +1327,8 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTP packet FIFO cleanup (packets on timeout) */
-        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, &sender->packetFifoQueue, curTime);
+        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, &sender->packetFifoQueue,
+                                                              curTime, dropCount, ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS);
         if (ret < 0)
         {
             if (ret != -2)
@@ -1324,7 +1338,16 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
         else if (ret > 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets from FIFO on timeout", ret);
+            char strDrops[16];
+            char *str = strDrops;
+            int i, l, len;
+            for (i = 0, len = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+            {
+                l = snprintf(str, 16 - len, "%s%d", (i > 0) ? " " : "", dropCount[i]);
+                len += l;
+                str += l;
+            }
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets from FIFO on timeout (%s)", ret, strDrops);
         }
 
         /* RTP packets creation */
@@ -1479,6 +1502,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sender, ARSTREAM2_RtpSender_DynamicConfig_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int i;
 
     if ((sender == NULL) || (config == NULL))
     {
@@ -1496,13 +1520,16 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sen
     {
         config->maxLatencyMs = 0;
     }
-    if (sender->maxNetworkLatencyUs > 0)
+    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
     {
-        config->maxNetworkLatencyMs = (sender->maxNetworkLatencyUs + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
-    }
-    else
-    {
-        config->maxNetworkLatencyMs = 0;
+        if (sender->maxNetworkLatencyUs[i] > 0)
+        {
+            config->maxNetworkLatencyMs[i] = (sender->maxNetworkLatencyUs[i] + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
+        }
+        else
+        {
+            config->maxNetworkLatencyMs[i] = 0;
+        }
     }
 
     return ret;
@@ -1512,6 +1539,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_DynamicConfig_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int i;
 
     if ((sender == NULL) || (config == NULL))
     {
@@ -1527,9 +1555,9 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
     else
     {
         int totalBufSize = 0;
-        if (config->maxNetworkLatencyMs > 0)
+        if (config->maxNetworkLatencyMs[0] > 0)
         {
-            totalBufSize = sender->maxBitrate * config->maxNetworkLatencyMs / 1000 / 8;
+            totalBufSize = sender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
         }
         else if (config->maxLatencyMs > 0)
         {
@@ -1539,7 +1567,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
         sender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
     }
     sender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
-    sender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
+    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+    {
+        sender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
+    }
 
     if ((sender->streamSocket != -1) && (sender->streamSocketSendBufferSize))
     {

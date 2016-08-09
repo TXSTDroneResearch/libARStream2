@@ -681,10 +681,20 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t
 
 int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
                                                     ARSTREAM2_RTP_PacketFifo_t *fifo,
-                                                    ARSTREAM2_RTP_PacketFifoQueue_t *queue, uint64_t curTime)
+                                                    ARSTREAM2_RTP_PacketFifoQueue_t *queue, uint64_t curTime,
+                                                    unsigned int *dropCount, unsigned int importanceLevelCount)
 {
     ARSTREAM2_RTP_PacketFifoItem_t *cur = NULL, *next = NULL;
     int count;
+    unsigned int i;
+
+    if ((dropCount) && (importanceLevelCount > 0))
+    {
+        for (i = 0; i < importanceLevelCount; i++)
+        {
+            dropCount[i] = 0;
+        }
+    }
 
     if ((!context) || (!fifo) || (!queue))
     {
@@ -707,6 +717,11 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_
     {
         if ((cur->packet.timeoutTimestamp != 0) && (cur->packet.timeoutTimestamp <= curTime))
         {
+            if ((dropCount) && (cur->packet.importance < importanceLevelCount))
+            {
+                dropCount[cur->packet.importance]++;
+            }
+
             /* call the monitoringCallback */
             if (context->monitoringCallback != NULL)
             {

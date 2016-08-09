@@ -170,6 +170,7 @@ typedef struct ARSTREAM2_RTP_SenderContext_s
     void *previousAuUserPtr;
     int stapPending;
     ARSTREAM2_RTP_PacketFifoItem_t *stapItem;
+    int stapFirstNalu;
     uint64_t stapNtpTimestamp;
     uint64_t stapInputTimestamp;
     uint64_t stapTimeoutTimestamp;
@@ -257,7 +258,8 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t
 
 int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_t *context,
                                                     ARSTREAM2_RTP_PacketFifo_t *fifo,
-                                                    ARSTREAM2_RTP_PacketFifoQueue_t *queue, uint64_t curTime);
+                                                    ARSTREAM2_RTP_PacketFifoQueue_t *queue, uint64_t curTime,
+                                                    unsigned int *dropCount, unsigned int importanceLevelCount);
 
 int ARSTREAM2_RTP_Sender_PacketFifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
                                          ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime);

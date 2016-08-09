@@ -35,6 +35,18 @@ extern "C" {
 
 
 /**
+ * @brief Maximum number of NAL units importance levels
+ */
+#define ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS          (4)
+
+
+/**
+ * @brief Maximum number of NAL units priority levels
+ */
+#define ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS            (5)
+
+
+/**
  * @brief ARSTREAM2 StreamSender instance handle.
  */
 typedef void* ARSTREAM2_StreamSender_Handle;
@@ -173,7 +185,7 @@ typedef struct ARSTREAM2_StreamSender_Config_t
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_StreamSender_Config_t;
@@ -188,7 +200,7 @@ typedef struct ARSTREAM2_StreamSender_DynamicConfig_t
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
 
 } ARSTREAM2_StreamSender_DynamicConfig_t;
 
@@ -205,8 +217,8 @@ typedef struct ARSTREAM2_StreamSender_H264NaluDesc_t
     uint64_t auTimestamp;                           /**< Access unit timastamp in microseconds. All NAL units of an access unit must share the same timestamp */
     uint32_t isLastNaluInAu;                        /**< Boolean-like flag (0/1). If active, tells the sender that the NAL unit is the last of the access unit */
     uint32_t seqNumForcedDiscontinuity;             /**< Force an added discontinuity in RTP sequence number before the NAL unit */
-    uint32_t importance;                            /**< Importance indication (0: unspecified, low numbers are more important) */
-    uint32_t priority;                              /**< Priority indication (0: unspecified, low numbers have more priority) */
+    uint32_t importance;                            /**< Importance indication (low numbers are more important, valid range: 0..ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS-1) */
+    uint32_t priority;                              /**< Priority indication (low numbers are more important, valid range: 0..ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS-1) */
     void *auUserPtr;                                /**< Access unit user pointer that will be passed to the access unit callback function (optional, can be NULL) */
     void *naluUserPtr;                              /**< NAL unit user pointer that will be passed to the NAL unit callback function (optional, can be NULL) */
 

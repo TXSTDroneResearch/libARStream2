@@ -251,7 +251,7 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiverResender_New(ARSTREAM2
         senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
         senderConfig.maxBitrate = receiver->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
-        senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+        senderConfig.maxNetworkLatencyMs[0] = config->maxNetworkLatencyMs;
         senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &error2);

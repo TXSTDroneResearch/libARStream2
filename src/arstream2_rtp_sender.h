@@ -63,7 +63,7 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_RtpSender_Config_t;
@@ -78,7 +78,7 @@ typedef struct ARSTREAM2_RtpSender_DynamicConfig_t
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
+    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
 
 } ARSTREAM2_RtpSender_DynamicConfig_t;
 

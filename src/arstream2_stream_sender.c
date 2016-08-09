@@ -59,6 +59,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     if (ret == ARSTREAM2_OK)
     {
         ARSTREAM2_RtpSender_Config_t senderConfig;
+        int i;
         memset(&senderConfig, 0, sizeof(senderConfig));
         senderConfig.canonicalName = config->canonicalName;
         senderConfig.friendlyName = config->friendlyName;
@@ -83,7 +84,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
         senderConfig.maxBitrate = config->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
-        senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+        {
+            senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs[i];
+        }
         senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
 
         streamSender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &ret);
@@ -229,6 +233,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetDynamicConfig(ARSTREAM2_StreamSender_
 {
     ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int i;
 
     if (!streamSenderHandle)
     {
@@ -254,7 +259,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetDynamicConfig(ARSTREAM2_StreamSender_
     config->streamSocketBufferSize = senderConfig.streamSocketBufferSize;
     config->maxBitrate = senderConfig.maxBitrate;
     config->maxLatencyMs = senderConfig.maxLatencyMs;
-    config->maxNetworkLatencyMs = senderConfig.maxNetworkLatencyMs;
+    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+    {
+        config->maxNetworkLatencyMs[i] = senderConfig.maxNetworkLatencyMs[i];
+    }
 
     return ret;
 }
@@ -264,6 +272,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
                                                          const ARSTREAM2_StreamSender_DynamicConfig_t *config)
 {
     ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+    int i;
 
     if (!streamSenderHandle)
     {
@@ -282,7 +291,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
     senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
     senderConfig.maxBitrate = config->maxBitrate;
     senderConfig.maxLatencyMs = config->maxLatencyMs;
-    senderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
+    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+    {
+        senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs[i];
+    }
 
     return ARSTREAM2_RtpSender_SetDynamicConfig(streamSender->sender, &senderConfig);
 }
