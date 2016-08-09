@@ -335,8 +335,8 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 {
                     firstMbInSlice = 0;
                     missingMb = filter->currentAuCurrentSliceFirstMb;
-                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu currentSliceFirstMb:%d missingMb:%d",
-                                filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuCurrentSliceFirstMb, missingMb); //TODO: debug
+                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu currentSliceFirstMb:%d missingMb:%d",
+                                filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuCurrentSliceFirstMb, missingMb);*/
                 }
                 else
                 {
@@ -351,8 +351,8 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 // Slices have been received before
                 firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
                 missingMb = filter->currentAuCurrentSliceFirstMb - firstMbInSlice;
-                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu previousSliceFirstMb:%d previousSliceMbCount:%d currentSliceFirstMb:%d missingMb:%d firstMbInSlice:%d",
-                            filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb, firstMbInSlice); //TODO: debug
+                /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu previousSliceFirstMb:%d previousSliceMbCount:%d currentSliceFirstMb:%d missingMb:%d firstMbInSlice:%d",
+                            filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb, missingMb, firstMbInSlice);*/
             }
             else
             {
@@ -568,7 +568,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                 // Slices have been received before
                 firstMbInSlice = filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
                 missingMb = filter->mbCount - firstMbInSlice;
-                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu missingMb:%d firstMbInSlice:%d", filter->currentAuOutputIndex, au->ntpTimestamp, missingMb, firstMbInSlice); //TODO: debug
+                //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu missingMb:%d firstMbInSlice:%d", filter->currentAuOutputIndex, au->ntpTimestamp, missingMb, firstMbInSlice);
             }
         }
         else
@@ -613,7 +613,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
     {
         if (!filter->generateSkippedPSlices)
         {
-            //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
+            //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Missing NALU is probably a slice", filter->currentAuOutputIndex, au->ntpTimestamp);
             if (missingMb > 0)
             {
                 if (firstMbInSlice + missingMb > filter->mbCount) missingMb = filter->mbCount - firstMbInSlice;
