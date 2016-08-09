@@ -567,7 +567,8 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                 context->byteCount += nalu.naluSize;
 
                 context->monitoringCallback(nalu.inputTimestamp, curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
-                                            nalu.isLastInAu, 0, nalu.naluSize, context->monitoringCallbackUserPtr);
+                                            nalu.isLastInAu, nalu.importance, nalu.priority,
+                                            0, nalu.naluSize, context->monitoringCallbackUserPtr);
             }
 
             /* call the naluCallback */
@@ -622,7 +623,8 @@ int ARSTREAM2_RTPH264_Sender_FifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
             context->byteCount += nalu.naluSize;
 
             context->monitoringCallback(nalu.inputTimestamp, curTime, nalu.ntpTimestamp, rtpTimestamp, context->seqNum - 1,
-                                        nalu.isLastInAu, 0, nalu.naluSize, context->monitoringCallbackUserPtr);
+                                        nalu.isLastInAu, nalu.importance, nalu.priority,
+                                        0, nalu.naluSize, context->monitoringCallbackUserPtr);
         }
 
         /* call the naluCallback */

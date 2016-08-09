@@ -104,6 +104,8 @@ typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
     uint32_t rtpTimestamp;
     uint16_t seqNum;
     uint16_t markerBit;
+    uint32_t importance;
+    uint32_t priority;
     uint32_t bytesSent;
     uint32_t bytesDropped;
 } ARSTREAM2_RtpSender_MonitoringPoint_t;
@@ -480,6 +482,7 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
 
 static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64_t outputTimestamp, uint64_t ntpTimestamp,
                                                  uint32_t rtpTimestamp, uint16_t seqNum, uint16_t markerBit,
+                                                 uint32_t importance, uint32_t priority,
                                                  uint32_t bytesSent, uint32_t bytesDropped, void *userPtr)
 {
     ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)userPtr;
@@ -502,6 +505,8 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
     sender->monitoringPoint[sender->monitoringIndex].rtpTimestamp = rtpTimestamp;
     sender->monitoringPoint[sender->monitoringIndex].seqNum = seqNum;
     sender->monitoringPoint[sender->monitoringIndex].markerBit = markerBit;
+    sender->monitoringPoint[sender->monitoringIndex].importance = importance;
+    sender->monitoringPoint[sender->monitoringIndex].priority = priority;
     sender->monitoringPoint[sender->monitoringIndex].bytesSent = bytesSent;
     sender->monitoringPoint[sender->monitoringIndex].bytesDropped = bytesDropped;
 
@@ -513,7 +518,8 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
         fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)ntpTimestamp);
         fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)inputTimestamp);
         fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)outputTimestamp);
-        fprintf(sender->fMonitorOut, "%lu %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
+        fprintf(sender->fMonitorOut, "%lu %u %u %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit,
+                importance, priority, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
     }
 #endif
 }
@@ -860,7 +866,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
 
         if (retSender->fMonitorOut)
         {
-            fprintf(retSender->fMonitorOut, "ntpTimestamp inputTimestamp outputTimestamp rtpTimestamp rtpSeqNum rtpMarkerBit bytesSent bytesDropped\n");
+            fprintf(retSender->fMonitorOut, "ntpTimestamp inputTimestamp outputTimestamp rtpTimestamp rtpSeqNum rtpMarkerBit importance priority bytesSent bytesDropped\n");
         }
     }
 #endif //#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT

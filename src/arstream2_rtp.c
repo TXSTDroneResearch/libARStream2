@@ -642,7 +642,8 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t
         if (context->monitoringCallback != NULL)
         {
             context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp,
-                                        cur->packet.seqNum, cur->packet.markerBit, cur->packet.payloadSize, 0, context->monitoringCallbackUserPtr);
+                                        cur->packet.seqNum, cur->packet.markerBit, cur->packet.importance, cur->packet.priority,
+                                        cur->packet.payloadSize, 0, context->monitoringCallbackUserPtr);
         }
 
         if (cur->next)
@@ -726,7 +727,8 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_
             if (context->monitoringCallback != NULL)
             {
                 context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
-                                            cur->packet.markerBit, 0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
+                                            cur->packet.markerBit, cur->packet.importance, cur->packet.priority,
+                                            0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
             }
 
             if (cur->next)
@@ -810,7 +812,8 @@ int ARSTREAM2_RTP_Sender_PacketFifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
                 if (context->monitoringCallback != NULL)
                 {
                     context->monitoringCallback(item->packet.inputTimestamp, curTime, item->packet.ntpTimestamp, item->packet.rtpTimestamp, item->packet.seqNum,
-                                                item->packet.markerBit, 0, item->packet.payloadSize, context->monitoringCallbackUserPtr);
+                                                item->packet.markerBit, item->packet.importance, item->packet.priority,
+                                                0, item->packet.payloadSize, context->monitoringCallbackUserPtr);
                 }
 
                 if (item->packet.buffer)

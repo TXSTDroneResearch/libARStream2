@@ -148,6 +148,7 @@ typedef struct ARSTREAM2_RTP_PacketFifo_s
 typedef void (*ARSTREAM2_RTP_SenderMonitoringCallback_t)(uint64_t inputTimestamp, uint64_t outputTimestamp,
                                                          uint64_t ntpTimestamp, uint32_t rtpTimestamp,
                                                          uint16_t seqNum, uint16_t markerBit,
+                                                         uint32_t importance, uint32_t priority,
                                                          uint32_t bytesSent, uint32_t bytesDropped, void *userPtr);
 
 
