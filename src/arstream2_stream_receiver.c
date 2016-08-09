@@ -1031,7 +1031,9 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
 
         while (auItem != NULL)
         {
+            ARSTREAM2_H264_AccessUnit_t *au = &auItem->au;
             ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+            unsigned int auSize = 0;
 
             if ((streamReceiver->appOutput.mbWidth == 0) || (streamReceiver->appOutput.mbHeight == 0))
             {
@@ -1043,6 +1045,22 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 }
                 streamReceiver->appOutput.mbWidth = mbWidth;
                 streamReceiver->appOutput.mbHeight = mbHeight;
+            }
+
+            /* pre-check the access unit size to avoid calling getAuBufferCallback+auReadyCallback for null sized frames */
+            for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
+            {
+                /* filter out unwanted NAL units */
+                if ((streamReceiver->appOutput.filterOutSpsPps) && ((naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SPS) || (naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_PPS)))
+                {
+                    continue;
+                }
+                if ((streamReceiver->appOutput.filterOutSei) && (naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SEI))
+                {
+                    continue;
+                }
+
+                auSize += naluItem->nalu.naluSize;
             }
 
             if (running)
@@ -1073,9 +1091,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 }
                 else
                 {
-                    ARSTREAM2_H264_AccessUnit_t *au = &auItem->au;
-                    ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-                    unsigned int auSize = 0;
+                    auSize = 0;
 
                     streamReceiver->appOutput.mbStatus = au->buffer->mbStatusBuffer;
 
@@ -1107,6 +1123,10 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                             }
 
                             auSize += naluItem->nalu.naluSize;
+                        }
+                        else
+                        {
+                            break;
                         }
                     }
 
