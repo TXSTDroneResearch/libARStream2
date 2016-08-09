@@ -121,7 +121,7 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 
         if (ret == 0)
         {
-            ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, item);
+            ret = ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedByPriority(packetFifoQueue, item);
             if (ret != 0)
             {
                 ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, item->packet.buffer);
@@ -234,7 +234,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
                     if (ret == 0)
                     {
-                        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, item);
+                        ret = ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedByPriority(packetFifoQueue, item);
                         if (ret != 0)
                         {
                             ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, item->packet.buffer);
@@ -404,7 +404,7 @@ static int ARSTREAM2_RTPH264_Sender_FinishStapAPacket(ARSTREAM2_RTP_SenderContex
 
     if (ret == 0)
     {
-        ret = ARSTREAM2_RTP_PacketFifoEnqueueItem(packetFifoQueue, context->stapItem);
+        ret = ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedByPriority(packetFifoQueue, context->stapItem);
         if (ret != 0)
         {
             ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, context->stapItem->packet.buffer);

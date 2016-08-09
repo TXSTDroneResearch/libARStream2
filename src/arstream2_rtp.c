@@ -415,7 +415,69 @@ int ARSTREAM2_RTP_PacketFifoEnqueueItem(ARSTREAM2_RTP_PacketFifoQueue_t *queue, 
 }
 
 
-int ARSTREAM2_RTP_PacketFifoEnqueueItemOrdered(ARSTREAM2_RTP_PacketFifoQueue_t *queue, ARSTREAM2_RTP_PacketFifoItem_t *item)
+int ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedByPriority(ARSTREAM2_RTP_PacketFifoQueue_t *queue, ARSTREAM2_RTP_PacketFifoItem_t *item)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t* cur;
+
+    if ((!queue) || (!item))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    for (cur = queue->tail; cur; cur = cur->prev)
+    {
+        if (cur->packet.rtpTimestamp == item->packet.rtpTimestamp)
+        {
+            if (cur->packet.priority <= item->packet.priority)
+            {
+                break;
+            }
+        }
+        else if (cur->packet.rtpTimestamp < item->packet.rtpTimestamp)
+        {
+            break;
+        }
+    }
+
+    if (cur)
+    {
+        /* insert after cur */
+        item->next = cur->next;
+        if (item->next)
+        {
+            item->next->prev = item;
+        }
+        else
+        {
+            queue->tail = item;
+        }
+        item->prev = cur;
+        cur->next = item;
+        queue->count++;
+    }
+    else
+    {
+        /* insert at head */
+        item->next = queue->head;
+        if (queue->head)
+        {
+            queue->head->prev = item;
+        }
+        item->prev = NULL;
+        queue->head = item;
+        if (!queue->tail)
+        {
+            queue->tail = item;
+        }
+        queue->count++;
+    }
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedBySeqNum(ARSTREAM2_RTP_PacketFifoQueue_t *queue, ARSTREAM2_RTP_PacketFifoItem_t *item)
 {
     ARSTREAM2_RTP_PacketFifoItem_t* cur;
     int outOfOrder = 0, duplicate = 0;
@@ -1083,7 +1145,7 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 item->packet.payload = item->packet.buffer->buffer + item->packet.headerExtensionSize;
                 item->packet.payloadSize = msgVec[i].msg_len - sizeof(ARSTREAM2_RTP_Header_t) - item->packet.headerExtensionSize;
 
-                ret = ARSTREAM2_RTP_PacketFifoEnqueueItemOrdered(queue, item);
+                ret = ARSTREAM2_RTP_PacketFifoEnqueueItemOrderedBySeqNum(queue, item);
                 if (ret < 0)
                 {
                     if (ret == -3)
