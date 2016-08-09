@@ -27,6 +27,9 @@
 #include <libARSAL/ARSAL_Mutex.h>
 
 
+//#define ARSTREAM2_RTP_SENDER_RANDOM_DROP
+#define ARSTREAM2_RTP_SENDER_DROP_RATIO 0.1
+
 /**
  * Tag for ARSAL_PRINT
  */
@@ -656,6 +659,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: max packet size is too small to hold a sender report");
             internalError = ARSTREAM2_ERROR_BAD_PARAMETERS;
         }
+
+        struct timespec t1;
+        ARSAL_Time_GetTime(&t1);
+        srand(t1.tv_nsec);
     }
 
     if (internalError == ARSTREAM2_OK)
@@ -1365,6 +1372,18 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
         }
+
+#ifdef ARSTREAM2_RTP_SENDER_RANDOM_DROP
+        ret = ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(&sender->rtpSenderContext, &sender->packetFifo,
+                                                        &sender->packetFifoQueue, ARSTREAM2_RTP_SENDER_DROP_RATIO, curTime);
+        if (ret < 0)
+        {
+            if (ret != -2)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_Sender_PacketFifoRandomDrop() failed (%d)", ret);
+            }
+        }
+#endif
 
         /* RTP packets sending */
         if ((!packetsPending) || ((packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, &writeSet)))))

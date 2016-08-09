@@ -840,6 +840,89 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(ARSTREAM2_RTP_SenderContext_
 }
 
 
+int ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(ARSTREAM2_RTP_SenderContext_t *context,
+                                              ARSTREAM2_RTP_PacketFifo_t *fifo,
+                                              ARSTREAM2_RTP_PacketFifoQueue_t *queue, float ratio, uint64_t curTime)
+{
+    ARSTREAM2_RTP_PacketFifoItem_t *cur = NULL, *next = NULL;
+    int count;
+
+    if ((!context) || (!fifo) || (!queue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid pointer");
+        return -1;
+    }
+    if (!curTime)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Invalid current time");
+        return -1;
+    }
+
+    if ((!queue->head) || (!queue->count))
+    {
+        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Packet FIFO is empty");
+        return -2;
+    }
+
+    for (cur = queue->head, count = 0; cur != NULL; cur = next)
+    {
+        if (rand() <= RAND_MAX * ratio)
+        {
+            /* call the monitoringCallback */
+            if (context->monitoringCallback != NULL)
+            {
+                context->monitoringCallback(cur->packet.inputTimestamp, curTime, cur->packet.ntpTimestamp, cur->packet.rtpTimestamp, cur->packet.seqNum,
+                                            cur->packet.markerBit, cur->packet.importance, cur->packet.priority,
+                                            0, cur->packet.payloadSize, context->monitoringCallbackUserPtr);
+            }
+
+            if (cur->next)
+            {
+                cur->next->prev = cur->prev;
+            }
+            else
+            {
+                queue->tail = cur->prev;
+            }
+            if (cur->prev)
+            {
+                cur->prev->next = cur->next;
+            }
+            else
+            {
+                queue->head = cur->next;
+            }
+            queue->count--;
+            count++;
+
+            next = cur->next;
+
+            int ret;
+            if (cur->packet.buffer)
+            {
+                ret = ARSTREAM2_RTP_PacketFifoUnrefBuffer(fifo, cur->packet.buffer);
+                if (ret != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_PacketFifoUnrefBuffer() failed (%d)", ret);
+                }
+            }
+            ret = ARSTREAM2_RTP_PacketFifoPushFreeItem(fifo, cur);
+            if (ret < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "Failed to push free FIFO item");
+                return -1;
+            }
+        }
+        else
+        {
+            next = cur->next;
+        }
+    }
+
+    return count;
+}
+
+
 int ARSTREAM2_RTP_Sender_PacketFifoFlush(ARSTREAM2_RTP_SenderContext_t *context,
                                          ARSTREAM2_RTP_PacketFifo_t *fifo, uint64_t curTime)
 {
