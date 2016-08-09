@@ -1063,7 +1063,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 auSize += naluItem->nalu.naluSize;
             }
 
-            if (running)
+            if ((running) && (auSize > 0))
             {
                 eARSTREAM2_ERROR cbRet = ARSTREAM2_OK;
                 uint8_t *auBuffer = NULL;
