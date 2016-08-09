@@ -29,7 +29,7 @@
  */
 typedef struct ARSTREAM2_RTPH264_ReceiverContext_s
 {
-    int32_t previousDepayloadExtSeqNum;
+    int64_t previousDepayloadExtSeqNum;
     uint64_t previousDepayloadExtRtpTimestamp;
     uint32_t missingBeforePending;
     int fuPending;
