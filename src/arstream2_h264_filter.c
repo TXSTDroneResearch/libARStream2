@@ -456,7 +456,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         {
             if (err != -2)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264FilterError_HandleMissingEndOfFrame() failed (%d)", ret);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264FilterError_HandleMissingEndOfFrame() failed (%d)", err);
             }
             filter->currentAuIncomplete = 1;
         }

@@ -560,10 +560,8 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
                 firstMbInSlice = 0;
                 missingMb = filter->mbCount;
 
-                //TODO: slice context
-                //UNSUPPORTED
                 //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu No previous slice received, aborting", filter->currentAuOutputIndex, au->ntpTimestamp);
-                ret = -1;
+                ret = -2;
             }
             else
             {
