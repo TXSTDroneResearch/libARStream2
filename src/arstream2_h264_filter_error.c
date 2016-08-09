@@ -432,7 +432,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
 
     if (ret == 0)
     {
-        if (nextNaluItem->nalu.sliceType != ARSTREAM2_H264_SLICE_TYPE_P)
+        if ((!filter->currentAuStreamingInfoV2Available) && (nextNaluItem->nalu.sliceType != ARSTREAM2_H264_SLICE_TYPE_P))
         {
             //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Current slice is not a P-slice, aborting", filter->currentAuOutputIndex, au->ntpTimestamp);
             if (missingMb > 0)
@@ -643,7 +643,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 
     if (ret == 0)
     {
-        if (prevNaluItem->nalu.sliceType != ARSTREAM2_H264_SLICE_TYPE_P)
+        if ((!filter->currentAuStreamingInfoV2Available) && (prevNaluItem->nalu.sliceType != ARSTREAM2_H264_SLICE_TYPE_P))
         {
             //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_FILTER_ERROR_TAG, "#%d AUTS:%llu Previous slice is not a P-slice, aborting", filter->currentAuOutputIndex, au->ntpTimestamp);
             if (missingMb > 0)
