@@ -71,22 +71,22 @@ typedef struct ARSTREAM2_StreamSender_MonitoringData_t
 {
     uint64_t startTimestamp;                /**< Monitoring start timestamp in microseconds */
     uint32_t timeInterval;                  /**< Monitoring time interval in microseconds */
-    uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during realTimeIntervalUs in microseconds */
-    uint32_t acqToNetworkTimeJitter;        /**< Acquisition to network time jitter during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMin;                /**< Minimum network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMax;                /**< Maximum network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeMean;               /**< Mean network time during realTimeIntervalUs in microseconds */
-    uint32_t networkTimeJitter;             /**< Network time jitter during realTimeIntervalUs in microseconds */
-    uint32_t bytesSent;                     /**< Bytes sent during realTimeIntervalUs */
-    uint32_t packetsSent;                   /**< Packets sent during realTimeIntervalUs */
-    uint32_t packetSizeMin;                 /**< Minimum packet size during realTimeIntervalUs */
-    uint32_t packetSizeMax;                 /**< Maximum packet size during realTimeIntervalUs */
-    uint32_t packetSizeMean;                /**< Mean packet size during realTimeIntervalUs */
-    uint32_t packetSizeStdDev;              /**< Packet size standard deviation during realTimeIntervalUs */
-    uint32_t bytesDropped;                  /**< Bytes dropped during realTimeIntervalUs */
-    uint32_t packetsDropped;                /**< Packets dropped during realTimeIntervalUs */
+    uint32_t acqToNetworkTimeMin;           /**< Minimum acquisition to network time during timeInterval in microseconds */
+    uint32_t acqToNetworkTimeMax;           /**< Maximum acquisition to network time during timeInterval in microseconds */
+    uint32_t acqToNetworkTimeMean;          /**< Mean acquisition to network time during timeInterval in microseconds */
+    uint32_t acqToNetworkTimeJitter;        /**< Acquisition to network time jitter during timeInterval in microseconds */
+    uint32_t networkTimeMin;                /**< Minimum network time during timeInterval in microseconds */
+    uint32_t networkTimeMax;                /**< Maximum network time during timeInterval in microseconds */
+    uint32_t networkTimeMean;               /**< Mean network time during timeInterval in microseconds */
+    uint32_t networkTimeJitter;             /**< Network time jitter during timeInterval in microseconds */
+    uint32_t bytesSent;                     /**< Bytes sent during timeInterval */
+    uint32_t packetsSent;                   /**< Packets sent during timeInterval */
+    uint32_t packetSizeMin;                 /**< Minimum packet size during timeInterval */
+    uint32_t packetSizeMax;                 /**< Maximum packet size during timeInterval */
+    uint32_t packetSizeMean;                /**< Mean packet size during timeInterval */
+    uint32_t packetSizeStdDev;              /**< Packet size standard deviation during timeInterval */
+    uint32_t bytesDropped;                  /**< Bytes dropped during timeInterval */
+    uint32_t packetsDropped;                /**< Packets dropped during timeInterval */
 
 } ARSTREAM2_StreamSender_MonitoringData_t;
 
@@ -353,7 +353,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
  * @brief Get the stream monitoring
  * The monitoring data is computed form the time startTime and back timeIntervalUs microseconds at most.
  * If startTime is 0 the start time is the current time.
- * If monitoring data is not available up to timeIntervalUs, the monitoring is computed on less time and the real interval is output to realTimeIntervalUs.
+ * If monitoring data is not available up to timeIntervalUs, the monitoring is computed on less time
+ * and the real interval is output to monitoringData->timeInterval.
  * Pointers to monitoring parameters that are not required can be left NULL.
  *
  * @param[in] sender The sender instance
