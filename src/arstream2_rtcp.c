@@ -109,13 +109,13 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverRep
 
     if (ssrc != context->receiverSsrc)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected receiver SSRC");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unexpected receiver SSRC");
         return -1;
     }
 
     if (ssrc_1 != context->senderSsrc)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
         return -1;
     }
 
@@ -230,7 +230,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
 
     if (ssrc != context->senderSsrc)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unexpected sender SSRC");
         return -1;
     }
 
@@ -240,7 +240,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
     }
     else if (ntpTimestamp <= context->prevSrNtpTimestamp)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report (%llu vs. %llu)", ntpTimestamp, context->prevSrNtpTimestamp);
         return -1;
     }
     if (!context->prevSrRtpTimestamp)
@@ -306,7 +306,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         uint32_t cumulativeLost = context->extHighestSeqNum - context->firstSeqNum + 1 - context->packetsReceived;
         if (cumulativeLost != context->packetsLost)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Receiver report mismatch: cumulativeLost=%d - context->packetsLost=%d", cumulativeLost, context->packetsLost);
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Receiver report mismatch: cumulativeLost=%d - context->packetsLost=%d", cumulativeLost, context->packetsLost);
         }
         uint32_t fractionLost = 0;
         if ((context->lastRrExtHighestSeqNum != 0) && (context->extHighestSeqNum > context->lastRrExtHighestSeqNum))
@@ -328,7 +328,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
     }
     else if (rrCount > 1)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unsupported receiver report count");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unsupported receiver report count");
         return -1;
     }
 
@@ -532,7 +532,7 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
     uint32_t ssrc = ntohl(app->ssrc);
     if (ssrc != peerSsrc)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unexpected peer SSRC");
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unexpected peer SSRC");
         return -1;
     }
 
