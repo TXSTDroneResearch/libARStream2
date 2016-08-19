@@ -38,6 +38,8 @@ struct mmsghdr {
     struct msghdr msg_hdr;  /* Message header */
     unsigned int  msg_len;  /* Number of received bytes for header */
 };
+#else
+struct mmsghdr;
 #endif
 
 
