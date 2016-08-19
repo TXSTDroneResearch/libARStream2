@@ -173,6 +173,7 @@ typedef struct ARSTREAM2_StreamSender_Config_t
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
     eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
+    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     ARSTREAM2_StreamSender_AuCallback_t auCallback;       /**< Access unit callback function (optional, can be NULL) */
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
@@ -184,7 +185,6 @@ typedef struct ARSTREAM2_StreamSender_Config_t
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_STREAM_SENDER_DEFAULT_NALU_FIFO_SIZE */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
-    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */

@@ -236,6 +236,8 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiverResender_New(ARSTREAM2
         eARSTREAM2_ERROR error2;
         ARSTREAM2_RtpSender_Config_t senderConfig;
         memset(&senderConfig, 0, sizeof(senderConfig));
+        senderConfig.canonicalName = config->canonicalName;
+        senderConfig.friendlyName = config->friendlyName;
         senderConfig.clientAddr = config->clientAddr;
         senderConfig.mcastAddr = config->mcastAddr;
         senderConfig.mcastIfaceAddr = config->mcastIfaceAddr;
@@ -243,15 +245,20 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiverResender_New(ARSTREAM2
         senderConfig.serverControlPort = config->serverControlPort;
         senderConfig.clientStreamPort = config->clientStreamPort;
         senderConfig.clientControlPort = config->clientControlPort;
+        senderConfig.classSelector = config->classSelector;
         senderConfig.naluCallback = ARSTREAM2_RtpReceiverResender_NaluCallback;
         senderConfig.naluCallbackUserPtr = (void*)retResender;
         senderConfig.naluFifoSize = ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_NALU_BUFFER_COUNT;
         senderConfig.maxPacketSize = config->maxPacketSize;
-        senderConfig.targetPacketSize = config->targetPacketSize;
+        senderConfig.targetPacketSize = 0;
         senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
-        senderConfig.maxBitrate = receiver->maxBitrate;
-        senderConfig.maxLatencyMs = config->maxLatencyMs;
-        senderConfig.maxNetworkLatencyMs[0] = config->maxNetworkLatencyMs;
+        senderConfig.maxBitrate = 0;
+        senderConfig.maxLatencyMs = 0;
+        int i;
+        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+        {
+            senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs;
+        }
         senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         retResender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &error2);

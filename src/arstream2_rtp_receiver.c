@@ -216,20 +216,6 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
         }
     }
 
-    if (ret == 0)
-    {
-        /* set the socket buffer size */
-        if ((receiver->maxNetworkLatencyMs) && (receiver->maxBitrate))
-        {
-            err = ARSTREAM2_RtpReceiver_SetSocketReceiveBufferSize(receiver, receiver->net.streamSocket, (receiver->maxNetworkLatencyMs * receiver->maxBitrate * 2) / 8000); //TODO: should not be x2
-            if (err != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set the socket buffer size (%d)", err);
-                ret = -1;
-            }
-        }
-    }
-
     if (ret != 0)
     {
         if (receiver->net.streamSocket >= 0)
@@ -1071,9 +1057,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->rtph264ReceiverContext.auCallback = config->auCallback;
         retReceiver->rtph264ReceiverContext.auCallbackUserPtr = config->auCallbackUserPtr;
         retReceiver->rtpReceiverContext.maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
-        retReceiver->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-        retReceiver->maxLatencyMs = (config->maxLatencyMs > 0) ? config->maxLatencyMs : 0;
-        retReceiver->maxNetworkLatencyMs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs : 0;
         retReceiver->insertStartCodes = (config->insertStartCodes > 0) ? 1 : 0;
         retReceiver->generateReceiverReports = (config->generateReceiverReports > 0) ? 1 : 0;
         retReceiver->rtpReceiverContext.rtpClockRate = 90000;
@@ -1084,7 +1067,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->rtph264ReceiverContext.startCode = (retReceiver->insertStartCodes) ? htonl(ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE) : 0;
         retReceiver->rtph264ReceiverContext.startCodeLength = (retReceiver->insertStartCodes) ? ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH : 0;
         retReceiver->rtcpReceiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
-        retReceiver->rtcpReceiverContext.rtcpByteRate = (retReceiver->maxBitrate > 0) ? retReceiver->maxBitrate * ARSTREAM2_RTCP_RECEIVER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
+        retReceiver->rtcpReceiverContext.rtcpByteRate = ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
         retReceiver->rtcpReceiverContext.cname = retReceiver->canonicalName;
         retReceiver->rtcpReceiverContext.name = retReceiver->friendlyName;
 

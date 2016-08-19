@@ -117,9 +117,6 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
-    int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (should be provided by the server, can be 0) */
-    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (should be provided by the server, can be 0) */
-    int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds (should be provided by the server, can be 0) */
     int insertStartCodes;                           /**< Boolean-like (0-1) flag: if active insert a start code prefix before NAL units */
     int generateReceiverReports;                    /**< Boolean-like (0-1) flag: if active generate RTCP receiver reports */
 } ARSTREAM2_RtpReceiver_Config_t;
@@ -130,6 +127,8 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
  */
 typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
 {
+    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
+    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
@@ -137,10 +136,9 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
     int serverControlPort;                          /**< Server control port, @see ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT */
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
-    int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
-    int targetPacketSize;                           /**< Target network packet size in bytes */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
-    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
+    int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 } ARSTREAM2_RtpReceiver_RtpResender_Config_t;
@@ -248,9 +246,6 @@ struct ARSTREAM2_RtpReceiver_t {
 
     char *canonicalName;
     char *friendlyName;
-    int maxBitrate;
-    int maxLatencyMs;
-    int maxNetworkLatencyMs;
     int insertStartCodes;
     int generateReceiverReports;
     uint8_t *rtcpMsgBuffer;

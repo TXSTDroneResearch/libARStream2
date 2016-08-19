@@ -235,9 +235,6 @@ int main(int argc, char *argv[])
         deviceManager->arstream2ClientStreamPort = BD_CLIENT_STREAM_PORT;
         deviceManager->arstream2ClientControlPort = BD_CLIENT_CONTROL_PORT;
         deviceManager->arstream2MaxPacketSize = 0;
-        deviceManager->arstream2MaxLatency = 0;
-        deviceManager->arstream2MaxNetworkLatency = 0;
-        deviceManager->arstream2MaxBitrate = 0;
         deviceManager->run = 1;
     }
     else
@@ -564,9 +561,6 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverConfig.canonicalName = "StreamReceiverTest";
         streamReceiverConfig.friendlyName = "StreamReceiverTest";
         streamReceiverConfig.maxPacketSize = deviceManager->arstream2MaxPacketSize;
-        streamReceiverConfig.maxBitrate = deviceManager->arstream2MaxBitrate;
-        streamReceiverConfig.maxLatencyMs = deviceManager->arstream2MaxLatency;
-        streamReceiverConfig.maxNetworkLatencyMs = deviceManager->arstream2MaxNetworkLatency;
         streamReceiverConfig.generateReceiverReports = 1;
         streamReceiverConfig.waitForSync = 1;
         streamReceiverConfig.outputIncompleteAu = 0;
@@ -840,42 +834,6 @@ eARDISCOVERY_ERROR ARDISCOVERY_Connection_ReceiveJsonCallback(uint8_t *dataRx, u
                 value = json_object_get_int(jsonObj_Item);
                 deviceManager->arstream2MaxPacketSize = value;
                 ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - arstream2MaxPacketSize = %d", deviceManager->arstream2MaxPacketSize);
-            }
-        }
-
-        /* Find the arstream2MaxLatency node */
-        if (error == 0)
-        {
-            jsonObj_Item = json_object_object_get(jsonObj_All, ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_MAX_LATENCY_KEY);
-            if (jsonObj_Item != NULL)
-            {
-                value = json_object_get_int(jsonObj_Item);
-                deviceManager->arstream2MaxLatency = value;
-                ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - arstream2MaxLatency = %d", deviceManager->arstream2MaxLatency);
-            }
-        }
-
-        /* Find the arstream2MaxNetworkLatency node */
-        if (error == 0)
-        {
-            jsonObj_Item = json_object_object_get(jsonObj_All, ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_MAX_NETWORK_LATENCY_KEY);
-            if (jsonObj_Item != NULL)
-            {
-                value = json_object_get_int(jsonObj_Item);
-                deviceManager->arstream2MaxNetworkLatency = value;
-                ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - arstream2MaxNetworkLatency = %d", deviceManager->arstream2MaxNetworkLatency);
-            }
-        }
-
-        /* Find the arstream2MaxBitrate node */
-        if (error == 0)
-        {
-            jsonObj_Item = json_object_object_get(jsonObj_All, ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_MAX_BITRATE_KEY);
-            if (jsonObj_Item != NULL)
-            {
-                value = json_object_get_int(jsonObj_Item);
-                deviceManager->arstream2MaxBitrate = value;
-                ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - arstream2MaxBitrate = %d", deviceManager->arstream2MaxBitrate);
             }
         }
     }

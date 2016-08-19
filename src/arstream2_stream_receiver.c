@@ -280,9 +280,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.auCallback = ARSTREAM2_StreamReceiver_RtpReceiverAuCallback;
         receiverConfig.auCallbackUserPtr = streamReceiver;
         receiverConfig.maxPacketSize = config->maxPacketSize;
-        receiverConfig.maxBitrate = config->maxBitrate;
-        receiverConfig.maxLatencyMs = config->maxLatencyMs;
-        receiverConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
         receiverConfig.insertStartCodes = 1;
         receiverConfig.generateReceiverReports = config->generateReceiverReports;
 
@@ -1490,6 +1487,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
     ARSTREAM2_RtpReceiver_RtpResender_Config_t resenderConfig;
     memset(&resenderConfig, 0, sizeof(resenderConfig));
 
+    resenderConfig.canonicalName = config->canonicalName;
+    resenderConfig.friendlyName = config->friendlyName;
     resenderConfig.clientAddr = config->clientAddr;
     resenderConfig.mcastAddr = config->mcastAddr;
     resenderConfig.mcastIfaceAddr = config->mcastIfaceAddr;
@@ -1497,10 +1496,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
     resenderConfig.serverControlPort = config->serverControlPort;
     resenderConfig.clientStreamPort = config->clientStreamPort;
     resenderConfig.clientControlPort = config->clientControlPort;
+    resenderConfig.classSelector = config->classSelector;
     resenderConfig.maxPacketSize = config->maxPacketSize;
-    resenderConfig.targetPacketSize = config->targetPacketSize;
     resenderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
-    resenderConfig.maxLatencyMs = config->maxLatencyMs;
     resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
     resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
 

@@ -14,11 +14,11 @@ public class ARStream2Manager
     private final Thread networkThread;
     private final Thread outputThread;
 
-    public ARStream2Manager(Mux mux, String canonicalName, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency)
+    public ARStream2Manager(Mux mux, String canonicalName, int maxPacketSize)
     {
         String friendlyName = Build.MODEL + " " + Build.DEVICE + " " + canonicalName;
         Mux.Ref muxRef = mux.newMuxRef();
-        this.nativeRef = nativeMuxInit(muxRef.getCPtr(), canonicalName, friendlyName, maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency);
+        this.nativeRef = nativeMuxInit(muxRef.getCPtr(), canonicalName, friendlyName, maxPacketSize);
         muxRef.release();
         this.networkThread = new Thread(new Runnable()
         {
@@ -41,11 +41,11 @@ public class ARStream2Manager
     }
 
     public ARStream2Manager(String serverAddress, int serverStreamPort, int serverControlPort, int clientStreamPort, int clientControlPort,
-                         String canonicalName, int maxPacketSize, int maxBitrate, int maxLatency, int maxNetworkLatency, ARSAL_SOCKET_CLASS_SELECTOR_ENUM classSelector)
+                         String canonicalName, int maxPacketSize, ARSAL_SOCKET_CLASS_SELECTOR_ENUM classSelector)
     {
         String friendlyName = Build.MODEL + " " + Build.DEVICE + " " + canonicalName;
         this.nativeRef = nativeNetInit(serverAddress, serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
-                canonicalName, friendlyName, maxPacketSize, maxBitrate, maxLatency, maxNetworkLatency, classSelector.getValue());
+                canonicalName, friendlyName, maxPacketSize, classSelector.getValue());
         this.networkThread = new Thread(new Runnable()
         {
             @Override
@@ -115,10 +115,9 @@ public class ARStream2Manager
     private native long nativeNetInit(String serverAddress, int serverStreamPort, int serverControlPort,
                                       int clientStreamPort, int clientControlPort,
                                       String canonicalName, String friendlyName, int maxPacketSize,
-                                      int maxBitrate, int maxLatency, int maxNetworkLatency, int classSelector);
+                                      int classSelector);
 
-    private native long nativeMuxInit(long mux, String canonicalName, String friendlyName, int maxPacketSize,
-                                      int maxBitrate, int maxLatency, int maxNetworkLatency);
+    private native long nativeMuxInit(long mux, String canonicalName, String friendlyName, int maxPacketSize);
 
     private native boolean nativeStop(long nativeRef);
 

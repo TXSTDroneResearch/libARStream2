@@ -12,12 +12,12 @@ public class ARStream2Resender
     public ARStream2Resender(ARStream2Manager manager, String clientAddress,
                           int serverStreamPort, int serverControlPort,
                           int clientStreamPort, int clientControlPort,
-                          int maxPacketSize, int targetPacketSize, int maxLatency, int maxNetworkLatency)
+                          int maxPacketSize, int maxNetworkLatency)
     {
         this.nativeRef = nativeInit(manager.getNativeRef(), clientAddress,
                 serverStreamPort, serverControlPort,
                 clientStreamPort, clientControlPort,
-                maxPacketSize, targetPacketSize, maxLatency, maxNetworkLatency);
+                maxPacketSize, maxNetworkLatency);
         this.resenderThread = new Thread(new Runnable()
         {
             @Override
@@ -71,7 +71,7 @@ public class ARStream2Resender
     private native long nativeInit(long arstream2ManagerNativeRef, String clientAddress,
                                    int serverStreamPort, int serverControlPort,
                                    int clientStreamPort, int clientControlPort,
-                                   int maxPacketSize, int targetPacketSize, int maxLatency, int maxNetworkLatency);
+                                   int maxPacketSize, int maxNetworkLatency);
 
     private native boolean nativeStop(long nativeRef);
 

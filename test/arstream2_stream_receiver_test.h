@@ -27,9 +27,6 @@ typedef struct
     int arstream2ClientStreamPort;
     int arstream2ClientControlPort;
     int arstream2MaxPacketSize;
-    int arstream2MaxLatency;
-    int arstream2MaxNetworkLatency;
-    int arstream2MaxBitrate;
     uint8_t *auBuffer;
     uint32_t auBufferSize;
     
