@@ -452,7 +452,7 @@ static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(uint64_t timest
             return -1;
         }
         ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t *recMeta = (ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t*)recordingMetadata;
-        ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t *recMetaTSExt = (ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t*)(recordingMetadata + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t));
+        ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t *recMetaTSExt = (ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t*)((uint8_t*)recordingMetadata + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t));
         if ((length >= (sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t) - 4) / 4)
                 && (streamingMetadataSize >= sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t)))
         {
