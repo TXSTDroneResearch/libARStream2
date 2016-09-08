@@ -29,6 +29,8 @@
 
 #define ARSTREAM2_STREAM_RECORDER_GPS_ALTITUDE_MASK   (0xFFFFFF00)                          /**< GPS altitude mask */
 #define ARSTREAM2_STREAM_RECORDER_GPS_ALTITUDE_SHIFT  (8)                                   /**< GPS altitude shift */
+#define ARSTREAM2_STREAM_RECORDER_ALTITUDE_MASK       (0xFFFFFF00)                          /**< Altitude mask */
+#define ARSTREAM2_STREAM_RECORDER_ALTITUDE_SHIFT      (8)                                   /**< Altitude shift */
 #define ARSTREAM2_STREAM_RECORDER_GPS_SV_COUNT_MASK   (0x000000FF)                          /**< GPS SV count mask */
 #define ARSTREAM2_STREAM_RECORDER_GPS_SV_COUNT_SHIFT  (0)                                   /**< GPS SV count shift */
 #define ARSTREAM2_STREAM_RECORDER_FLYING_STATE_MASK   (0x7F)                                /**< Flying state mask */
@@ -69,9 +71,58 @@ typedef enum
 
 
 /**
+ * @brief Video metadata types.
+ */
+typedef enum
+{
+    ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_UNKNOWN = 0,                              /**< Unknown video metadata type */
+    ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_STREAMING_V1,                             /**< "Parrot Video Streaming Metadata" v1 */
+    ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1,                             /**< "Parrot Video Recording Metadata" v1 */
+    ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2,                                       /**< "Parrot Video Metadata" v2 */
+
+} ARSTREAM2_STREAM_RECORDER_VideoMetadataTypes_t;
+
+
+/**
  * "Parrot Video Streaming Metadata" v1 specific identifier.
  */
 #define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_STREAMING_METADATA_V1_ID 0x5031
+
+
+/**
+ * "Parrot Video Recording Metadata" v1 MIME format.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT "application/octet-stream;type=com.parrot.videometadata1"
+
+
+/**
+ * "Parrot Video Recording Metadata" v1 content encoding.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING ""
+
+
+/**
+ * "Parrot Video Metadata" v2 identifier.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_ID 0x5032
+
+
+/**
+ * "Parrot Video Metadata" v2 timestamp extension identifier.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_TIMESTAMP_EXTENSION_ID 0x4531
+
+
+/**
+ * "Parrot Video Metadata" v2 MIME format.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_MIME_FORMAT "application/octet-stream;type=com.parrot.videometadata2"
+
+
+/**
+ * "Parrot Video Metadata" v2 content encoding.
+ */
+#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_CONTENT_ENCODING ""
 
 
 /**
@@ -133,18 +184,6 @@ typedef struct
 
 
 /**
- * "Parrot Video Recording Metadata" v1 MIME format.
- */
-#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT "application/octet-stream;type=com.parrot.videometadata1"
-
-
-/**
- * "Parrot Video Recording Metadata" v1 content encoding.
- */
-#define ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING ""
-
-
-/**
  * @brief "Parrot Video Recording Metadata" v1 definition.
  */
 typedef struct
@@ -176,6 +215,56 @@ typedef struct
     uint8_t  mode;                 /**< Bit 7 = animation, bits 6..0 = pilotingMode */
 
 } ARSTREAM2_STREAM_RECORDER_ParrotVideoRecordingMetadataV1_t;
+
+
+/**
+ * @brief "Parrot Video Metadata" v2 base structure definition.
+ */
+typedef struct
+{
+    uint16_t id;                   /**< Identifier = 0x5032 */
+    uint16_t length;               /**< Structure size in 32 bits words excluding the id and length
+                                        fields and including extensions */
+    int32_t  groundDistance;       /**< Best ground distance estimation (m), Q16.16 */
+    int32_t  latitude;             /**< Absolute latitude (deg), Q10.22 */
+    int32_t  longitude;            /**< Absolute longitude (deg), Q10.22 */
+    int32_t  altitudeAndSv;        /**< Bits 31..8 = altitude (m) Q16.8, bits 7..0 = GPS SV count */
+    int16_t  northSpeed;           /**< North speed (m/s), Q8.8 */
+    int16_t  eastSpeed;            /**< East speed (m/s), Q8.8 */
+    int16_t  downSpeed;            /**< Down speed (m/s), Q8.8 */
+    int16_t  airSpeed;             /**< Speed relative to air (m/s), negative means no data, Q8.8 */
+    int16_t  droneW;               /**< Drone quaternion W, Q2.14 */
+    int16_t  droneX;               /**< Drone quaternion X, Q2.14 */
+    int16_t  droneY;               /**< Drone quaternion Y, Q2.14 */
+    int16_t  droneZ;               /**< Drone quaternion Z, Q2.14 */
+    int16_t  frameW;               /**< Frame view quaternion W, Q2.14 */
+    int16_t  frameX;               /**< Frame view quaternion X, Q2.14 */
+    int16_t  frameY;               /**< Frame view quaternion Y, Q2.14 */
+    int16_t  frameZ;               /**< Frame view quaternion Z, Q2.14 */
+    int16_t  cameraPan;            /**< Camera pan (rad), Q4.12 */
+    int16_t  cameraTilt;           /**< Camera tilt (rad), Q4.12 */
+    uint16_t exposureTime;         /**< Frame exposure time (ms), Q8.8 */
+    uint16_t gain;                 /**< Frame ISO gain */
+    uint8_t  state;                /**< Bit 7 = binning, bits 6..0 = flyingState */
+    uint8_t  mode;                 /**< Bit 7 = animation, bits 6..0 = pilotingMode */
+    int8_t   wifiRssi;             /**< Wifi RSSI (dBm) */
+    uint8_t  batteryPercentage;    /**< Battery charge percentage */
+
+} ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t;
+
+
+/**
+ * @brief "Parrot Video Metadata" v2 timestamp extension definition.
+ */
+typedef struct
+{
+    uint16_t extId;                /**< Extension structure id = 0x4531 */
+    uint16_t extLength;            /**< Extension structure size in 32 bits words excluding the
+                                        extId and extSize fields */
+    uint32_t frameTimestampH;      /**< Frame timestamp (µs, monotonic), high 32 bits */
+    uint32_t frameTimestampL;      /**< Frame timestamp (µs, monotonic), low 32 bits */
+
+} ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t;
 
 
 typedef enum
@@ -229,13 +318,14 @@ typedef struct ARSTREAM2_StreamRecorder_s
     uint32_t lastSyncIndex;
     void *recordingMetadata;
     unsigned int recordingMetadataSize;
+    ARSTREAM2_STREAM_RECORDER_VideoMetadataTypes_t recordingMetadataType;
     void *savedMetadata;
     unsigned int savedMetadataSize;
 
 } ARSTREAM2_StreamRecorder_t;
 
 
-static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataSize(void *streamingMetadata, unsigned int streamingMetadataSize)
+static ARSTREAM2_STREAM_RECORDER_VideoMetadataTypes_t ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(void *streamingMetadata, unsigned int streamingMetadataSize, int *size)
 {
     if ((!streamingMetadata) || (streamingMetadataSize < 4))
     {
@@ -246,18 +336,25 @@ static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataSize(void *strea
 
     if (specific == ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_STREAMING_METADATA_V1_ID)
     {
-        return sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoRecordingMetadataV1_t);
+        if (size) *size = sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoRecordingMetadataV1_t);
+        return ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1;
+    }
+    else if (specific == ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_ID)
+    {
+        if (size) *size = sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t) + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t);
+        return ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2;
     }
     else
     {
-        return -1;
+        return ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_UNKNOWN;
     }
 }
 
 static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(uint64_t timestamp,
                                                                  const void *streamingMetadata, unsigned int streamingMetadataSize,
                                                                  void *savedMetadata, unsigned int savedMetadataSize,
-                                                                 void *recordingMetadata, unsigned int recordingMetadataSize)
+                                                                 void *recordingMetadata, unsigned int recordingMetadataSize,
+                                                                 ARSTREAM2_STREAM_RECORDER_VideoMetadataTypes_t type)
 {
     int ret = 0;
 
@@ -271,7 +368,7 @@ static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(uint64_t timest
     uint16_t specific = ntohs(*((uint16_t*)streamingMetadata));
     uint16_t length = ntohs(*((uint16_t*)streamingMetadata + 1));
 
-    if (specific == ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_STREAMING_METADATA_V1_ID)
+    if ((specific == ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_STREAMING_METADATA_V1_ID) && (type == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1))
     {
         if (recordingMetadataSize != sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoRecordingMetadataV1_t))
         {
@@ -346,6 +443,25 @@ static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(uint64_t timest
         else
         {
             return -1;
+        }
+    }
+    else if ((specific == ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_ID) && (type == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2))
+    {
+        if (recordingMetadataSize != sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t) + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t))
+        {
+            return -1;
+        }
+        ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t *recMeta = (ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t*)recordingMetadata;
+        ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t *recMetaTSExt = (ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t*)(recordingMetadata + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t));
+        if ((length >= (sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t) - 4) / 4)
+                && (streamingMetadataSize >= sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t)))
+        {
+            memcpy(recMeta, streamingMetadata, sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t));
+            recMeta->length = htons((sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2Base_t) + sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t) - 4) / 4);
+            recMetaTSExt->extId = htons(ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_TIMESTAMP_EXTENSION_ID);
+            recMetaTSExt->extLength = htons((sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoMetadataV2TimestampExtension_t) - 4) / 4);
+            recMetaTSExt->frameTimestampH = htonl((uint32_t)(timestamp >> 32));
+            recMetaTSExt->frameTimestampL = htonl((uint32_t)(timestamp & 0xFFFFFFFF));
         }
     }
     else
@@ -978,7 +1094,8 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize == 0))
                 {
                     /* Setup the metadata */
-                    int size = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataSize(item->au.auMetadata, item->au.auMetadataSize);
+                    int size = 0;
+                    streamRecorder->recordingMetadataType = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(item->au.auMetadata, item->au.auMetadataSize, &size);
                     if (size > 0)
                     {
                         int ret = 0;
@@ -1001,11 +1118,21 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                         }
                         if (ret == 0)
                         {
-                            eARMEDIA_ERROR err;
-                            err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
-                                                                          ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING,
-                                                                          ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT,
-                                                                          sizeof(ARSTREAM2_STREAM_RECORDER_ParrotVideoRecordingMetadataV1_t));
+                            eARMEDIA_ERROR err = ARMEDIA_OK;
+                            if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1)
+                            {
+                                err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
+                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING,
+                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT,
+                                                                              size);
+                            }
+                            else if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2)
+                            {
+                                err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
+                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_CONTENT_ENCODING,
+                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_MIME_FORMAT,
+                                                                              size);
+                            }
                             if (err != ARMEDIA_OK)
                             {
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_SetMetadataInfo() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
@@ -1029,7 +1156,8 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                     int ret = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(item->au.timestamp,
                                                                                     item->au.auMetadata, item->au.auMetadataSize,
                                                                                     streamRecorder->savedMetadata, streamRecorder->savedMetadataSize,
-                                                                                    streamRecorder->recordingMetadata, streamRecorder->recordingMetadataSize);
+                                                                                    streamRecorder->recordingMetadata, streamRecorder->recordingMetadataSize,
+                                                                                    streamRecorder->recordingMetadataType);
                     if (ret != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata() failed: %d", ret);
