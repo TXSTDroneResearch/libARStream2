@@ -281,7 +281,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeInitClass(JNIEnv *env, j
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Unable to find method getBuffer");
     }
-    g_onBufferReady = (*env)->GetMethodID(env, clazz, "onBufferReady", "(IIIIJJJI)I");
+    g_onBufferReady = (*env)->GetMethodID(env, clazz, "onBufferReady", "(IIJIJJJI)I");
     if (!g_onBufferReady)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Unable to find method onBufferReady");
