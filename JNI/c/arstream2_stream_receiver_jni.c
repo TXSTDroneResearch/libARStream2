@@ -255,7 +255,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeRunNetworkThread(JNIEnv *
 
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *thizz);
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *thizz);
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp, uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType, const void *auMetaData, int auMetaDataSize, const void *auUserData, int auUserDataSize, const void *auBufferUserPtr, void *userPtr);
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType, ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata, void *auBufferUserPtr, void *userPtr);
 
 JNIEXPORT void JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeInitClass(JNIEnv *env, jclass clazz)
@@ -363,13 +363,13 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(const uint8_
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
-    jobject spsByteBuffer = (*env)->NewDirectByteBuffer(env, spsBuffer, spsSize);
+    jobject spsByteBuffer = (*env)->NewDirectByteBuffer(env, (uint8_t*)spsBuffer, spsSize);
     if (spsByteBuffer == NULL)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Error allocationg sps byte buffer");
         return ARSTREAM2_ERROR_ALLOC;
     }
-    jobject ppsByteBuffer = (*env)->NewDirectByteBuffer(env, ppsBuffer, ppsSize);
+    jobject ppsByteBuffer = (*env)->NewDirectByteBuffer(env, (uint8_t*)ppsBuffer, ppsSize);
     if (ppsByteBuffer == NULL)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Error allocationg pps byte buffer");
@@ -438,7 +438,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t
     return (ret == 0) ? ARSTREAM2_OK : ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
 }
 
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp, uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType, const void *auMetaData, int auMetaDataSize, const void *auUserData, int auUserDataSize, const void *auBufferUserPtr, void *userPtr)
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType, ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata, void *auBufferUserPtr, void *userPtr)
 {
     int ret = -1;
     JNIEnv *env = NULL;
@@ -460,7 +460,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *au
     }
 
     ret = (*env)->CallIntMethod(env, (jobject)userPtr, g_onBufferReady, (jint)auBufferUserPtr, (jint)auSize,
-                                (jint)auMetaData, (jint)auMetaDataSize, (jlong)auNtpTimestamp, (jlong)auNtpTimestampLocal, (jint)auSyncType);
+                                (jlong)auMetadata->auMetadata, (jint)auMetadata->auMetadataSize, (jlong)auTimestamps->auNtpTimestamp, (jlong)auTimestamps->auNtpTimestampRaw, (jlong)auTimestamps->auNtpTimestampLocal, (jint)auSyncType);
     if (wasAlreadyAttached == 0)
     {
         (*g_vm)->DetachCurrentThread(g_vm);

@@ -1067,6 +1067,8 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 uint8_t *auBuffer = NULL;
                 int auBufferSize = 0;
                 void *auBufferUserPtr = NULL;
+                ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t auTimestamps;
+                ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t auMetadata;
 
                 ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
                 streamReceiver->appOutput.callbackInProgress = 1;
@@ -1147,6 +1149,18 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                             break;
                     }
 
+                    /* timestamps and metadata */
+                    memset(&auTimestamps, 0, sizeof(auTimestamps));
+                    memset(&auMetadata, 0, sizeof(auMetadata));
+                    auTimestamps.auNtpTimestamp = au->ntpTimestamp;
+                    auTimestamps.auNtpTimestampRaw = au->extRtpTimestamp * 1000000 / 90000; //TODO
+                    auTimestamps.auNtpTimestampLocal = au->ntpTimestampLocal;
+                    auMetadata.auMetadata = (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL;
+                    auMetadata.auMetadataSize = au->metadataSize;
+                    auMetadata.auUserData = (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL;
+                    auMetadata.auUserDataSize = au->userDataSize;
+                    auMetadata.debugString = NULL;
+
                     ARSAL_Time_GetTime(&t1);
                     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
@@ -1155,11 +1169,8 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         /* call the auReadyCallback */
                         ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
-                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, au->extRtpTimestamp, au->ntpTimestamp,
-                                                        au->ntpTimestampLocal, auSyncType,
-                                                        (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL, au->metadataSize,
-                                                        (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL, au->userDataSize,
-                                                        auBufferUserPtr, streamReceiver->appOutput.auReadyCallbackUserPtr);
+                        cbRet = streamReceiver->appOutput.auReadyCallback(auBuffer, auSize, &auTimestamps, auSyncType, &auMetadata,
+                                                                          auBufferUserPtr, streamReceiver->appOutput.auReadyCallbackUserPtr);
 
                         ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
                     }

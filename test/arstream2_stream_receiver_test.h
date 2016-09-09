@@ -59,9 +59,10 @@ void stopVideo (BD_MANAGER_t *deviceManager);
 
 eARSTREAM2_ERROR spsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 eARSTREAM2_ERROR getAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
-eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp, uint64_t auNtpTimestamp,
-                                 uint64_t auNtpTimestampLocal, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
-                                 const void *auMetadata, int auMetadataSize, const void *auUserData, int auUserDataSize,
+eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize,
+                                 ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps,
+                                 eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
+                                 ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata,
                                  void *auBufferUserPtr, void *userPtr);
 
 int sendBeginStream(BD_MANAGER_t *deviceManager);

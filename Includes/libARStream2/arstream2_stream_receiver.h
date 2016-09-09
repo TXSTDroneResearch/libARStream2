@@ -81,6 +81,38 @@ typedef enum
 
 
 /**
+ * @brief ARSTREAM2 StreamReceiver AuReadyCallback function timestamps.
+ */
+typedef struct
+{
+    uint64_t auNtpTimestamp;                                        /**< Unskewed NTP timestamp from the source NTP wallclock (in microseconds).
+                                                                      *  This TS can be null and must be considered invalid when null.
+                                                                      *  It should be used for presentation when not null. */
+    uint64_t auNtpTimestampRaw;                                     /**< Raw NTP timestamp from extended RTP timestamp (in microseconds).
+                                                                      *  This TS is nonotonic and never null.
+                                                                      *  It should only be used for presentation when auNtpTimestamp is null. */
+    uint64_t auNtpTimestampLocal;                                   /**< Unskewed NTP timestamp in the local clock reference (in microseconds).
+                                                                      *  This TS can be null and must be considered invalid when null.
+                                                                      *  It should only be used for end-to-end software latency computation when not null. */
+
+} ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t;
+
+
+/**
+ * @brief ARSTREAM2 StreamReceiver AuReadyCallback function metadata.
+ */
+typedef struct
+{
+    const void *auMetadata;                                         /**< Video metadata */
+    int auMetadataSize;                                             /**< Video metadata size */
+    const void *auUserData;                                         /**< H.264 user data SEI */
+    int auUserDataSize;                                             /**< H.264 user data SEI size */
+    const char *debugString;                                        /**< Debug string */
+
+} ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t;
+
+
+/**
  * @brief SPS/PPS NAL units callback function
  *
  * To be used with the application output feature.
@@ -150,12 +182,11 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_GetAuBufferCallback_t)(uint8
  * @warning ARSTREAM2_StreamReceiver_* functions must not be called within the callback function
  * except the ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus() function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_AuReadyCallback_t)(uint8_t *auBuffer, int auSize, uint64_t auExtRtpTimestamp,
-                                                                   uint64_t auNtpTimestamp, uint64_t auNtpTimestampLocal,
-                                                                   eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
-                                                                   const void *auMetadata, int auMetadataSize,
-                                                                   const void *auUserData, int auUserDataSize,
-                                                                   void *auBufferUserPtr, void *userPtr);
+typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_AuReadyCallback_t)(uint8_t *auBuffer, int auSize,
+                                                                       ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps,
+                                                                       eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType,
+                                                                       ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata,
+                                                                       void *auBufferUserPtr, void *userPtr);
 
 
 /**
