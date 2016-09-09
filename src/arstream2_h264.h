@@ -160,6 +160,7 @@ typedef struct ARSTREAM2_H264_NalUnit_s
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t ntpTimestampRaw;
     uint64_t ntpTimestampLocal;
     uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;
@@ -243,6 +244,7 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t ntpTimestampRaw;
     uint64_t ntpTimestampLocal;
     uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;

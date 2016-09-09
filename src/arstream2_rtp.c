@@ -30,6 +30,7 @@ void ARSTREAM2_RTP_PacketReset(ARSTREAM2_RTP_Packet_t *packet)
     packet->inputTimestamp = 0;
     packet->timeoutTimestamp = 0;
     packet->ntpTimestamp = 0;
+    packet->ntpTimestampRaw = 0;
     packet->ntpTimestampLocal = 0;
     packet->extRtpTimestamp = 0;
     packet->rtpTimestamp = 0;
@@ -58,6 +59,7 @@ void ARSTREAM2_RTP_PacketCopy(ARSTREAM2_RTP_Packet_t *dst, const ARSTREAM2_RTP_P
     dst->inputTimestamp = src->inputTimestamp;
     dst->timeoutTimestamp = src->timeoutTimestamp;
     dst->ntpTimestamp = src->ntpTimestamp;
+    dst->ntpTimestampRaw = src->ntpTimestampRaw;
     dst->ntpTimestampLocal = src->ntpTimestampLocal;
     dst->extRtpTimestamp = src->extRtpTimestamp;
     dst->rtpTimestamp = src->rtpTimestamp;
@@ -1206,6 +1208,7 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                     rtcpContext->packetsReceived = 0;
                     rtcpContext->packetsLost = 0;
                 }
+                item->packet.ntpTimestampRaw = (item->packet.extRtpTimestamp * 1000000 + context->rtpClockRate / 2) / context->rtpClockRate;
                 context->previousExtSeqNum = (int32_t)item->packet.extSeqNum;
                 flags = ntohs(item->packet.header->flags);
                 if (flags & (1 << 7))

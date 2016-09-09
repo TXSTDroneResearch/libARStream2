@@ -1153,13 +1153,13 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     memset(&auTimestamps, 0, sizeof(auTimestamps));
                     memset(&auMetadata, 0, sizeof(auMetadata));
                     auTimestamps.auNtpTimestamp = au->ntpTimestamp;
-                    auTimestamps.auNtpTimestampRaw = au->extRtpTimestamp * 1000000 / 90000; //TODO
+                    auTimestamps.auNtpTimestampRaw = au->ntpTimestampRaw;
                     auTimestamps.auNtpTimestampLocal = au->ntpTimestampLocal;
                     auMetadata.auMetadata = (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL;
                     auMetadata.auMetadataSize = au->metadataSize;
                     auMetadata.auUserData = (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL;
                     auMetadata.auUserDataSize = au->userDataSize;
-                    auMetadata.debugString = NULL;
+                    auMetadata.debugString = NULL; //TODO
 
                     ARSAL_Time_GetTime(&t1);
                     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;

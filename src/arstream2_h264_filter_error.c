@@ -161,7 +161,9 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 ARSTREAM2_H264Filter_ResetAu(filter);
                 auItem->au.syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IDR;
                 auItem->au.rtpTimestamp = nextAu->rtpTimestamp - ((nextAu->rtpTimestamp >= 90) ? 90 : ((nextAu->rtpTimestamp >= 1) ? 1 : 0));
+                auItem->au.extRtpTimestamp = nextAu->extRtpTimestamp - ((nextAu->extRtpTimestamp >= 90) ? 90 : ((nextAu->extRtpTimestamp >= 1) ? 1 : 0));
                 auItem->au.ntpTimestamp = nextAu->ntpTimestamp - ((nextAu->ntpTimestamp >= 1000) ? 1000 : ((nextAu->ntpTimestamp >= 1) ? 1 : 0));
+                auItem->au.ntpTimestampRaw = nextAu->ntpTimestampRaw - ((nextAu->ntpTimestampRaw >= 1000) ? 1000 : ((nextAu->ntpTimestampRaw >= 1) ? 1 : 0));
                 auItem->au.ntpTimestampLocal = nextAu->ntpTimestampLocal - ((nextAu->ntpTimestampLocal >= 1000) ? 1000 : ((nextAu->ntpTimestampLocal >= 1) ? 1 : 0));
                 if (filter->currentAuMacroblockStatus)
                 {
@@ -493,6 +495,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                         item->nalu.inputTimestamp = nextNaluItem->nalu.inputTimestamp;
                         item->nalu.timeoutTimestamp = nextNaluItem->nalu.timeoutTimestamp;
                         item->nalu.ntpTimestamp = nextNaluItem->nalu.ntpTimestamp;
+                        item->nalu.ntpTimestampRaw = nextNaluItem->nalu.ntpTimestampRaw;
                         item->nalu.ntpTimestampLocal = nextNaluItem->nalu.ntpTimestampLocal;
                         item->nalu.extRtpTimestamp = nextNaluItem->nalu.extRtpTimestamp;
                         item->nalu.rtpTimestamp = nextNaluItem->nalu.rtpTimestamp;
