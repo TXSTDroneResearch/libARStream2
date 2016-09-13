@@ -161,9 +161,19 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                 /* SEI */
                 if (filter->sync)
                 {
-                    int i, count;
+                    int i, count, recPt;
                     void *pUserDataSei = NULL;
                     unsigned int userDataSeiSize = 0;
+                    ARSTREAM2_H264Parser_RecoveryPointSei_t recoveryPoint;
+                    recPt = ARSTREAM2_H264Parser_GetRecoveryPointSei(filter->parser, &recoveryPoint);
+                    if (recPt == 1)
+                    {
+                        filter->currentAuIsRecoveryPoint = 1;
+                    }
+                    else if (recPt < 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetRecoveryPointSei() failed (%d)", _err);
+                    }
                     count = ARSTREAM2_H264Parser_GetUserDataSeiCount(filter->parser);
                     for (i = 0; i < count; i++)
                     {
@@ -280,6 +290,7 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
     {
         filter->currentAuStreamingInfoAvailable = 0;
     }
+    filter->currentAuIsRecoveryPoint = 0;
     filter->currentAuPreviousSliceIndex = -1;
     filter->currentAuPreviousSliceFirstMb = 0;
     filter->currentAuInferredPreviousSliceFirstMb = 0;
@@ -469,6 +480,10 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME;
         }
         else if ((filter->currentAuStreamingInfoV1Available) && (filter->currentAuStreamingInfoV1.indexInGop == 0))
+        {
+            au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START;
+        }
+        else if (filter->currentAuIsRecoveryPoint)
         {
             au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START;
         }

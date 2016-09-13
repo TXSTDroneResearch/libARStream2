@@ -126,6 +126,7 @@ typedef struct ARSTREAM2_H264Filter_s
     ARSTREAM2_H264Sei_ParrotStreamingV1_t currentAuStreamingInfoV1;
     int currentAuStreamingInfoV2Available;
     ARSTREAM2_H264Sei_ParrotStreamingV2_t currentAuStreamingInfoV2;
+    int currentAuIsRecoveryPoint;
     int currentAuPreviousSliceIndex;
     int currentAuPreviousSliceFirstMb;
     int currentAuCurrentSliceFirstMb;
