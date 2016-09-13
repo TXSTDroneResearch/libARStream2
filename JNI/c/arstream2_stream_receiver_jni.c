@@ -253,7 +253,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeRunNetworkThread(JNIEnv *
 // ARStream2Receiver
 // ---------------------------------------
 
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *thizz);
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *thizz);
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *thizz);
 static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *auBuffer, int auSize, ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps, eARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE auSyncType, ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata, void *auBufferUserPtr, void *userPtr);
 
@@ -342,7 +342,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Receiver_nativeStop(JNIEnv *env, jobjec
 }
 
 
-static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *thizz)
+static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_SpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *thizz)
 {
     int ret = -1;
     JNIEnv *env = NULL;

@@ -688,7 +688,7 @@ void stopVideo(BD_MANAGER_t *deviceManager)
 }
 
 
-eARSTREAM2_ERROR spsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *userPtr)
+eARSTREAM2_ERROR spsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr)
 {
     ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "SPS/PPS received: SPSSize=%d, PPSSize=%d", spsSize, ppsSize);
 

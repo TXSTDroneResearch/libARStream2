@@ -103,11 +103,11 @@ typedef struct
  */
 typedef struct
 {
-    const void *auMetadata;                                         /**< Video metadata */
+    void *auMetadata;                                               /**< Video metadata */
     int auMetadataSize;                                             /**< Video metadata size */
-    const void *auUserData;                                         /**< H.264 user data SEI */
+    void *auUserData;                                               /**< H.264 user data SEI */
     int auUserDataSize;                                             /**< H.264 user data SEI size */
-    const char *debugString;                                        /**< Debug string */
+    char *debugString;                                              /**< Debug string */
 
 } ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t;
 
@@ -131,7 +131,7 @@ typedef struct
  *
  * @warning ARSTREAM2_StreamReceiver_* functions must not be called within the callback function.
  */
-typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_SpsPpsCallback_t)(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_SpsPpsCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 
 
 /**

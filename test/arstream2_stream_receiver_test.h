@@ -57,7 +57,7 @@ void stopNetwork (BD_MANAGER_t *deviceManager);
 int startVideo (BD_MANAGER_t *deviceManager);
 void stopVideo (BD_MANAGER_t *deviceManager);
 
-eARSTREAM2_ERROR spsPpsCallback(const uint8_t *spsBuffer, int spsSize, const uint8_t *ppsBuffer, int ppsSize, void *userPtr);
+eARSTREAM2_ERROR spsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 eARSTREAM2_ERROR getAuBufferCallback(uint8_t **auBuffer, int *auBufferSize, void **auBufferUserPtr, void *userPtr);
 eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize,
                                  ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t *auTimestamps,
