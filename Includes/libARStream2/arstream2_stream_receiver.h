@@ -194,14 +194,14 @@ typedef eARSTREAM2_ERROR (*ARSTREAM2_StreamReceiver_AuReadyCallback_t)(uint8_t *
  */
 typedef struct
 {
-    const char *serverAddr;                                         /**< Server address */
-    const char *mcastAddr;                                          /**< Multicast receive address (optional, NULL for no multicast) */
-    const char *mcastIfaceAddr;                                     /**< Multicast input interface address (required if mcastAddr is not NULL) */
-    int serverStreamPort;                                           /**< Server stream port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT */
-    int serverControlPort;                                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
-    int clientStreamPort;                                           /**< Client stream port */
-    int clientControlPort;                                          /**< Client control port */
-    eARSAL_SOCKET_CLASS_SELECTOR classSelector;                     /**< Type of Service class selector */
+    const char *serverAddr;                         /**< Server address */
+    const char *mcastAddr;                          /**< Multicast receive address (optional, NULL for no multicast) */
+    const char *mcastIfaceAddr;                     /**< Multicast input interface address (required if mcastAddr is not NULL) */
+    int serverStreamPort;                           /**< Server stream port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_STREAM_PORT */
+    int serverControlPort;                          /**< Server control port, @see ARSTREAM2_STREAM_RECEIVER_DEFAULT_CLIENT_CONTROL_PORT */
+    int clientStreamPort;                           /**< Client stream port */
+    int clientControlPort;                          /**< Client control port */
+    eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
 
 } ARSTREAM2_StreamReceiver_NetConfig_t;
 
@@ -215,7 +215,7 @@ struct mux_ctx;
  */
 typedef struct
 {
-    struct mux_ctx *mux;                                            /**< libmux context */
+    struct mux_ctx *mux;                            /**< libmux context */
 
 } ARSTREAM2_StreamReceiver_MuxConfig_t;
 
@@ -225,17 +225,17 @@ typedef struct
  */
 typedef struct
 {
-    const char *canonicalName;                                      /**< RTP participant canonical name (CNAME SDES item) */
-    const char *friendlyName;                                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
-    int maxPacketSize;                                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
-    int generateReceiverReports;                                    /**< if true, generate RTCP receiver reports */
-    int waitForSync;                                                /**< if true, wait for SPS/PPS sync before outputting access anits */
-    int outputIncompleteAu;                                         /**< if true, output incomplete access units */
-    int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
-    int filterOutSei;                                               /**< if true, filter out SEI NAL units */
-    int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
-    int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
-    int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
+    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
+    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
+    int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
+    int generateReceiverReports;                    /**< if true, generate RTCP receiver reports */
+    int waitForSync;                                /**< if true, wait for SPS/PPS sync before outputting access anits */
+    int outputIncompleteAu;                         /**< if true, output incomplete access units */
+    int filterOutSpsPps;                            /**< if true, filter out SPS and PPS NAL units */
+    int filterOutSei;                               /**< if true, filter out SEI NAL units */
+    int replaceStartCodesWithNaluSize;              /**< if true, replace the NAL units start code with the NALU size */
+    int generateSkippedPSlices;                     /**< if true, generate skipped P slices to replace missing slices for pre-decoder error concealment */
+    int generateFirstGrayIFrame;                    /**< if true, generate a first gray IDR frame to initialize the decoding (waitForSync must be enabled) */
 
 } ARSTREAM2_StreamReceiver_Config_t;
 
