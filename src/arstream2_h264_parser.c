@@ -56,6 +56,10 @@ typedef struct ARSTREAM2_H264Parser_s
     int userDataSize[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
     unsigned int userDataCount;
 
+    // Recovery point SEI
+    ARSTREAM2_H264Parser_RecoveryPointSei_t recoveryPoint;
+    int hasRecoveryPoint;
+
 } ARSTREAM2_H264Parser_t;
 
 
@@ -1920,6 +1924,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.recoveryFrameCnt = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ recovery_frame_count = %d", val);
 
     // exact_match_flag
@@ -1930,6 +1935,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.exactMatchFlag = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ exact_match_flag = %d", val);
 
     // broken_link_flag
@@ -1940,6 +1946,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.brokenLinkFlag = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ broken_link_flag = %d", val);
 
     // changing_slice_group_idc
@@ -1950,7 +1957,10 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.changingSliceGroupIdc = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ changing_slice_group_idc = %d", val);
+
+    parser->hasRecoveryPoint = 1;
 
     return _readBits;
 }
@@ -2305,6 +2315,8 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
     uint32_t val = 0;
     int readBytes = 0, _readBits = 0, _readBits2;
     int payloadType, payloadSize;
+
+    parser->hasRecoveryPoint = 0;
 
     // sei_rbsp
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- sei_rbsp()");
@@ -3643,6 +3655,34 @@ int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserH
     if (parser->config.extractUserDataSei)
     {
         return (int)parser->userDataCount;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+
+int ARSTREAM2_H264Parser_GetRecoveryPointSei(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_RecoveryPointSei_t *recoveryPoint)
+{
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
+
+    if (!parserHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
+        return -1;
+    }
+
+    if (!recoveryPoint)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (parser->hasRecoveryPoint)
+    {
+        memcpy(recoveryPoint, &parser->recoveryPoint, sizeof(ARSTREAM2_H264Parser_RecoveryPointSei_t));
+        return 1;
     }
     else
     {

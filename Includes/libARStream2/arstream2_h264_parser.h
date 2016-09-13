@@ -54,6 +54,19 @@ typedef struct
 
 
 /**
+ * @brief Recovery point SEI syntax elements.
+ */
+typedef struct
+{
+    unsigned int recoveryFrameCnt;          /**< recovery_frame_cnt syntax element */
+    unsigned int exactMatchFlag;            /**< exact_match_flag syntax element */
+    unsigned int brokenLinkFlag;            /**< broken_link_flag syntax element */
+    unsigned int changingSliceGroupIdc;     /**< changing_slice_group_idc syntax element */
+
+} ARSTREAM2_H264Parser_RecoveryPointSei_t;
+
+
+/**
  * @brief Initialize an H.264 parser instance.
  *
  * The library allocates the required resources. The user must call ARSTREAM2_H264Parser_Free() to free the resources.
@@ -189,6 +202,24 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_GetSliceInfo(ARSTREAM2_H264Parser_Handle p
  * @return -1 if an error occurred.
  */
 int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserHandle);
+
+
+/**
+ * @brief Get the recovery point SEI.
+ *
+ * The function fills the recoveryPoint structure with the recovery point info.
+ * A call to ARSTREAM2_H264Parser_ParseNalu() must have been made prior to calling this function.
+ * This function should only be called if the last NALU type is 6.
+ * If no recovery point SEI has been found the function returns 0.
+ *
+ * @param parserHandle Instance handle.
+ * @param recoveryPoint Pointer to the recovery point structure to fill.
+ *
+ * @return 1 if a recovery point SEI has been found.
+ * @return 0 if no recovery point SEI has been found.
+ * @return -1 if an error occurred.
+ */
+int ARSTREAM2_H264Parser_GetRecoveryPointSei(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_RecoveryPointSei_t *recoveryPoint);
 
 
 /**
