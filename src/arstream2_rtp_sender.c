@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <math.h>
@@ -129,6 +130,7 @@ struct ARSTREAM2_RtpSender_t {
     int serverControlPort;
     int clientStreamPort;
     int clientControlPort;
+    int classSelector;
     ARSTREAM2_RtpSender_AuCallback_t auCallback;
     void *auCallbackUserPtr;
     ARSTREAM2_RtpSender_NaluCallback_t naluCallback;
@@ -547,6 +549,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->serverControlPort = (config->serverControlPort > 0) ? config->serverControlPort : ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT;
         retSender->clientStreamPort = config->clientStreamPort;
         retSender->clientControlPort = config->clientControlPort;
+        retSender->classSelector = config->classSelector;
         retSender->auCallback = config->auCallback;
         retSender->auCallbackUserPtr = config->auCallbackUserPtr;
         retSender->naluCallback = config->naluCallback;
@@ -1031,6 +1034,16 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
 
     if (ret == 0)
     {
+        int tos = sender->classSelector;
+        err = ARSAL_Socket_Setsockopt(sender->streamSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
+
+    if (ret == 0)
+    {
         /* set to non-blocking */
         int flags = fcntl(sender->streamSocket, F_GETFL, 0);
         fcntl(sender->streamSocket, F_SETFL, flags | O_NONBLOCK);
@@ -1171,6 +1184,16 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 #endif
+
+    if (ret == 0)
+    {
+        int tos = sender->classSelector;
+        err = ARSAL_Socket_Setsockopt(sender->controlSocket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(int));
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on setsockopt: error=%d (%s)", errno, strerror(errno));
+        }
+    }
 
     if (ret == 0)
     {
