@@ -470,13 +470,6 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
     receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = recvTimestamp;
 
     ARSAL_Mutex_Unlock(&(receiver->monitoringMutex));
-
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
-    if (receiver->fMonitorOut)
-    {
-        fprintf(receiver->fMonitorOut, "%llu %lu %llu %llu %u %u %lu\n", (long long unsigned int)recvTimestamp, (long unsigned int)rtpTimestamp, (long long unsigned int)ntpTimestamp, (long long unsigned int)ntpTimestampLocal, seqNum, markerBit, (long unsigned int)bytes);
-    }
-#endif
 }
 
 static int ARSTREAM2_RtpReceiver_MuxReadData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *recvBuffer, int recvBufferSize, int *recvSize)
@@ -1274,76 +1267,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
     }
 
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
-    if (internalError == ARSTREAM2_OK)
-    {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        szOutputFileName[0] = '\0';
-        if (0)
-        {
-        }
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_ALLOW_DRONE
-        else if ((access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_DRONE, F_OK) == 0) && (access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_DRONE, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_DRONE;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_ALLOW_NAP_USB
-        else if ((access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_USB;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_ALLOW_PCLINUX
-        else if ((access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_PATH_PCLINUX;
-        }
-#endif
-        if (pszFilePath)
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT_FILENAME, i);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            retReceiver->fMonitorOut = fopen(szOutputFileName, "w");
-            if (!retReceiver->fMonitorOut)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
-            }
-        }
-
-        if (retReceiver->fMonitorOut)
-        {
-            fprintf(retReceiver->fMonitorOut, "recvTimestamp rtpTimestamp ntpTimestamp ntpTimestampLocal rtpSeqNum rtpMarkerBit bytes\n");
-        }
-    }
-#endif //#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
-
     if ((internalError != ARSTREAM2_OK) &&
         (retReceiver != NULL))
     {
@@ -1402,12 +1325,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         }
 #endif
 
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
-        if ((retReceiver) && (retReceiver->fMonitorOut))
-        {
-            fclose(retReceiver->fMonitorOut);
-        }
-#endif
         free(retReceiver);
         retReceiver = NULL;
     }
@@ -1471,13 +1388,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
                 ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = &(*receiver)->naluBuffer[i];
                 free(naluBuf->naluBuffer);
             }
-
-#ifdef ARSTREAM2_RTP_RECEIVER_MONITORING_OUTPUT
-            if ((*receiver)->fMonitorOut)
-            {
-                fclose((*receiver)->fMonitorOut);
-            }
-#endif
 
             int ret = (*receiver)->ops.streamChannelTeardown((*receiver));
             if (ret != 0)

@@ -236,6 +236,7 @@ typedef struct
     int replaceStartCodesWithNaluSize;              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                     /**< if true, generate skipped P slices to replace missing slices for pre-decoder error concealment */
     int generateFirstGrayIFrame;                    /**< if true, generate a first gray IDR frame to initialize the decoding (waitForSync must be enabled) */
+    const char *debugPath;                          /**< Optional path for writing debug files (optional, can be NULL) */
 
 } ARSTREAM2_StreamReceiver_Config_t;
 

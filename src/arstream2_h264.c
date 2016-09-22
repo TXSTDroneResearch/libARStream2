@@ -88,6 +88,7 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->auSize = 0;
     au->metadataSize = 0;
     au->userDataSize = 0;
+    au->videoStatsAvailable = 0;
     au->mbStatusAvailable = 0;
     au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_NONE;
     au->inputTimestamp = 0;
@@ -114,6 +115,7 @@ void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H26
     dst->auSize = src->auSize;
     dst->metadataSize = src->metadataSize;
     dst->userDataSize = src->userDataSize;
+    dst->videoStatsAvailable = src->videoStatsAvailable;
     dst->mbStatusAvailable = src->mbStatusAvailable;
     dst->syncType = src->syncType;
     dst->inputTimestamp = src->inputTimestamp;
@@ -332,7 +334,7 @@ int ARSTREAM2_H264_NaluFifoFlush(ARSTREAM2_H264_NaluFifo_t *fifo)
 
 
 int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, int bufferMaxCount,
-                              int auBufferSize, int metadataBufferSize, int userDataBufferSize)
+                              int auBufferSize, int metadataBufferSize, int userDataBufferSize, int videoStatsBufferSize)
 {
     int i;
     ARSTREAM2_H264_AuFifoItem_t* curItem;
@@ -445,6 +447,21 @@ int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, i
         }
     }
 
+    if (videoStatsBufferSize > 0)
+    {
+        for (i = 0; i < bufferMaxCount; i++)
+        {
+            fifo->bufferPool[i].videoStatsBuffer = malloc(videoStatsBufferSize);
+            if (!fifo->bufferPool[i].videoStatsBuffer)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO buffer allocation failed (size %d)", videoStatsBufferSize);
+                ARSTREAM2_H264_AuFifoFree(fifo);
+                return -1;
+            }
+            fifo->bufferPool[i].videoStatsBufferSize = videoStatsBufferSize;
+        }
+    }
+
     return 0;
 }
 
@@ -471,6 +488,8 @@ int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo)
             fifo->bufferPool[i].metadataBuffer = NULL;
             free(fifo->bufferPool[i].userDataBuffer);
             fifo->bufferPool[i].userDataBuffer = NULL;
+            free(fifo->bufferPool[i].videoStatsBuffer);
+            fifo->bufferPool[i].videoStatsBuffer = NULL;
             free(fifo->bufferPool[i].mbStatusBuffer);
             fifo->bufferPool[i].mbStatusBuffer = NULL;
         }

@@ -29,6 +29,8 @@
 #define ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE (1024)
 #define ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE (1024)
 
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME "videostats"
+
 
 typedef struct ARSTREAM2_StreamReceiver_s
 {
@@ -83,6 +85,12 @@ typedef struct ARSTREAM2_StreamReceiver_s
 
     } recorder;
 
+    /* Debug files */
+    char *debugPath;
+    char *videoStatsFileName;
+    uint64_t videoStatsFileOutputTimestamp;
+    FILE *videoStatsFile;
+
 } ARSTREAM2_StreamReceiver_t;
 
 
@@ -93,6 +101,9 @@ static void ARSTREAM2_StreamReceiver_StreamRecorderAuCallback(eARSTREAM2_STREAM_
 static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_t *streamReceiver);
+static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver);
+static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver);
+static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au);
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
@@ -143,6 +154,11 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         streamReceiver->appOutput.filterOutSpsPps = (config->filterOutSpsPps > 0) ? 1 : 0;
         streamReceiver->appOutput.filterOutSei = (config->filterOutSei > 0) ? 1 : 0;
         streamReceiver->appOutput.replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
+        if ((config->debugPath) && (strlen(config->debugPath)))
+        {
+            streamReceiver->debugPath = strdup(config->debugPath);
+        }
+        ARSTREAM2_StreamReceiver_VideoStatsFileOpen(streamReceiver);
     }
 
     if (ret == ARSTREAM2_OK)
@@ -235,7 +251,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         int auFifoRet = ARSTREAM2_H264_AuFifoInit(&streamReceiver->auFifo, ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT,
                                                   ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT,
                                                   ARSTREAM2_STREAM_RECEIVER_AU_BUFFER_SIZE, ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE,
-                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE);
+                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
         if (auFifoRet != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoInit() failed (%d)", auFifoRet);
@@ -347,6 +363,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (appOutputCallbackCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
             if (recorderMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->recorder.mutex));
             if (fifoMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->fifoMutex));
+            ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
+            free(streamReceiver->debugPath);
             free(streamReceiver);
         }
         *streamReceiverHandle = NULL;
@@ -404,11 +422,144 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     free(streamReceiver->recorder.fileName);
     free(streamReceiver->pSps);
     free(streamReceiver->pPps);
+    ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
+    free(streamReceiver->debugPath);
 
     free(streamReceiver);
     *streamReceiverHandle = NULL;
 
     return ret;
+}
+
+
+static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver)
+{
+    int i;
+    char szOutputFileName[500];
+    szOutputFileName[0] = '\0';
+
+    if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
+    {
+        for (i = 0; i < 1000; i++)
+        {
+            snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", streamReceiver->debugPath, ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i);
+            if (access(szOutputFileName, F_OK) == -1)
+            {
+                // file does not exist
+                break;
+            }
+            szOutputFileName[0] = '\0';
+        }
+    }
+
+    if (strlen(szOutputFileName))
+    {
+        streamReceiver->videoStatsFileName = strdup(szOutputFileName);
+        if (!streamReceiver->videoStatsFileName)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed for video stats output file '%s'", szOutputFileName);
+            return;
+        }
+        streamReceiver->videoStatsFile = fopen(szOutputFileName, "w");
+        if (!streamReceiver->videoStatsFile)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to open video stats output file '%s'", szOutputFileName);
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Opened video stats output file '%s'", szOutputFileName);
+        }
+    }
+
+    if (streamReceiver->videoStatsFile)
+    {
+        fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount discardedFrameCount missedFrameCount errorSecondCount");
+        int i, j;
+        for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
+        {
+            fprintf(streamReceiver->videoStatsFile, " errorSecondCountByZone[%d]", i);
+        }
+        for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
+        {
+            for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
+            {
+                fprintf(streamReceiver->videoStatsFile, " macroblockStatus[%d][%d]", j, i);
+            }
+        }
+        fprintf(streamReceiver->videoStatsFile, "\n");
+    }
+}
+
+
+static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver)
+{
+    if (streamReceiver->videoStatsFile)
+    {
+        fclose(streamReceiver->videoStatsFile);
+        streamReceiver->videoStatsFile = NULL;
+    }
+    free(streamReceiver->videoStatsFileName);
+    streamReceiver->videoStatsFileName = NULL;
+}
+
+
+static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au)
+{
+    if ((!videoStats) || (!au))
+    {
+        return;
+    }
+
+    if (!streamReceiver->videoStatsFile)
+    {
+        return;
+    }
+
+    struct timespec t1;
+    ARSAL_Time_GetTime(&t1);
+    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+    if (streamReceiver->videoStatsFileOutputTimestamp == 0)
+    {
+        /* init */
+        streamReceiver->videoStatsFileOutputTimestamp = curTime;
+    }
+    if (curTime >= streamReceiver->videoStatsFileOutputTimestamp + ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL)
+    {
+        if (streamReceiver->videoStatsFile)
+        {
+            /* get the RSSI from the streaming metadata */
+            //TODO: remove this hack once we have a better way of getting the RSSI
+            int rssi = 0;
+            if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5031))
+            {
+                rssi = (int8_t)au->buffer->metadataBuffer[26];
+            }
+            if ((au->metadataSize >= 55) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5032))
+            {
+                rssi = (int8_t)au->buffer->metadataBuffer[54];
+            }
+
+            fprintf(streamReceiver->videoStatsFile, "%llu %i %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
+                    (long unsigned int)videoStats->totalFrameCount, (long unsigned int)videoStats->outputFrameCount,
+                    (long unsigned int)videoStats->discardedFrameCount, (long unsigned int)videoStats->missedFrameCount,
+                    (long unsigned int)videoStats->errorSecondCount);
+            int i, j;
+            for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
+            {
+                fprintf(streamReceiver->videoStatsFile, " %lu", (long unsigned int)videoStats->errorSecondCountByZone[i]);
+            }
+            for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
+            {
+                for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
+                {
+                    fprintf(streamReceiver->videoStatsFile, " %lu", (long unsigned int)videoStats->macroblockStatus[j][i]);
+                }
+            }
+            fprintf(streamReceiver->videoStatsFile, "\n");
+        }
+        streamReceiver->videoStatsFileOutputTimestamp = curTime;
+    }
 }
 
 
@@ -649,6 +800,11 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_RecorderAuEnqueue() failed (%d)", ret);
             }
+        }
+
+        if (auItem->au.videoStatsAvailable)
+        {
+            ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer, &auItem->au);
         }
     }
     else

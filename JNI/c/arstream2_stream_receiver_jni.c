@@ -66,6 +66,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     config.replaceStartCodesWithNaluSize = 0;
     config.generateSkippedPSlices = 1;
     config.generateFirstGrayIFrame = 1;
+    config.debugPath = "/sdcard/FF/streamdebug";
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, &net_config, NULL);
@@ -149,6 +150,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
     config.replaceStartCodesWithNaluSize = 0;
     config.generateSkippedPSlices = 1;
     config.generateFirstGrayIFrame = 1;
+    config.debugPath = "/sdcard/FF/streamdebug";
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, NULL, &mux_config);

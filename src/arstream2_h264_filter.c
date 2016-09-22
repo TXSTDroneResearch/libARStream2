@@ -584,44 +584,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             /* count missed frames (missing non-ref frames are not counted as missing) */
             filter->stats.missedFrameCount++;
         }
-        if (filter->lastStatsOutputTimestamp == 0)
-        {
-            /* init */
-            filter->lastStatsOutputTimestamp = curTime;
-        }
-        if (curTime >= filter->lastStatsOutputTimestamp + ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL)
-        {
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
-            if (filter->fStatsOut)
-            {
-                int rssi = 0;
-                if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5031))
-                {
-                    /* get the RSSI from the streaming metadata */
-                    //TODO: remove this hack once we have a better way of getting the RSSI
-                    rssi = (int8_t)au->buffer->metadataBuffer[26];
-                }
-                fprintf(filter->fStatsOut, "%llu %i %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
-                        (long unsigned int)filter->stats.totalFrameCount, (long unsigned int)filter->stats.outputFrameCount,
-                        (long unsigned int)filter->stats.discardedFrameCount, (long unsigned int)filter->stats.missedFrameCount,
-                        (long unsigned int)filter->stats.errorSecondCount);
-                int i, j;
-                for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-                {
-                    fprintf(filter->fStatsOut, " %lu", (long unsigned int)filter->stats.errorSecondCountByZone[i]);
-                }
-                for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
-                {
-                    for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-                    {
-                        fprintf(filter->fStatsOut, " %lu", (long unsigned int)filter->stats.macroblockStatus[j][i]);
-                    }
-                }
-                fprintf(filter->fStatsOut, "\n");
-            }
-#endif
-            filter->lastStatsOutputTimestamp = curTime;
-        }
         if (filter->currentAuIsRef)
         {
             /* reference frame => exchange macroblock status buffers */
@@ -629,6 +591,24 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             filter->currentAuMacroblockStatus = filter->currentAuRefMacroblockStatus;
             filter->currentAuRefMacroblockStatus = tmp;
         }
+
+        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264Filter_VideoStats_t)))
+        {
+            memcpy(au->buffer->videoStatsBuffer, &filter->stats, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
+            au->videoStatsAvailable = 1;
+        }
+        else
+        {
+            au->videoStatsAvailable = 0;
+        }
+    }
+    else
+    {
+        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264Filter_VideoStats_t)))
+        {
+            memset(au->buffer->videoStatsBuffer, 0, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
+        }
+        au->videoStatsAvailable = 0;
     }
 
     return ret;
@@ -831,89 +811,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         }
     }
 
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
-    if (ret == ARSTREAM2_OK)
-    {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        szOutputFileName[0] = '\0';
-        if (0)
-        {
-        }
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_DRONE
-        else if ((access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_DRONE, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_DRONE, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_DRONE;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_NAP_USB
-        else if ((access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_USB, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_USB;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_NAP_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_ANDROID_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_ALLOW_PCLINUX
-        else if ((access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_PCLINUX, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_PATH_PCLINUX;
-        }
-#endif
-        if (pszFilePath)
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT_FILENAME, i);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            filter->fStatsOut = fopen(szOutputFileName, "w");
-            if (!filter->fStatsOut)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_H264_FILTER_TAG, "Unable to open stats output file '%s'", szOutputFileName);
-            }
-        }
-
-        if (filter->fStatsOut)
-        {
-            fprintf(filter->fStatsOut, "timestamp rssi totalFrameCount outputFrameCount discardedFrameCount missedFrameCount errorSecondCount");
-            int i, j;
-            for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-            {
-                fprintf(filter->fStatsOut, " errorSecondCountByZone[%d]", i);
-            }
-            for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
-            {
-                for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-                {
-                    fprintf(filter->fStatsOut, " macroblockStatus[%d][%d]", j, i);
-                }
-            }
-            fprintf(filter->fStatsOut, "\n");
-        }
-    }
-#endif //#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
-
     if (ret == ARSTREAM2_OK)
     {
         *filterHandle = (ARSTREAM2_H264Filter_Handle*)filter;
@@ -924,9 +821,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         {
             if (filter->parser) ARSTREAM2_H264Parser_Free(filter->parser);
             if (filter->writer) ARSTREAM2_H264Writer_Free(filter->writer);
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
-            if (filter->fStatsOut) fclose(filter->fStatsOut);
-#endif
             free(filter);
         }
         *filterHandle = NULL;
@@ -955,9 +849,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Free(ARSTREAM2_H264Filter_Handle *filterHa
     free(filter->currentAuRefMacroblockStatus);
     free(filter->pSps);
     free(filter->pPps);
-#ifdef ARSTREAM2_H264_FILTER_STATS_FILE_OUTPUT
-    if (filter->fStatsOut) fclose(filter->fStatsOut);
-#endif
 
     free(filter);
     *filterHandle = NULL;
