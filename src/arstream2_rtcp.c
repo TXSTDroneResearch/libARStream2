@@ -323,11 +323,8 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 
     if (rrCount == 1)
     {
-        uint32_t cumulativeLost = context->extHighestSeqNum - context->firstSeqNum + 1 - context->packetsReceived;
-        if (cumulativeLost != context->packetsLost)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Receiver report mismatch: cumulativeLost=%d - context->packetsLost=%d", cumulativeLost, context->packetsLost);
-        }
+        //uint32_t cumulativeLost = context->extHighestSeqNum - context->firstSeqNum + 1 - context->packetsReceived;
+        // NB: cumulativeLost is unreliable because (context->extHighestSeqNum - context->firstSeqNum) is before jitter buffer and context->packetsReceived is after
         uint32_t fractionLost = 0;
         if ((context->lastRrExtHighestSeqNum != 0) && (context->extHighestSeqNum > context->lastRrExtHighestSeqNum))
         {
@@ -335,7 +332,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
             if (fractionLost > 256) fractionLost = 0;
         }
         receptionReport->ssrc = htonl(context->senderSsrc);
-        receptionReport->lost = htonl(((fractionLost & 0xFF) << 24) | (cumulativeLost & 0x00FFFFFF));
+        receptionReport->lost = htonl(((fractionLost & 0xFF) << 24) | (context->packetsLost & 0x00FFFFFF));
         receptionReport->extHighestSeqNum = htonl(context->extHighestSeqNum);
         receptionReport->interarrivalJitter = htonl(context->interarrivalJitter);
         receptionReport->lsr = htonl((uint32_t)(((context->prevSrNtpTimestamp << 16) / 1000000) & 0xFFFFFFFF));

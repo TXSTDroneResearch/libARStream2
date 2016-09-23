@@ -1236,11 +1236,12 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 {
                     if (ret == -3)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Duplicate RTP packet received (seqNum %d, extSeqNum %d)",
-                                    item->packet.seqNum, item->packet.extSeqNum); //TODO: debug
+                        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTP_TAG, "Duplicate RTP packet received (seqNum %d, extSeqNum %d)",
+                                    item->packet.seqNum, item->packet.extSeqNum);
                     }
                     else
                     {
+                        rtcpContext->packetsLost++;
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "ARSTREAM2_RTP_PacketFifoEnqueueItem() failed (%d)", ret);
                     }
                     /* failed to enqueue, flag the item for garbage collection */
@@ -1279,6 +1280,7 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
             else
             {
                 /* invalid payload, flag the item for garbage collection */
+                rtcpContext->packetsLost++;
                 garbageCount++;
                 if (!garbage)
                 {

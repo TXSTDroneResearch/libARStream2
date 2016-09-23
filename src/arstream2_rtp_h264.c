@@ -1059,6 +1059,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         missingPacketsBefore = (uint32_t)((int64_t)packet->extSeqNum - context->previousDepayloadExtSeqNum - 1 + context->missingBeforePending);
                         context->missingBeforePending = 0;
                         rtcpContext->packetsLost += missingPacketsBefore;
+                        rtcpContext->packetsReceived -= missingPacketsBefore;
                     }
 
                     /* AU change detection */
@@ -1355,8 +1356,9 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                 }
                 else
                 {
-                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Late out of order RTP packet dropped (seqNum %d, extSeqNum %d)",
-                                packetItem->packet.seqNum, packetItem->packet.extSeqNum);*/
+                    rtcpContext->packetsLost++;
+                    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTPH264_TAG, "Late out of order RTP packet dropped (seqNum %d, extSeqNum %d)",
+                                packetItem->packet.seqNum, packetItem->packet.extSeqNum);
                 }
 
                 err = ARSTREAM2_RTP_PacketFifoUnrefBuffer(packetFifo, packetItem->packet.buffer);
