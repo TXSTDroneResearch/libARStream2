@@ -211,7 +211,8 @@ int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize,
 int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                 const ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                 uint64_t receptionTimestamp,
-                                                ARSTREAM2_RTCP_SenderContext_t *context);
+                                                ARSTREAM2_RTCP_SenderContext_t *context,
+                                                int *gotReceptionReport);
 
 int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
                                                uint64_t sendTimestamp, uint32_t packetCount, uint32_t byteCount,
@@ -224,7 +225,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
 int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                    ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                    uint64_t sendTimestamp,
-                                                   ARSTREAM2_RTCP_ReceiverContext_t *context);
+                                                   ARSTREAM2_RTCP_ReceiverContext_t *context,
+                                                   unsigned int *size);
 
 int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc,
                                              const char *cname, const char *name, unsigned int *size);
@@ -256,7 +258,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
 int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_SenderContext_t *context,
-                                                int *gotReceiverReport);
+                                                int *gotReceptionReport);
 
 int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
                                                   uint64_t receptionTimestamp,

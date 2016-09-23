@@ -1332,17 +1332,17 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             }
             while (bytes > 0)
             {
-                int gotReceiverReport = 0;
+                int gotReceptionReport = 0;
 
                 ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(sender->rtcpMsgBuffer, (unsigned int)bytes,
                                                                   curTime, &sender->rtcpSenderContext,
-                                                                  &gotReceiverReport);
+                                                                  &gotReceptionReport);
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
                 }
 
-                if ((gotReceiverReport) && (sender->receiverReportCallback != NULL))
+                if ((gotReceptionReport) && (sender->receiverReportCallback != NULL))
                 {
                     ARSTREAM2_StreamSender_ReceiverReportData_t report;
                     memset(&report, 0, sizeof(ARSTREAM2_StreamSender_ReceiverReportData_t));

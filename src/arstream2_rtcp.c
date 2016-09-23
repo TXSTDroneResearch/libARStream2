@@ -61,7 +61,8 @@ int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize,
 int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                 const ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                 uint64_t receptionTimestamp,
-                                                ARSTREAM2_RTCP_SenderContext_t *context)
+                                                ARSTREAM2_RTCP_SenderContext_t *context,
+                                                int *gotReceptionReport)
 {
     uint32_t ssrc, ssrc_1;
     uint32_t lost, extHighestSeqNum, interarrivalJitter;
@@ -85,6 +86,22 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverRep
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid receiver report packet type (%d)", receiverReport->packetType);
         return -1;
+    }
+
+    unsigned int rrCount = receiverReport->flags & 0x1F;
+    if (rrCount != 1)
+    {
+        if (rrCount > 1)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Unsupported reception report count (%d)", rrCount);
+            return -1;
+        }
+        else
+        {
+            /* No reception report available in the receiver report */
+            if (gotReceptionReport) *gotReceptionReport = 0;
+            return 0;
+        }
     }
 
     uint16_t length = ntohs(receiverReport->length);
@@ -137,6 +154,7 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverRep
     }
     context->lastRrReceptionTimestamp = receptionTimestamp;
 
+    if (gotReceptionReport) *gotReceptionReport = 1;
     return 0;
 }
 
@@ -280,7 +298,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderRepor
 int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
                                                    ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
                                                    uint64_t sendTimestamp,
-                                                   ARSTREAM2_RTCP_ReceiverContext_t *context)
+                                                   ARSTREAM2_RTCP_ReceiverContext_t *context,
+                                                   unsigned int *size)
 {
     if ((!receiverReport) || (!receptionReport) || (!context))
     {
@@ -295,6 +314,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
     }
 
     int rrCount = ((context->packetsReceived > 0) && (context->packetsReceived > context->lastRrPacketsReceived)) ? 1 : 0;
+    unsigned int _size = sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + rrCount * sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
 
     receiverReport->flags = (2 << 6) | (rrCount & 0x1F);
     receiverReport->packetType = ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE;
@@ -331,6 +351,9 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
         ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unsupported receiver report count");
         return -1;
     }
+
+    if (size)
+        *size = _size;
 
     return 0;
 }
@@ -670,16 +693,17 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
 
     if ((ret == 0) && (generateReceiverReport) && (totalSize + sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t) <= maxPacketSize))
     {
+        unsigned int rrSize = 0;
         ret = ARSTREAM2_RTCP_Receiver_GenerateReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)(packet + totalSize),
                                                              (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
-                                                             sendTimestamp, context);
+                                                             sendTimestamp, context, &rrSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate receiver report (%d)", ret);
         }
         else
         {
-            totalSize += sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t);
+            totalSize += rrSize;
         }
     }
 
@@ -722,10 +746,10 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
 int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_SenderContext_t *context,
-                                                int *gotReceiverReport)
+                                                int *gotReceptionReport)
 {
     unsigned int readSize = 0, size = 0;
-    int receptionReportCount = 0, type, ret;
+    int receptionReportCount = 0, type, ret, _ret = 0;
 
     if ((!packet) || (!context))
     {
@@ -736,6 +760,11 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
     while (readSize < packetSize)
     {
         type = ARSTREAM2_RTCP_GetPacketType(packet, packetSize - readSize, &receptionReportCount, &size);
+        if (type < 0)
+        {
+            _ret = -1;
+            break;
+        }
         switch (type)
         {
             case ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE:
@@ -744,14 +773,13 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                     ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)packet,
                                                                       (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
                                                                       receptionTimestamp,
-                                                                      context);
+                                                                      context, gotReceptionReport);
                     if (ret != 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process receiver report (%d)", ret);
                     }
                     else
                     {
-                        if (gotReceiverReport) *gotReceiverReport = 1;
                         /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Receiver state: RTD=%.1fms interarrivalJitter=%.1fms lost=%d lastLossRate=%.1f%% highestSeqNum=%d",
                                     (float)context->roundTripDelay / 1000., (float)context->interarrivalJitter / 1000.,
                                     context->receiverLostCount, (float)context->receiverFractionLost * 100. / 256.,
@@ -784,13 +812,11 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
             default:
                 break;
         }
-        if (type < 0)
-            break;
         readSize += size;
         packet += size;
     }
 
-    return 0;
+    return _ret;
 }
 
 
@@ -799,7 +825,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                                                   ARSTREAM2_RTCP_ReceiverContext_t *context)
 {
     unsigned int readSize = 0, size = 0;
-    int type, ret;
+    int type, ret, _ret = 0;
 
     if ((!packet) || (!context))
     {
@@ -810,6 +836,11 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
     while (readSize < packetSize)
     {
         type = ARSTREAM2_RTCP_GetPacketType(packet, packetSize - readSize, NULL, &size);
+        if (type < 0)
+        {
+            _ret = -1;
+            break;
+        }
         switch (type)
         {
             case ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE:
@@ -851,11 +882,9 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
             default:
                 break;
         }
-        if (type < 0)
-            break;
         readSize += size;
         packet += size;
     }
 
-    return 0;
+    return _ret;
 }
