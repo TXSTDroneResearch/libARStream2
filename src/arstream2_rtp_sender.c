@@ -56,6 +56,12 @@
 
 
 /**
+ * Timeout drops minimum log interval in seconds
+ */
+#define ARSTREAM2_RTP_SENDER_TIMEOUT_DROP_LOG_INTERVAL (10)
+
+
+/**
  * Default minimum stream socket send buffer size: 50ms @ 5Mbit/s
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE (31250)
@@ -171,6 +177,8 @@ struct ARSTREAM2_RtpSender_t {
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     FILE* fMonitorOut;
 #endif
+    int timeoutDropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
+    uint64_t timeoutDropLogStartTime;
 };
 
 
@@ -1374,16 +1382,51 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
         else if (ret > 0)
         {
-            char strDrops[16];
-            char *str = strDrops;
-            int i, l, len;
-            for (i = 0, len = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+            /* Log drops once in a while */
+            if (sender->timeoutDropLogStartTime)
             {
-                l = snprintf(str, 16 - len, "%s%d", (i > 0) ? " " : "", dropCount[i]);
-                len += l;
-                str += l;
+                if (curTime >= sender->timeoutDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_TIMEOUT_DROP_LOG_INTERVAL * 1000000)
+                {
+                    char strDrops[16];
+                    char *str = strDrops;
+                    int i, l, len, totalCount;
+                    for (i = 0, len = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+                    {
+                        totalCount += sender->timeoutDropCount[i];
+                        l = snprintf(str, 16 - len, "%s%d", (i > 0) ? " " : "", sender->timeoutDropCount[i]);
+                        len += l;
+                        str += l;
+                    }
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets from FIFO on timeout (%s) in last %.1f seconds",
+                                totalCount, strDrops, (float)(curTime - sender->timeoutDropLogStartTime) / 1000000.);
+                    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+                    {
+                        sender->timeoutDropCount[i] = 0;
+                    }
+                    sender->timeoutDropLogStartTime = 0;
+                }
+                else
+                {
+                    int i;
+                    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+                    {
+                        sender->timeoutDropCount[i] += dropCount[i];
+                    }
+                }
             }
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets from FIFO on timeout (%s)", ret, strDrops);
+            else
+            {
+                int i, totalCount;
+                for (i = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+                {
+                    totalCount += dropCount[i];
+                    sender->timeoutDropCount[i] += dropCount[i];
+                }
+                if (totalCount > 0)
+                {
+                    sender->timeoutDropLogStartTime = curTime;
+                }
+            }
         }
 
         /* RTP packets creation */
@@ -1430,7 +1473,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 {
                     if (errno == EAGAIN)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Stream socket buffer full (no packets dropped, will retry later) - sendmmsg error (%d): %s", errno, strerror(errno));
+                        //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Stream socket buffer full (no packets dropped, will retry later) - sendmmsg error (%d): %s", errno, strerror(errno)); //TODO: debug
                         int i;
                         for (i = 0, msgVecSentCount = 0; i < msgVecCount; i++)
                         {
