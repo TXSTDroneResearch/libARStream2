@@ -59,9 +59,9 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
                 auItem = NULL;
             }
-            err = ARSTREAM2_H264_AuFifoFlush(filter->auFifo);
+            int _ret = ARSTREAM2_H264_AuFifoFlush(filter->auFifo);
             ARSAL_Mutex_Unlock(filter->fifoMutex);
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "AU FIFO is full, cannot generate gray I-frame => flush to recover (%d AU flushed)", err);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "AU FIFO is full, cannot generate gray I-frame => flush to recover (%d AU flushed)", _ret);
             ret = -1;
         }
         else
@@ -201,10 +201,11 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                     /* output the access unit */
                     if (filter->auCallback)
                     {
+                        int _ret;
                         if (filter->currentAuMacroblockStatus)
                         {
-                            err = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(&auItem->au, filter->mbCount);
-                            if (err == 0)
+                            _ret = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(&auItem->au, filter->mbCount);
+                            if (_ret == 0)
                             {
                                 memcpy(auItem->au.buffer->mbStatusBuffer, filter->currentAuMacroblockStatus, filter->mbCount);
                                 auItem->au.mbStatusAvailable = 1;
@@ -214,8 +215,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "MB status buffer is too small");
                             }
                         }
-                        int err = filter->auCallback(auItem, filter->auCallbackUserPtr);
-                        if (err != 0)
+                        _ret = filter->auCallback(auItem, filter->auCallbackUserPtr);
+                        if (_ret != 0)
                         {
                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to output the access unit");
                             ret = -1;

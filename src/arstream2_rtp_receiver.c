@@ -1569,7 +1569,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                                                                      curTime, 1, 1, 1, &receiver->rtcpReceiverContext, &size);
                 if ((ret == 0) && (size > 0))
                 {
-                    ssize_t bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
+                    bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
                     if (bytes < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));

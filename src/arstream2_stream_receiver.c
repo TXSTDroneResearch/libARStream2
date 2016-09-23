@@ -436,12 +436,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
 
 static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver)
 {
-    int i;
     char szOutputFileName[500];
     szOutputFileName[0] = '\0';
 
     if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
     {
+        int i;
         for (i = 0; i < 1000; i++)
         {
             snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,

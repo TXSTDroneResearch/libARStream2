@@ -819,7 +819,7 @@ int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo)
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoUnrefBuffer() failed (%d)", fifoErr);
                     }
                 }
-                int fifoErr = ARSTREAM2_H264_AuFifoPushFreeItem(fifo, item);
+                fifoErr = ARSTREAM2_H264_AuFifoPushFreeItem(fifo, item);
                 if (fifoErr != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuFifoPushFreeItem() failed (%d)", fifoErr);

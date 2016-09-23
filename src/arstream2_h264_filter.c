@@ -405,7 +405,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                     && ((naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SLICE_IDR)
                         || (naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SLICE)))
             {
-                int err = ARSTREAM2_H264FilterError_OutputGrayIdrFrame(filter, au);
+                err = ARSTREAM2_H264FilterError_OutputGrayIdrFrame(filter, au);
                 if (err != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264FilterError_OutputGrayIdrFrame() failed (%d)", err);

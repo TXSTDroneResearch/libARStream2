@@ -566,7 +566,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     int packetFifoWasCreated = 0;
     int naluFifoWasCreated = 0;
     int naluFifoMutexWasInit = 0;
-    int i;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -670,6 +669,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
 
         retSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
+        int i;
         for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
         {
             retSender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;

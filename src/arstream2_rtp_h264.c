@@ -76,10 +76,10 @@ static int ARSTREAM2_RTPH264_Sender_SingleNaluPacket(ARSTREAM2_RTP_SenderContext
 
         if ((context->useRtpHeaderExtensions) && (nalu->metadata) && (nalu->metadataSize > 4))
         {
-            uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu->metadata + 1)) * 4 + 4;
-            if (headerExtensionSize != nalu->metadataSize)
+            uint32_t decodedHeaderExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu->metadata + 1)) * 4 + 4;
+            if (decodedHeaderExtensionSize != nalu->metadataSize)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu->metadataSize, headerExtensionSize);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu->metadataSize, decodedHeaderExtensionSize);
             }
             else
             {
@@ -184,10 +184,10 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
 
                     if ((context->useRtpHeaderExtensions) && (offset == 1) && (nalu->metadata) && (nalu->metadataSize > 4) && (nalu->metadataSize < packetSize))
                     {
-                        uint32_t headerExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu->metadata + 1)) * 4 + 4;
-                        if (headerExtensionSize != nalu->metadataSize)
+                        uint32_t decodedHeaderExtensionSize = (uint32_t)ntohs(*((uint16_t*)nalu->metadata + 1)) * 4 + 4;
+                        if (decodedHeaderExtensionSize != nalu->metadataSize)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu->metadataSize, headerExtensionSize);
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "RTP extension header size error: expected %d bytes, got length of %d bytes", nalu->metadataSize, decodedHeaderExtensionSize);
                         }
                         else
                         {
