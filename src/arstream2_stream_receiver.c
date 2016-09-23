@@ -29,7 +29,9 @@
 #define ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE (1024)
 #define ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE (1024)
 
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH "videostats"
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME "videostats"
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT "dat"
 
 
 typedef struct ARSTREAM2_StreamReceiver_s
@@ -442,7 +444,10 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
     {
         for (i = 0; i < 1000; i++)
         {
-            snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", streamReceiver->debugPath, ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i);
+            snprintf(szOutputFileName, 128, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
             if (access(szOutputFileName, F_OK) == -1)
             {
                 // file does not exist
