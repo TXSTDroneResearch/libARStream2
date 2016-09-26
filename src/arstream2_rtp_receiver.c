@@ -133,7 +133,11 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     {
         /* set to non-blocking */
         int flags = fcntl(receiver->net.streamSocket, F_GETFL, 0);
-        fcntl(receiver->net.streamSocket, F_SETFL, flags | O_NONBLOCK);
+        err = fcntl(receiver->net.streamSocket, F_SETFL, flags | O_NONBLOCK);
+        if (err < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+        }
 
         memset(&recvSin, 0, sizeof(struct sockaddr_in));
         recvSin.sin_family = AF_INET;
@@ -348,7 +352,11 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     {
         /* set to non-blocking */
         int flags = fcntl(receiver->net.controlSocket, F_GETFL, 0);
-        fcntl(receiver->net.controlSocket, F_SETFL, flags | O_NONBLOCK);
+        err = fcntl(receiver->net.controlSocket, F_SETFL, flags | O_NONBLOCK);
+        if (err < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+        }
 
         /* receive address */
         memset(&recvSin, 0, sizeof(struct sockaddr_in));
@@ -712,10 +720,17 @@ static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, 
             else
             {
                 /* no poll error, no timeout, but socket is not ready */
-                int error = 0;
+                int err, error = 0;
                 socklen_t errlen = sizeof(error);
-                getsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
+                err = getsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+                if (err < 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to retrieve socket error: error=%d (%s)",  errno, strerror(errno));
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
+                }
                 ret = -EIO;
                 *recvSize = 0;
             }
@@ -864,10 +879,17 @@ static int ARSTREAM2_RtpReceiver_NetReadControlData(ARSTREAM2_RtpReceiver_t *rec
         else
         {
             /* no poll error, no timeout, but socket is not ready */
-            int error = 0;
+            int err, error = 0;
             socklen_t errlen = sizeof(error);
-            getsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
+            err = getsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
+            if (err < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to retrieve socket error: error=%d (%s)",  errno, strerror(errno));
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
+            }
             bytes = -EIO;
         }
     } else {

@@ -253,7 +253,11 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         /* set to non-blocking */
         int flags = fcntl(sender->streamSocket, F_GETFL, 0);
-        fcntl(sender->streamSocket, F_SETFL, flags | O_NONBLOCK);
+        err = fcntl(sender->streamSocket, F_SETFL, flags | O_NONBLOCK);
+        if (err < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+        }
 
         /* source address */
         memset(&sourceSin, 0, sizeof(sourceSin));
@@ -406,7 +410,11 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         /* set to non-blocking */
         int flags = fcntl(sender->controlSocket, F_GETFL, 0);
-        fcntl(sender->controlSocket, F_SETFL, flags | O_NONBLOCK);
+        err = fcntl(sender->controlSocket, F_SETFL, flags | O_NONBLOCK);
+        if (err < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+        }
 
         /* receive address */
         memset(&recvSin, 0, sizeof(struct sockaddr_in));
@@ -1117,7 +1125,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
             res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
             if (res != 0)
             {
-                ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
+                res = ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
                 retVal = ARSTREAM2_ERROR_INVALID_STATE;
             }
         }
@@ -1203,7 +1211,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
                 res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
                 if (res != 0)
                 {
-                    ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
+                    res = ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
                     retVal = ARSTREAM2_ERROR_INVALID_STATE;
                     break;
                 }
