@@ -2675,8 +2675,6 @@ static int ARSTREAM2_H264Parser_ParsePredWeightTable(ARSTREAM2_H264Parser_t* par
 
     //TODO
     return -1;
-
-    return _readBits;
 }
 
 
