@@ -1541,7 +1541,11 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
-            read(sender->naluFifoPipe[0], &dump, 10);
+            int readRet = read(sender->naluFifoPipe[0], &dump, 10);
+            if (readRet < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));
+            }
         }
 
         ARSAL_Mutex_Lock(&(sender->streamMutex));

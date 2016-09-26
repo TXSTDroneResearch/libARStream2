@@ -1781,7 +1781,11 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
-            read(receiver->pipe[0], &dump, 10);
+            int readRet = read(receiver->pipe[0], &dump, 10);
+            if (readRet < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));
+            }
         }
 
         ARSAL_Mutex_Lock(&(receiver->streamMutex));
