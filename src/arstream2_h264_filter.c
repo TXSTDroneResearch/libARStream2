@@ -488,6 +488,8 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START;
         }
     }
+    au->isComplete = (filter->currentAuIncomplete) ? 0 : 1;
+    au->isRef = (filter->currentAuIsRef) ? 1 : 0;
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
     {

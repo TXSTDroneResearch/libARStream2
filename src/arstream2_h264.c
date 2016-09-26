@@ -90,6 +90,8 @@ void ARSTREAM2_H264_AuReset(ARSTREAM2_H264_AccessUnit_t *au)
     au->userDataSize = 0;
     au->videoStatsAvailable = 0;
     au->mbStatusAvailable = 0;
+    au->isComplete = 0;
+    au->isRef = 0;
     au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_NONE;
     au->inputTimestamp = 0;
     au->timeoutTimestamp = 0;
@@ -117,6 +119,8 @@ void ARSTREAM2_H264_AuCopy(ARSTREAM2_H264_AccessUnit_t *dst, const ARSTREAM2_H26
     dst->userDataSize = src->userDataSize;
     dst->videoStatsAvailable = src->videoStatsAvailable;
     dst->mbStatusAvailable = src->mbStatusAvailable;
+    dst->isComplete = src->isComplete;
+    dst->isRef = src->isRef;
     dst->syncType = src->syncType;
     dst->inputTimestamp = src->inputTimestamp;
     dst->timeoutTimestamp = src->timeoutTimestamp;

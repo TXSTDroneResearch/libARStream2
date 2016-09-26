@@ -103,6 +103,8 @@ typedef struct
  */
 typedef struct
 {
+    unsigned int isComplete;                                        /**< True if the access unit is syntaxically complete */
+    unsigned int isRef;                                             /**< True if the access unit is a reference frame */
     void *auMetadata;                                               /**< Video metadata */
     int auMetadataSize;                                             /**< Video metadata size */
     void *auUserData;                                               /**< H.264 user data SEI */

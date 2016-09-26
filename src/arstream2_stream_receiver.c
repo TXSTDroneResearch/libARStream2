@@ -1316,6 +1316,8 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     auTimestamps.auNtpTimestamp = au->ntpTimestamp;
                     auTimestamps.auNtpTimestampRaw = au->ntpTimestampRaw;
                     auTimestamps.auNtpTimestampLocal = au->ntpTimestampLocal;
+                    auMetadata.isComplete = au->isComplete;
+                    auMetadata.isRef = au->isRef;
                     auMetadata.auMetadata = (au->metadataSize > 0) ? au->buffer->metadataBuffer : NULL;
                     auMetadata.auMetadataSize = au->metadataSize;
                     auMetadata.auUserData = (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL;
