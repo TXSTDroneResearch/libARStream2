@@ -115,6 +115,7 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
         {
             case ARSTREAM2_H264_NALU_TYPE_SLICE_IDR:
                 au->syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IDR;
+                // fall through
             case ARSTREAM2_H264_NALU_TYPE_SLICE:
                 /* Slice */
                 filter->currentAuCurrentSliceFirstMb = -1;
