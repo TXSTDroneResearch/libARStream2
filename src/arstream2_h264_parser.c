@@ -5,6 +5,10 @@
  * @author aurelien.barre@parrot.com
  */
 
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -3281,13 +3285,13 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
 }
 
 
-static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* parser, FILE* fp, unsigned long long fileSize, unsigned long long *startcodePosition)
+static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* parser, FILE* fp, off_t fileSize, off_t *startcodePosition)
 {
     int ret;
-    unsigned long long initPos, pos, end, i = 0;
+    off_t initPos, pos, end, i = 0;
     uint32_t val, shiftVal;
 
-    initPos = pos = ftell(fp);
+    initPos = pos = ftello(fp);
     end = fileSize;
 
     if (pos + 4 > end) return -2;
@@ -3321,14 +3325,14 @@ static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* pars
     if (shiftVal == ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE)
     {
         pos += 4;
-        ret = fseek(fp, pos, SEEK_SET);
+        ret = fseeko(fp, pos, SEEK_SET);
         if (ret != 0) return -1;
         ret = 0;
         if (startcodePosition) *startcodePosition = pos - 4;
     }
     else
     {
-        ret = fseek(fp, initPos, SEEK_SET);
+        ret = fseeko(fp, initPos, SEEK_SET);
         if (ret != 0) return -1;
         ret = -2;
     }
@@ -3342,7 +3346,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
-    unsigned long long naluStart, naluEnd, startcodePosition = 0;
+    off_t naluStart, naluEnd, startcodePosition = 0;
     unsigned int _naluSize = 0;
 
     if (!parserHandle)
@@ -3380,7 +3384,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
         _naluSize = (unsigned int)(naluEnd - naluStart);
         if (_naluSize > 0)
         {
-            ret = fseek(fp, naluStart, SEEK_SET);
+            ret = fseeko(fp, naluStart, SEEK_SET);
             if (ret != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to seek in file");
