@@ -1077,11 +1077,15 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
     {
         retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if ((nalu->naluBuffer == NULL) ||
-        (nalu->naluSize == 0) ||
-        (nalu->auTimestamp == 0))
+
+    if (retVal == ARSTREAM2_OK)
     {
-        retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        if ((nalu->naluBuffer == NULL) ||
+            (nalu->naluSize == 0) ||
+            (nalu->auTimestamp == 0))
+        {
+            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        }
     }
 
     if (retVal == ARSTREAM2_OK)
@@ -1158,13 +1162,17 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
     {
         retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    for (k = 0; k < naluCount; k++)
+
+    if (retVal == ARSTREAM2_OK)
     {
-        if ((nalu[k].naluBuffer == NULL) ||
-            (nalu[k].naluSize == 0) ||
-            (nalu[k].auTimestamp == 0))
+        for (k = 0; k < naluCount; k++)
         {
-            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+            if ((nalu[k].naluBuffer == NULL) ||
+                (nalu[k].naluSize == 0) ||
+                (nalu[k].auTimestamp == 0))
+            {
+                retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+            }
         }
     }
 
@@ -1247,16 +1255,19 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
         retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSAL_Time_GetTime(&t1);
-    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-    ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-    int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
-    ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
-
-    if (ret != 0)
+    if (retVal == ARSTREAM2_OK)
     {
-        retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        ARSAL_Time_GetTime(&t1);
+        curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+        ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
+        int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+        ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
+
+        if (ret != 0)
+        {
+            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        }
     }
 
     return retVal;
