@@ -337,7 +337,7 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
             sliceFirstMb = filter->currentAuInferredPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
             sliceMbCount = (filter->currentAuInferredSliceMbCount > 0) ? filter->currentAuInferredSliceMbCount : 0;
         }
-        if ((filter->sync) && (filter->currentAuMacroblockStatus) && (sliceFirstMb > 0) && (sliceMbCount > 0))
+        if ((filter->sync) && (filter->currentAuMacroblockStatus) && (sliceFirstMb >= 0) && (sliceMbCount > 0))
         {
             int i, idx;
             uint8_t status;
