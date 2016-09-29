@@ -75,6 +75,7 @@ typedef struct ARSTREAM2_H264Filter_VideoStats_s
 {
     uint32_t totalFrameCount;
     uint32_t outputFrameCount;
+    uint32_t erroredOutputFrameCount;
     uint32_t discardedFrameCount;
     uint32_t missedFrameCount;
     uint32_t errorSecondCount;

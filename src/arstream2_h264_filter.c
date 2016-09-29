@@ -372,7 +372,7 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
 int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au)
 {
     ARSTREAM2_H264_NaluFifoItem_t *naluItem, *prevNaluItem = NULL;
-    int cancelAuOutput = 0, discarded = 0;
+    int cancelAuOutput = 0, discarded = 0, hasErrors = 0;
     int ret = 0, err;
 
     if ((!filter) || (!au))
@@ -555,6 +555,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                     if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
                     {
+                        hasErrors = 1;
                         //TODO: we should not use curTime but an AU timestamp
                         if (curTime > filter->stats.errorSecondStartTime + 1000000)
                         {
@@ -576,6 +577,10 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         {
             /* count all output frames (including non-ref frames) */
             filter->stats.outputFrameCount++;
+            if (hasErrors)
+            {
+                filter->stats.erroredOutputFrameCount++;
+            }
         }
         if (discarded)
         {

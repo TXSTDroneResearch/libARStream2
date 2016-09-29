@@ -478,7 +478,7 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
 
     if (streamReceiver->videoStatsFile)
     {
-        fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount discardedFrameCount missedFrameCount errorSecondCount");
+        fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount errorSecondCount");
         int i, j;
         for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
         {
@@ -545,10 +545,10 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceive
                 rssi = (int8_t)au->buffer->metadataBuffer[54];
             }
 
-            fprintf(streamReceiver->videoStatsFile, "%llu %i %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
+            fprintf(streamReceiver->videoStatsFile, "%llu %i %lu %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
                     (long unsigned int)videoStats->totalFrameCount, (long unsigned int)videoStats->outputFrameCount,
-                    (long unsigned int)videoStats->discardedFrameCount, (long unsigned int)videoStats->missedFrameCount,
-                    (long unsigned int)videoStats->errorSecondCount);
+                    (long unsigned int)videoStats->erroredOutputFrameCount, (long unsigned int)videoStats->discardedFrameCount,
+                    (long unsigned int)videoStats->missedFrameCount, (long unsigned int)videoStats->errorSecondCount);
             int i, j;
             for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
             {
