@@ -31,8 +31,8 @@
  * Macros
  */
 
-#define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MAX)
-#define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (5)
+#define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT)
+#define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT)
 #define ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL (1000000)
 
 
@@ -78,10 +78,10 @@ typedef struct ARSTREAM2_H264Filter_VideoStats_s
     uint32_t erroredOutputFrameCount;
     uint32_t discardedFrameCount;
     uint32_t missedFrameCount;
-    uint32_t errorSecondCount;
-    uint64_t errorSecondStartTime;
-    uint32_t errorSecondCountByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
-    uint64_t errorSecondStartTimeByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+    uint32_t erroredSecondCount;
+    uint64_t erroredSecondStartTime;
+    uint32_t erroredSecondCountByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+    uint64_t erroredSecondStartTimeByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
     uint32_t macroblockStatus[ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT][ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
 
 } ARSTREAM2_H264Filter_VideoStats_t;

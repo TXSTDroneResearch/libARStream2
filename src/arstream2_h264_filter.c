@@ -570,15 +570,15 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
                     {
                         //TODO: we should not use curTime but an AU timestamp
-                        if (curTime > filter->stats.errorSecondStartTime + 1000000)
+                        if (curTime > filter->stats.erroredSecondStartTime + 1000000)
                         {
-                            filter->stats.errorSecondStartTime = curTime;
-                            filter->stats.errorSecondCount++;
+                            filter->stats.erroredSecondStartTime = curTime;
+                            filter->stats.erroredSecondCount++;
                         }
-                        if (curTime > filter->stats.errorSecondStartTimeByZone[zone] + 1000000)
+                        if (curTime > filter->stats.erroredSecondStartTimeByZone[zone] + 1000000)
                         {
-                            filter->stats.errorSecondStartTimeByZone[zone] = curTime;
-                            filter->stats.errorSecondCountByZone[zone]++;
+                            filter->stats.erroredSecondStartTimeByZone[zone] = curTime;
+                            filter->stats.erroredSecondCountByZone[zone]++;
                         }
                     }
                 }
