@@ -68,7 +68,6 @@ typedef struct ARSTREAM2_StreamReceiver_s
         void *getAuBufferCallbackUserPtr;
         ARSTREAM2_StreamReceiver_AuReadyCallback_t auReadyCallback;
         void *auReadyCallbackUserPtr;
-        uint8_t *mbStatus;
         int mbWidth;
         int mbHeight;
 
@@ -1254,8 +1253,6 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 {
                     auSize = 0;
 
-                    streamReceiver->appOutput.mbStatus = au->buffer->mbStatusBuffer;
-
                     for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
                     {
                         /* filter out unwanted NAL units */
@@ -1323,6 +1320,9 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     auMetadata.auMetadataSize = au->metadataSize;
                     auMetadata.auUserData = (au->userDataSize > 0) ? au->buffer->userDataBuffer : NULL;
                     auMetadata.auUserDataSize = au->userDataSize;
+                    auMetadata.mbWidth = streamReceiver->appOutput.mbWidth;
+                    auMetadata.mbHeight = streamReceiver->appOutput.mbHeight;
+                    auMetadata.mbStatus = (au->mbStatusAvailable) ? au->buffer->mbStatusBuffer : NULL;
                     auMetadata.debugString = NULL; //TODO
 
                     ARSAL_Time_GetTime(&t1);
@@ -1605,33 +1605,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
     }
 
     return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight)
-{
-    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
-
-    if (!streamReceiverHandle)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
-    int appOutputRunning = streamReceiver->appOutput.running;
-    int callbackInProgress = streamReceiver->appOutput.callbackInProgress;
-    ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
-    if ((!appOutputRunning) || (!callbackInProgress))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid state");
-        return ARSTREAM2_ERROR_INVALID_STATE;
-    }
-
-    if (macroblocks) *macroblocks = streamReceiver->appOutput.mbStatus;
-    if (mbWidth) *mbWidth = streamReceiver->appOutput.mbWidth;
-    if (mbHeight) *mbHeight = streamReceiver->appOutput.mbHeight;
-
-    return ARSTREAM2_OK;
 }
 
 

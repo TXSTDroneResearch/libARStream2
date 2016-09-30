@@ -110,6 +110,9 @@ typedef struct
     int auMetadataSize;                                             /**< Video metadata size */
     void *auUserData;                                               /**< H.264 user data SEI */
     int auUserDataSize;                                             /**< H.264 user data SEI size */
+    int mbWidth;                                                    /**< H.264 frame macroblock width */
+    int mbHeight;                                                   /**< H.264 frame macroblock height */
+    uint8_t *mbStatus;                                              /**< H.264 frame macroblock status (@see eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS) */
     char *debugString;                                              /**< Debug string */
 
 } ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t;
@@ -485,29 +488,6 @@ void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle);
  * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS are not available (no sync).
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
-
-
-/**
- * @brief Get the frame macroblocks status.
- *
- * This function returns pointers to a macroblock status array for the current frame and image
- * macroblock width and height.
- * Macroblock statuses are of type eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS.
- * This function must be called only within the ARSTREAM2_StreamReceiver_AuReadyCallback_t function.
- * The valididy of the data returned is only during the call to ARSTREAM2_StreamReceiver_AuReadyCallback_t
- * and the user must copy the macroblock status array to its own buffer for further use.
- *
- * @param streamReceiverHandle Instance handle.
- * @param macroblocks Pointer to the macroblock status array.
- * @param mbWidth pointer to the image macroblock-width.
- * @param mbHeight pointer to the image macroblock-height.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS have not been received (no sync).
- * @return ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE if macroblocks status is not available.
- * @return an eARSTREAM2_ERROR error code if another error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetFrameMacroblockStatus(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t **macroblocks, int *mbWidth, int *mbHeight);
 
 
 #ifdef __cplusplus
