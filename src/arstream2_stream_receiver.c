@@ -440,18 +440,28 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
 
     if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
     {
-        int i;
-        for (i = 0; i < 1000; i++)
+        snprintf(szOutputFileName, 500, "%s/%s", streamReceiver->debugPath,
+                 ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH);
+        if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
         {
-            snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
-            if (access(szOutputFileName, F_OK) == -1)
+            // directory exists and we have write permission
+            int i;
+            for (i = 0; i < 1000; i++)
             {
-                // file does not exist
-                break;
+                snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
+                if (access(szOutputFileName, F_OK) == -1)
+                {
+                    // file does not exist
+                    break;
+                }
+                szOutputFileName[0] = '\0';
             }
+        }
+        else
+        {
             szOutputFileName[0] = '\0';
         }
     }
