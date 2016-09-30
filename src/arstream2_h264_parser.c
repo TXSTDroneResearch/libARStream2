@@ -3289,7 +3289,12 @@ static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* pars
     off_t initPos, pos, end, i = 0;
     uint32_t val, shiftVal;
 
-    initPos = pos = ftello(fp);
+    pos = ftello(fp);
+    if (pos < 0)
+    {
+        return -1;
+    }
+    initPos = pos;
     end = fileSize;
 
     if (pos + 4 > end) return -2;
