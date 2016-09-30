@@ -29,6 +29,10 @@
 #define ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE (1024)
 #define ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE (1024)
 
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH "videorec"
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME "videorec"
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT "mp4"
+
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH "videostats"
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME "videostats"
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT "dat"
@@ -102,6 +106,7 @@ static void ARSTREAM2_StreamReceiver_StreamRecorderAuCallback(eARSTREAM2_STREAM_
 static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_t *streamReceiver);
+static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au);
@@ -159,6 +164,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         {
             streamReceiver->debugPath = strdup(config->debugPath);
         }
+        ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
         ARSTREAM2_StreamReceiver_VideoStatsFileOpen(streamReceiver);
     }
 
@@ -1777,6 +1783,75 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartRecorder(ARSTREAM2_StreamReceiver
     }
 
     return ret;
+}
+
+
+static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_t *streamReceiver)
+{
+    char szOutputFileName[500];
+    szOutputFileName[0] = '\0';
+
+    if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
+    {
+        snprintf(szOutputFileName, 500, "%s/%s", streamReceiver->debugPath,
+                 ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH);
+        if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
+        {
+            // directory exists and we have write permission
+            int i;
+            for (i = 0; i < 1000; i++)
+            {
+                snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME, i,
+                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT);
+                if (access(szOutputFileName, F_OK) == -1)
+                {
+                    // file does not exist
+                    break;
+                }
+                szOutputFileName[0] = '\0';
+            }
+        }
+        else
+        {
+            szOutputFileName[0] = '\0';
+        }
+    }
+
+    if (strlen(szOutputFileName))
+    {
+        if (streamReceiver->recorder.recorder)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Auto record failed: recorder is already started");
+            return;
+        }
+
+        streamReceiver->recorder.fileName = strdup(szOutputFileName);
+        if (!streamReceiver->recorder.fileName)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Auto record failed: string allocation failed");
+            return;
+        }
+        else
+        {
+            if (streamReceiver->sync)
+            {
+                streamReceiver->recorder.startPending = 0;
+                int recRet;
+                recRet = ARSTREAM2_StreamReceiver_StreamRecorderInit(streamReceiver);
+                if (recRet != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Auto record failed: ARSTREAM2_StreamReceiver_StreamRecorderInit() failed (%d)", recRet);
+                }
+            }
+            else
+            {
+                streamReceiver->recorder.startPending = 1;
+            }
+            ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Auto record started (file '%s')", streamReceiver->recorder.fileName);
+        }
+    }
 }
 
 
