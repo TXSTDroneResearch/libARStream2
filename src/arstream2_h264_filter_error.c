@@ -45,10 +45,8 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         ARSAL_Mutex_Lock(filter->fifoMutex);
         buffer = ARSTREAM2_H264_AuFifoGetBuffer(filter->auFifo);
         auItem = ARSTREAM2_H264_AuFifoPopFreeItem(filter->auFifo);
-        ARSAL_Mutex_Unlock(filter->fifoMutex);
         if ((!buffer) || (!auItem))
         {
-            ARSAL_Mutex_Lock(filter->fifoMutex);
             if (buffer)
             {
                 ARSTREAM2_H264_AuFifoUnrefBuffer(filter->auFifo, buffer);
@@ -66,6 +64,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
         else
         {
+            ARSAL_Mutex_Unlock(filter->fifoMutex);
             ARSTREAM2_H264_AuReset(&auItem->au);
             auItem->au.buffer = buffer;
         }

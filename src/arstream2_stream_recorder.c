@@ -964,20 +964,18 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_PushAccessUnit(ARSTREAM2_StreamRecorde
     {
         memcpy(&item->au, accessUnit, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
         int fifoErr = ARSTREAM2_StreamRecorder_FifoEnqueueItem(&streamRecorder->auFifo, item);
-        ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
         if (fifoErr != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoEnqueueItem() failed (%d)", fifoErr);
-            ARSAL_Mutex_Lock(&(streamRecorder->fifoMutex));
             fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
             /* Flush the FIFO */
             ARSTREAM2_StreamRecorder_FifoFlush(streamRecorder);
-            ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
             if (fifoErr != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoPushFreeItem() failed (%d)", fifoErr);
             }
         }
+        ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
     }
     else
     {
@@ -1031,164 +1029,169 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
 
     while (!shouldStop)
     {
-        ARSAL_Mutex_Lock(&(streamRecorder->fifoMutex));
-        item = ARSTREAM2_StreamRecorder_FifoDequeueItem(&streamRecorder->auFifo);
-        ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
-        while (item)
+        item = NULL;
+        do
         {
-            /* Record the frame */
-            switch (streamRecorder->fileType)
+            if (item)
             {
-            case ARSTREAM2_STREAM_RECORDER_FILE_TYPE_H264_BYTE_STREAM:
-            {
-                if (streamRecorder->outputFile)
+                /* Record the frame */
+                switch (streamRecorder->fileType)
                 {
+                case ARSTREAM2_STREAM_RECORDER_FILE_TYPE_H264_BYTE_STREAM:
+                {
+                    if (streamRecorder->outputFile)
+                    {
+                        if (item->au.naluCount)
+                        {
+                            unsigned int i;
+                            for (i = 0; i < item->au.naluCount; i++)
+                            {
+                                fwrite(item->au.naluData[i], item->au.naluSize[i], 1, streamRecorder->outputFile);
+                            }
+                        }
+                        else
+                        {
+                            fwrite(item->au.auData, item->au.auSize, 1, streamRecorder->outputFile);
+                        }
+                        if ((item->au.auSyncType != ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE)
+                                || (item->au.index >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
+                        {
+                            fflush(streamRecorder->outputFile);
+                            fsync(fileno(streamRecorder->outputFile));
+                            streamRecorder->lastSyncIndex = item->au.index;
+                        }
+                    }
+                    break;
+                }
+#if BUILD_LIBARMEDIA
+                case ARSTREAM2_STREAM_RECORDER_FILE_TYPE_MP4:
+                {
+                    int gotMetadata = 0;
+                    ARMEDIA_Frame_Header_t frameHeader;
+                    memset(&frameHeader, 0, sizeof(ARMEDIA_Frame_Header_t));
+                    frameHeader.codec = CODEC_MPEG4_AVC;
+                    frameHeader.frame_size = item->au.auSize;
+                    frameHeader.frame_number = item->au.index;
+                    frameHeader.width = streamRecorder->videoWidth;
+                    frameHeader.height = streamRecorder->videoHeight;
+                    frameHeader.timestamp = item->au.timestamp;
+                    frameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
+                    frameHeader.frame = item->au.auData;
+                    frameHeader.avc_insert_ps = 0;
+                    frameHeader.avc_nalu_count = item->au.naluCount;
                     if (item->au.naluCount)
                     {
                         unsigned int i;
                         for (i = 0; i < item->au.naluCount; i++)
                         {
-                            fwrite(item->au.naluData[i], item->au.naluSize[i], 1, streamRecorder->outputFile);
+                            frameHeader.avc_nalu_size[i] = item->au.naluSize[i];
+                            frameHeader.avc_nalu_data[i] = item->au.naluData[i];
                         }
                     }
-                    else
-                    {
-                        fwrite(item->au.auData, item->au.auSize, 1, streamRecorder->outputFile);
-                    }
-                    if ((item->au.auSyncType != ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE)
-                            || (item->au.index >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
-                    {
-                        fflush(streamRecorder->outputFile);
-                        fsync(fileno(streamRecorder->outputFile));
-                        streamRecorder->lastSyncIndex = item->au.index;
-                    }
-                }
-                break;
-            }
-#if BUILD_LIBARMEDIA
-            case ARSTREAM2_STREAM_RECORDER_FILE_TYPE_MP4:
-            {
-                int gotMetadata = 0;
-                ARMEDIA_Frame_Header_t frameHeader;
-                memset(&frameHeader, 0, sizeof(ARMEDIA_Frame_Header_t));
-                frameHeader.codec = CODEC_MPEG4_AVC;
-                frameHeader.frame_size = item->au.auSize;
-                frameHeader.frame_number = item->au.index;
-                frameHeader.width = streamRecorder->videoWidth;
-                frameHeader.height = streamRecorder->videoHeight;
-                frameHeader.timestamp = item->au.timestamp;
-                frameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
-                frameHeader.frame = item->au.auData;
-                frameHeader.avc_insert_ps = 0;
-                frameHeader.avc_nalu_count = item->au.naluCount;
-                if (item->au.naluCount)
-                {
-                    unsigned int i;
-                    for (i = 0; i < item->au.naluCount; i++)
-                    {
-                        frameHeader.avc_nalu_size[i] = item->au.naluSize[i];
-                        frameHeader.avc_nalu_data[i] = item->au.naluData[i];
-                    }
-                }
 
-                if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize == 0))
-                {
-                    /* Setup the metadata */
-                    int size = 0;
-                    streamRecorder->recordingMetadataType = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(item->au.auMetadata, item->au.auMetadataSize, &size);
-                    if (size > 0)
+                    if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize == 0))
                     {
-                        int ret = 0;
-                        streamRecorder->recordingMetadataSize = (unsigned)size;
-                        streamRecorder->recordingMetadata = malloc(streamRecorder->recordingMetadataSize);
-                        if (!streamRecorder->recordingMetadata)
+                        /* Setup the metadata */
+                        int size = 0;
+                        streamRecorder->recordingMetadataType = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(item->au.auMetadata, item->au.auMetadataSize, &size);
+                        if (size > 0)
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Metadata buffer allocation failed (size: %d)", streamRecorder->recordingMetadataSize);
-                            ret = -1;
-                        }
-                        if (ret == 0)
-                        {
-                            streamRecorder->savedMetadataSize = streamRecorder->recordingMetadataSize;
-                            streamRecorder->savedMetadata = malloc(streamRecorder->savedMetadataSize);
-                            if (!streamRecorder->savedMetadata)
+                            int ret = 0;
+                            streamRecorder->recordingMetadataSize = (unsigned)size;
+                            streamRecorder->recordingMetadata = malloc(streamRecorder->recordingMetadataSize);
+                            if (!streamRecorder->recordingMetadata)
                             {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Metadata buffer allocation failed (size: %d)", streamRecorder->savedMetadataSize);
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Metadata buffer allocation failed (size: %d)", streamRecorder->recordingMetadataSize);
                                 ret = -1;
                             }
+                            if (ret == 0)
+                            {
+                                streamRecorder->savedMetadataSize = streamRecorder->recordingMetadataSize;
+                                streamRecorder->savedMetadata = malloc(streamRecorder->savedMetadataSize);
+                                if (!streamRecorder->savedMetadata)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Metadata buffer allocation failed (size: %d)", streamRecorder->savedMetadataSize);
+                                    ret = -1;
+                                }
+                            }
+                            if (ret == 0)
+                            {
+                                eARMEDIA_ERROR err = ARMEDIA_OK;
+                                if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1)
+                                {
+                                    err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
+                                                                                  ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING,
+                                                                                  ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT,
+                                                                                  size);
+                                }
+                                else if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2)
+                                {
+                                    err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
+                                                                                  ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_CONTENT_ENCODING,
+                                                                                  ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_MIME_FORMAT,
+                                                                                  size);
+                                }
+                                if (err != ARMEDIA_OK)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_SetMetadataInfo() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
+                                    ret = -1;
+                                }
+                            }
+                            if (ret != 0)
+                            {
+                                free(streamRecorder->recordingMetadata);
+                                streamRecorder->recordingMetadata = NULL;
+                                streamRecorder->recordingMetadataSize = 0;
+                                free(streamRecorder->savedMetadata);
+                                streamRecorder->savedMetadata = NULL;
+                                streamRecorder->savedMetadataSize = 0;
+                            }
                         }
-                        if (ret == 0)
-                        {
-                            eARMEDIA_ERROR err = ARMEDIA_OK;
-                            if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_RECORDING_V1)
-                            {
-                                err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
-                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_CONTENT_ENCODING,
-                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_RECORDING_METADATA_V1_MIME_FORMAT,
-                                                                              size);
-                            }
-                            else if (streamRecorder->recordingMetadataType == ARSTREAM2_STREAM_RECORDER_VIDEO_METADATA_TYPE_V2)
-                            {
-                                err = ARMEDIA_VideoEncapsuler_SetMetadataInfo(streamRecorder->videoEncap,
-                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_CONTENT_ENCODING,
-                                                                              ARSTREAM2_STREAM_RECORDER_PARROT_VIDEO_METADATA_V2_MIME_FORMAT,
-                                                                              size);
-                            }
-                            if (err != ARMEDIA_OK)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_SetMetadataInfo() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
-                                ret = -1;
-                            }
-                        }
+                    }
+                    if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize > 0))
+                    {
+                        /* Convert the metadata */
+                        int ret = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(item->au.timestamp,
+                                                                                        item->au.auMetadata, item->au.auMetadataSize,
+                                                                                        streamRecorder->savedMetadata, streamRecorder->savedMetadataSize,
+                                                                                        streamRecorder->recordingMetadata, streamRecorder->recordingMetadataSize,
+                                                                                        streamRecorder->recordingMetadataType);
                         if (ret != 0)
                         {
-                            free(streamRecorder->recordingMetadata);
-                            streamRecorder->recordingMetadata = NULL;
-                            streamRecorder->recordingMetadataSize = 0;
-                            free(streamRecorder->savedMetadata);
-                            streamRecorder->savedMetadata = NULL;
-                            streamRecorder->savedMetadataSize = 0;
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata() failed: %d", ret);
+                        }
+                        else
+                        {
+                            gotMetadata = 1;
                         }
                     }
-                }
-                if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize > 0))
-                {
-                    /* Convert the metadata */
-                    int ret = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(item->au.timestamp,
-                                                                                    item->au.auMetadata, item->au.auMetadataSize,
-                                                                                    streamRecorder->savedMetadata, streamRecorder->savedMetadataSize,
-                                                                                    streamRecorder->recordingMetadata, streamRecorder->recordingMetadataSize,
-                                                                                    streamRecorder->recordingMetadataType);
-                    if (ret != 0)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata() failed: %d", ret);
-                    }
-                    else
-                    {
-                        gotMetadata = 1;
-                    }
-                }
 
-                eARMEDIA_ERROR err = ARMEDIA_VideoEncapsuler_AddFrame(streamRecorder->videoEncap, &frameHeader, ((gotMetadata) ? streamRecorder->recordingMetadata : NULL));
-                if (err != ARMEDIA_OK)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_AddFrame() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
+                    eARMEDIA_ERROR err = ARMEDIA_VideoEncapsuler_AddFrame(streamRecorder->videoEncap, &frameHeader, ((gotMetadata) ? streamRecorder->recordingMetadata : NULL));
+                    if (err != ARMEDIA_OK)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_AddFrame() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
+                    }
+                    break;
                 }
-                break;
-            }
 #endif
-            default:
-                break;
-            }
+                default:
+                    break;
+                }
 
-            /* Call the auCallback */
-            if (streamRecorder->auCallback != NULL)
-            {
-                streamRecorder->auCallback(ARSTREAM2_STREAM_RECORDER_AU_STATUS_SUCCESS,
-                                                  item->au.auUserPtr, streamRecorder->auCallbackUserPtr);
+                /* Call the auCallback */
+                if (streamRecorder->auCallback != NULL)
+                {
+                    streamRecorder->auCallback(ARSTREAM2_STREAM_RECORDER_AU_STATUS_SUCCESS,
+                                                      item->au.auUserPtr, streamRecorder->auCallbackUserPtr);
+                }
             }
 
             ARSAL_Mutex_Lock(&(streamRecorder->fifoMutex));
-            int fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
+            int fifoErr = 0;
+            if (item)
+            {
+                fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
+            }
             item = ARSTREAM2_StreamRecorder_FifoDequeueItem(&streamRecorder->auFifo);
             ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
             if (fifoErr != 0)
@@ -1196,6 +1199,7 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoPushFreeItem() failed (%d)", fifoErr);
             }
         }
+        while (item);
 
         ARSAL_Mutex_Lock(&(streamRecorder->mutex));
         shouldStop = streamRecorder->threadShouldStop;

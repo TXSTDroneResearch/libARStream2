@@ -1129,10 +1129,8 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
                         ARSTREAM2_H264_AuFifoBuffer_t *buffer = ARSTREAM2_H264_AuFifoGetBuffer(auFifo);
                         context->auItem = ARSTREAM2_H264_AuFifoPopFreeItem(auFifo);
-                        if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
                         if ((!buffer) || (!context->auItem))
                         {
-                            if (auFifoMutex) ARSAL_Mutex_Lock(auFifoMutex);
                             if (buffer) ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, buffer);
                             if (context->auItem) ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, context->auItem);
                             err = ARSTREAM2_H264_AuFifoFlush(auFifo);
@@ -1142,6 +1140,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                         }
                         else
                         {
+                            if (auFifoMutex) ARSAL_Mutex_Unlock(auFifoMutex);
                             ARSTREAM2_H264_AuReset(&context->auItem->au);
                             context->auItem->au.buffer = buffer;
                         }
