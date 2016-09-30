@@ -177,7 +177,8 @@ struct ARSTREAM2_RtpSender_t {
 #ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     FILE* fMonitorOut;
 #endif
-    int timeoutDropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
+    unsigned int timeoutDropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
+    unsigned int timeoutDropStatsTotalPackets;
     uint64_t timeoutDropLogStartTime;
 };
 
@@ -1408,7 +1409,8 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 {
                     char strDrops[16];
                     char *str = strDrops;
-                    int i, l, len, totalCount;
+                    int i, l, len;
+                    unsigned int totalCount;
                     for (i = 0, len = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
                     {
                         totalCount += sender->timeoutDropCount[i];
@@ -1416,13 +1418,15 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                         len += l;
                         str += l;
                     }
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets from FIFO on timeout (%s) in last %.1f seconds",
-                                totalCount, strDrops, (float)(curTime - sender->timeoutDropLogStartTime) / 1000000.);
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets out of %d (%.1f%%) from FIFO on timeout (%s) in last %.1f seconds",
+                                totalCount, sender->timeoutDropStatsTotalPackets, (float)totalCount * 100. / (float)sender->timeoutDropStatsTotalPackets,
+                                strDrops, (float)(curTime - sender->timeoutDropLogStartTime) / 1000000.);
                     for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
                     {
                         sender->timeoutDropCount[i] = 0;
                     }
                     sender->timeoutDropLogStartTime = 0;
+                    sender->timeoutDropStatsTotalPackets = 0;
                 }
                 else
                 {
@@ -1449,14 +1453,16 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTP packets creation */
+        unsigned int newPacketsCount = 0;
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
         ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo,
-                                                            &sender->packetFifo, &sender->packetFifoQueue, curTime);
+                                                            &sender->packetFifo, &sender->packetFifoQueue, curTime, &newPacketsCount);
         ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
         }
+        sender->timeoutDropStatsTotalPackets += newPacketsCount;
 
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_DROP
         ret = ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(&sender->rtpSenderContext, &sender->packetFifo,
