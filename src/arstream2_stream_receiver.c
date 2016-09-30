@@ -84,6 +84,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
         int startPending;
         int running;
         ARSTREAM2_StreamRecorder_Handle recorder;
+        ARSTREAM2_StreamRecorder_AccessUnit_t accessUnit;
         ARSAL_Thread_t thread;
         ARSAL_Mutex_t mutex;
         int auCount;
@@ -704,36 +705,35 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
     {
         ARSTREAM2_H264_AccessUnit_t *au = &recordtAuItem->au;
         ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-        ARSTREAM2_StreamRecorder_AccessUnit_t accessUnit;
-        memset(&accessUnit, 0, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
-        accessUnit.timestamp = au->ntpTimestamp;
-        accessUnit.index = streamReceiver->recorder.auCount++;
-        for (naluItem = au->naluHead, accessUnit.naluCount = 0; naluItem; naluItem = naluItem->next, accessUnit.naluCount++)
+        memset(&streamReceiver->recorder.accessUnit, 0, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
+        streamReceiver->recorder.accessUnit.timestamp = au->ntpTimestamp;
+        streamReceiver->recorder.accessUnit.index = streamReceiver->recorder.auCount++;
+        for (naluItem = au->naluHead, streamReceiver->recorder.accessUnit.naluCount = 0; naluItem; naluItem = naluItem->next, streamReceiver->recorder.accessUnit.naluCount++)
         {
-            accessUnit.naluData[accessUnit.naluCount] = naluItem->nalu.nalu;
-            accessUnit.naluSize[accessUnit.naluCount] = naluItem->nalu.naluSize;
+            streamReceiver->recorder.accessUnit.naluData[streamReceiver->recorder.accessUnit.naluCount] = naluItem->nalu.nalu;
+            streamReceiver->recorder.accessUnit.naluSize[streamReceiver->recorder.accessUnit.naluCount] = naluItem->nalu.naluSize;
         }
         /* map the access unit sync type */
         switch (au->syncType)
         {
             default:
             case ARSTREAM2_H264_AU_SYNC_TYPE_NONE:
-                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE;
+                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_IDR:
-                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR;
+                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME:
-                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME;
+                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME;
                 break;
             case ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START:
-                accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START;
+                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START;
                 break;
         }
-        accessUnit.auMetadata = au->buffer->metadataBuffer;
-        accessUnit.auMetadataSize = au->metadataSize;
-        accessUnit.auUserPtr = recordtAuItem;
-        eARSTREAM2_ERROR recErr = ARSTREAM2_StreamRecorder_PushAccessUnit(streamReceiver->recorder.recorder, &accessUnit);
+        streamReceiver->recorder.accessUnit.auMetadata = au->buffer->metadataBuffer;
+        streamReceiver->recorder.accessUnit.auMetadataSize = au->metadataSize;
+        streamReceiver->recorder.accessUnit.auUserPtr = recordtAuItem;
+        eARSTREAM2_ERROR recErr = ARSTREAM2_StreamRecorder_PushAccessUnit(streamReceiver->recorder.recorder, &streamReceiver->recorder.accessUnit);
         if (recErr != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamRecorder_PushAccessUnit() failed: %d (%s)",

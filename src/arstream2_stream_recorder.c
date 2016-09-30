@@ -309,6 +309,7 @@ typedef struct ARSTREAM2_StreamRecorder_s
     FILE *outputFile;
 #if BUILD_LIBARMEDIA
     ARMEDIA_VideoEncapsuler_t* videoEncap;
+    ARMEDIA_Frame_Header_t videoEncapFrameHeader;
 #endif
     ARSTREAM2_StreamRecorder_AuFifo_t auFifo;
     ARSAL_Mutex_t fifoMutex;
@@ -1067,25 +1068,24 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 case ARSTREAM2_STREAM_RECORDER_FILE_TYPE_MP4:
                 {
                     int gotMetadata = 0;
-                    ARMEDIA_Frame_Header_t frameHeader;
-                    memset(&frameHeader, 0, sizeof(ARMEDIA_Frame_Header_t));
-                    frameHeader.codec = CODEC_MPEG4_AVC;
-                    frameHeader.frame_size = item->au.auSize;
-                    frameHeader.frame_number = item->au.index;
-                    frameHeader.width = streamRecorder->videoWidth;
-                    frameHeader.height = streamRecorder->videoHeight;
-                    frameHeader.timestamp = item->au.timestamp;
-                    frameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
-                    frameHeader.frame = item->au.auData;
-                    frameHeader.avc_insert_ps = 0;
-                    frameHeader.avc_nalu_count = item->au.naluCount;
+                    memset(&streamRecorder->videoEncapFrameHeader, 0, sizeof(ARMEDIA_Frame_Header_t));
+                    streamRecorder->videoEncapFrameHeader.codec = CODEC_MPEG4_AVC;
+                    streamRecorder->videoEncapFrameHeader.frame_size = item->au.auSize;
+                    streamRecorder->videoEncapFrameHeader.frame_number = item->au.index;
+                    streamRecorder->videoEncapFrameHeader.width = streamRecorder->videoWidth;
+                    streamRecorder->videoEncapFrameHeader.height = streamRecorder->videoHeight;
+                    streamRecorder->videoEncapFrameHeader.timestamp = item->au.timestamp;
+                    streamRecorder->videoEncapFrameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
+                    streamRecorder->videoEncapFrameHeader.frame = item->au.auData;
+                    streamRecorder->videoEncapFrameHeader.avc_insert_ps = 0;
+                    streamRecorder->videoEncapFrameHeader.avc_nalu_count = item->au.naluCount;
                     if (item->au.naluCount)
                     {
                         unsigned int i;
                         for (i = 0; i < item->au.naluCount; i++)
                         {
-                            frameHeader.avc_nalu_size[i] = item->au.naluSize[i];
-                            frameHeader.avc_nalu_data[i] = item->au.naluData[i];
+                            streamRecorder->videoEncapFrameHeader.avc_nalu_size[i] = item->au.naluSize[i];
+                            streamRecorder->videoEncapFrameHeader.avc_nalu_data[i] = item->au.naluData[i];
                         }
                     }
 
@@ -1166,7 +1166,7 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                         }
                     }
 
-                    eARMEDIA_ERROR err = ARMEDIA_VideoEncapsuler_AddFrame(streamRecorder->videoEncap, &frameHeader, ((gotMetadata) ? streamRecorder->recordingMetadata : NULL));
+                    eARMEDIA_ERROR err = ARMEDIA_VideoEncapsuler_AddFrame(streamRecorder->videoEncap, &streamRecorder->videoEncapFrameHeader, ((gotMetadata) ? streamRecorder->recordingMetadata : NULL));
                     if (err != ARMEDIA_OK)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_AddFrame() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
