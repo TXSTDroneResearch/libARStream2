@@ -1531,7 +1531,6 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
         if (ret < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec() failed (%d)", ret);
-            ret = -1;
         }
         else if (ret > 0)
         {
@@ -1564,7 +1563,6 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                 if (ret < 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec() failed (%d)", ret);
-                    ret = -1;
                 }
             }
         }
@@ -1603,9 +1601,12 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
             }
         }
 
-        ARSAL_Mutex_Lock(&(receiver->streamMutex));
-        shouldStop = receiver->threadShouldStop;
-        ARSAL_Mutex_Unlock(&(receiver->streamMutex));
+        if (!shouldStop)
+        {
+            ARSAL_Mutex_Lock(&(receiver->streamMutex));
+            shouldStop = receiver->threadShouldStop;
+            ARSAL_Mutex_Unlock(&(receiver->streamMutex));
+        }
     }
 
     ARSAL_Mutex_Lock(&(receiver->streamMutex));
@@ -1729,7 +1730,6 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
             if (ret < 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec() failed (%d)", ret);
-                ret = -1;
             }
             else if (ret > 0)
             {
@@ -1759,7 +1759,6 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
                     if (ret < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec() failed (%d)", ret);
-                        ret = -1;
                     }
                 }
             }
@@ -1810,9 +1809,12 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
             }
         }
 
-        ARSAL_Mutex_Lock(&(receiver->streamMutex));
-        shouldStop = receiver->threadShouldStop;
-        ARSAL_Mutex_Unlock(&(receiver->streamMutex));
+        if (!shouldStop)
+        {
+            ARSAL_Mutex_Lock(&(receiver->streamMutex));
+            shouldStop = receiver->threadShouldStop;
+            ARSAL_Mutex_Unlock(&(receiver->streamMutex));
+        }
 
         if (!shouldStop)
         {

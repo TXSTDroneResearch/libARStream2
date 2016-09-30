@@ -946,7 +946,7 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
                                                                 ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                                 ARSTREAM2_H264_AuFifoItem_t *auItem)
 {
-    int ret = 0, needFree = 0;
+    int ret, needFree = 0;
     ARSTREAM2_H264_AuFifoItem_t *auCopyItem;
 
     if ((!auFifo) || (!naluFifo) || (!auItem))
@@ -981,7 +981,6 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
             else
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to pop free item from the NALU FIFO");
-                ret = -1;
                 needFree = 1;
             }
         }
@@ -989,7 +988,6 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
     else
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to pop free item from the AU FIFO");
-        ret = -1;
     }
 
     if (needFree)
