@@ -244,6 +244,7 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     unsigned int videoStatsAvailable;
     unsigned int mbStatusAvailable;
     unsigned int isComplete;
+    unsigned int hasErrors;
     unsigned int isRef;
     eARSTREAM2_H264_AU_SYNC_TYPE syncType;
     uint64_t inputTimestamp;

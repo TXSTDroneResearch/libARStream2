@@ -104,6 +104,7 @@ typedef struct
 typedef struct
 {
     unsigned int isComplete;                                        /**< True if the access unit is syntaxically complete */
+    unsigned int hasErrors;                                         /**< True if the access unit has errors (missing slices and/or error propagation) */
     unsigned int isRef;                                             /**< True if the access unit is a reference frame */
     void *auMetadata;                                               /**< Video metadata */
     int auMetadataSize;                                             /**< Video metadata size */

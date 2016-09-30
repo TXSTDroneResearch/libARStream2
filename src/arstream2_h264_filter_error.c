@@ -161,6 +161,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 ARSTREAM2_H264Filter_ResetAu(filter);
                 auItem->au.syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IDR;
                 auItem->au.isComplete = 1;
+                auItem->au.hasErrors = 1;
                 auItem->au.isRef = 1;
                 auItem->au.videoStatsAvailable = 0;
                 auItem->au.rtpTimestamp = nextAu->rtpTimestamp - ((nextAu->rtpTimestamp >= 90) ? 90 : ((nextAu->rtpTimestamp >= 1) ? 1 : 0));

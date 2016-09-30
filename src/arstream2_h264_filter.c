@@ -474,6 +474,19 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         }
     }
 
+    if (filter->currentAuMacroblockStatus)
+    {
+        int k;
+        for (k = 0; k < filter->mbCount; k++)
+        {
+            if ((filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
+                    && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
+            {
+                hasErrors = 1;
+            }
+        }
+    }
+
     if (au->syncType != ARSTREAM2_H264_AU_SYNC_TYPE_IDR)
     {
         if (filter->currentAuSlicesAllI)
@@ -490,6 +503,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         }
     }
     au->isComplete = (filter->currentAuIncomplete) ? 0 : 1;
+    au->hasErrors = hasErrors;
     au->isRef = (filter->currentAuIsRef) ? 1 : 0;
 
     if ((!filter->outputIncompleteAu) && (filter->currentAuIncomplete))
@@ -555,7 +569,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                     if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
                     {
-                        hasErrors = 1;
                         //TODO: we should not use curTime but an AU timestamp
                         if (curTime > filter->stats.errorSecondStartTime + 1000000)
                         {

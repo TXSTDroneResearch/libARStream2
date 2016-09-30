@@ -714,8 +714,8 @@ eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize,
                                  ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata,
                                  void *auBufferUserPtr, void *userPtr)
 {
-    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Frame received: RawTS=%llu, NtpTS=%llu, size=%d, complete=%d, ref=%d",
-                auTimestamps->auNtpTimestampRaw, auTimestamps->auNtpTimestamp, auSize, auMetadata->isComplete, auMetadata->isRef);
+    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Frame received: RawTS=%llu, NtpTS=%llu, complete=%d, errors=%d, ref=%d, size=%d",
+                auTimestamps->auNtpTimestampRaw, auTimestamps->auNtpTimestamp, auMetadata->isComplete, auMetadata->hasErrors, auMetadata->isRef, auSize);
 
     return ARSTREAM2_OK;
 }
