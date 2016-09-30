@@ -34,7 +34,10 @@ int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize,
     uint8_t version = (*buffer >> 6) & 0x3;
     if (version != 2)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid RTCP protocol version (%d)", version);
+        if (bufferSize != 24) /* workaround to avoid logging when it's an old clockSync packet with old FF or SC versions */
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid RTCP protocol version (%d)", version);
+        }
         return -1;
     }
 
