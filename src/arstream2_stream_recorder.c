@@ -861,7 +861,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
         if (streamRecorder)
         {
             if (streamRecorder->auFifo.size > 0) ARSTREAM2_StreamRecorder_FifoFree(&streamRecorder->auFifo);
-            if (fifoCondWasInit == 1) ARSAL_Cond_Destroy(&(streamRecorder->fifoCond));
+            if (fifoCondWasInit) ARSAL_Cond_Destroy(&(streamRecorder->fifoCond));
             if (fifoMutexWasInit) ARSAL_Mutex_Destroy(&(streamRecorder->fifoMutex));
             if (mutexWasInit) ARSAL_Mutex_Destroy(&(streamRecorder->mutex));
             if (streamRecorder->outputFile) fclose(streamRecorder->outputFile);

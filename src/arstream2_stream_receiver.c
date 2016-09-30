@@ -738,6 +738,9 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamRecorder_PushAccessUnit() failed: %d (%s)",
                         recErr, ARSTREAM2_Error_ToString(recErr));
+            err = -1;
+            needUnref = 1;
+            needFree = 1;
         }
     }
     else

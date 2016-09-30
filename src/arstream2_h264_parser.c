@@ -2778,6 +2778,7 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     }
                     _readBits += ret;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_frame_idx = %d", val);
+                }
 
                 if (memory_management_control_operation == 4)
                 {
@@ -2790,7 +2791,6 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     }
                     _readBits += ret;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- max_long_term_frame_idx_plus1 = %d", val);
-                }
                 }
             }
             while (memory_management_control_operation != 0);

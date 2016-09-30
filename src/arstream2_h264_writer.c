@@ -352,7 +352,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_pictureTiming(ARSTREAM2_H264Writ
     }
     payloadSize = (payloadSizeBits + 7) / 8;
 
-    while (payloadType > 255)
+    /*while (payloadType > 255) // logically dead code
     {
         // ff_byte
         ret = writeBits(writer, 8, 0xFF, 1);
@@ -362,7 +362,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_pictureTiming(ARSTREAM2_H264Writ
         }
         _bitsWritten += ret;
         payloadType -= 255;
-    }
+    }*/
     // last_payload_type_byte
     ret = writeBits(writer, 8, payloadType, 1);
     if (ret < 0)
@@ -631,7 +631,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writ
     payloadSizeBits = recoveryFrameCntSize + 1 + 1 + 2;
     payloadSize = (payloadSizeBits + 7) / 8;
 
-    while (payloadType > 255)
+    /*while (payloadType > 255) // logically dead code
     {
         // ff_byte
         ret = writeBits(writer, 8, 0xFF, 1);
@@ -641,7 +641,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writ
         }
         _bitsWritten += ret;
         payloadType -= 255;
-    }
+    }*/
     // last_payload_type_byte
     ret = writeBits(writer, 8, payloadType, 1);
     if (ret < 0)
@@ -650,7 +650,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writ
     }
     _bitsWritten += ret;
 
-    while (payloadSize > 255)
+    /*while (payloadSize > 255) // logically dead code
     {
         // ff_byte
         ret = writeBits(writer, 8, 0xFF, 1);
@@ -660,7 +660,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_recoveryPoint(ARSTREAM2_H264Writ
         }
         _bitsWritten += ret;
         payloadSize -= 255;
-    }
+    }*/
     // last_payload_type_byte
     ret = writeBits(writer, 8, payloadSize, 1);
     if (ret < 0)
@@ -722,7 +722,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_userDataUnregistered(ARSTREAM2_H
 
     payloadType = ARSTREAM2_H264_SEI_PAYLOAD_TYPE_USER_DATA_UNREGISTERED;
 
-    while (payloadType > 255)
+    /* while (payloadType > 255) // logically dead code
     {
         // ff_byte
         ret = writeBits(writer, 8, 0xFF, 1);
@@ -732,7 +732,7 @@ static int ARSTREAM2_H264Writer_WriteSeiPayload_userDataUnregistered(ARSTREAM2_H
         }
         _bitsWritten += ret;
         payloadType -= 255;
-    }
+    }*/
     // last_payload_type_byte
     ret = writeBits(writer, 8, payloadType, 1);
     if (ret < 0)

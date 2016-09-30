@@ -771,10 +771,16 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         int packetFifoBufferCount = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs[0] > 0))
                 ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs[0] * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
                 : retSender->naluFifoSize;
-        if (packetFifoBufferCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT) packetFifoBufferCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
+        if (packetFifoBufferCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT)
+        {
+            packetFifoBufferCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
+        }
         retSender->msgVecCount = packetFifoBufferCount;
         int packetFifoItemCount = packetFifoBufferCount * ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR;
-        if (packetFifoItemCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT) packetFifoItemCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT;
+        if (packetFifoItemCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT)
+        {
+            packetFifoItemCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT;
+        }
         int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retSender->packetFifo, packetFifoItemCount, packetFifoBufferCount, retSender->rtpSenderContext.maxPacketSize);
         if (packetFifoRet != 0)
         {
