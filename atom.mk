@@ -38,6 +38,7 @@ LOCAL_SRC_FILES := \
 	src/arstream2_rtp_h264.c \
 	src/arstream2_rtcp.c \
 	src/arstream2_stream_recorder.c \
+	src/arstream2_stream_stats.c \
 	src/arstream2_stream_sender.c \
 	src/arstream2_stream_receiver.c
 

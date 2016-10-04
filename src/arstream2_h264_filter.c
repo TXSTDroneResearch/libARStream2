@@ -564,7 +564,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             {
                 for (i = 0; i < filter->mbWidth; i++, k++)
                 {
-                    int zone = j * ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT / filter->mbHeight;
+                    int zone = j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT / filter->mbHeight;
                     filter->stats.macroblockStatus[filter->currentAuMacroblockStatus[k]][zone]++;
                     if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
@@ -613,9 +613,9 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             filter->currentAuRefMacroblockStatus = tmp;
         }
 
-        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264Filter_VideoStats_t)))
+        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264_VideoStats_t)))
         {
-            memcpy(au->buffer->videoStatsBuffer, &filter->stats, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
+            memcpy(au->buffer->videoStatsBuffer, &filter->stats, sizeof(ARSTREAM2_H264_VideoStats_t));
             au->videoStatsAvailable = 1;
         }
         else
@@ -625,9 +625,9 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
     }
     else
     {
-        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264Filter_VideoStats_t)))
+        if ((au->buffer->videoStatsBuffer) && (au->buffer->videoStatsBufferSize >= sizeof(ARSTREAM2_H264_VideoStats_t)))
         {
-            memset(au->buffer->videoStatsBuffer, 0, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
+            memset(au->buffer->videoStatsBuffer, 0, sizeof(ARSTREAM2_H264_VideoStats_t));
         }
         au->videoStatsAvailable = 0;
     }

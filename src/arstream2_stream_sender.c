@@ -12,6 +12,7 @@
 
 #include <libARStream2/arstream2_stream_sender.h>
 #include "arstream2_rtp_sender.h"
+#include "arstream2_stream_stats.h"
 
 
 /**
@@ -23,8 +24,19 @@
 typedef struct ARSTREAM2_StreamSender_s
 {
     ARSTREAM2_RtpSender_t *sender;
+    ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;
+    void *receiverReportCallbackUserPtr;
+
+    /* Debug files */
+    char *friendlyName;
+    char *dateAndTime;
+    char *debugPath;
+    ARSTREAM2_StreamStats_VideoStats_t videoStats;
 
 } ARSTREAM2_StreamSender_t;
+
+
+static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_StreamSender_ReceiverReportData_t *report, void *userPtr);
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *streamSenderHandle,
@@ -54,6 +66,29 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     if (ret == ARSTREAM2_OK)
     {
         memset(streamSender, 0, sizeof(*streamSender));
+        streamSender->receiverReportCallback = config->receiverReportCallback;
+        streamSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
+        if ((config->debugPath) && (strlen(config->debugPath)))
+        {
+            streamSender->debugPath = strdup(config->debugPath);
+        }
+        if ((config->friendlyName) && (strlen(config->friendlyName)))
+        {
+            streamSender->friendlyName = strndup(config->friendlyName, 40);
+        }
+        else if ((config->canonicalName) && (strlen(config->canonicalName)))
+        {
+            streamSender->friendlyName = strndup(config->canonicalName, 40);
+        }
+        char szDate[200];
+        time_t rawtime;
+        struct tm timeinfo;
+        time(&rawtime);
+        localtime_r(&rawtime, &timeinfo);
+        /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
+        strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
+        streamSender->dateAndTime = strndup(szDate, 200);
+        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamSender->videoStats, streamSender->debugPath, streamSender->friendlyName, streamSender->dateAndTime);
     }
 
     if (ret == ARSTREAM2_OK)
@@ -75,8 +110,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.auCallbackUserPtr = config->auCallbackUserPtr;
         senderConfig.naluCallback = config->naluCallback;
         senderConfig.naluCallbackUserPtr = config->naluCallbackUserPtr;
-        senderConfig.receiverReportCallback = config->receiverReportCallback;
-        senderConfig.receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
+        senderConfig.receiverReportCallback = ARSTREAM2_StreamSender_ReceiverReportCallback;
+        senderConfig.receiverReportCallbackUserPtr = streamSender;
         senderConfig.disconnectionCallback = config->disconnectionCallback;
         senderConfig.disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
         senderConfig.naluFifoSize = config->naluFifoSize;
@@ -107,6 +142,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         if (streamSender)
         {
             if (streamSender->sender) ARSTREAM2_RtpSender_Delete(&(streamSender->sender));
+            ARSTREAM2_StreamStats_VideoStatsFileClose(&streamSender->videoStats);
+            free(streamSender->debugPath);
+            free(streamSender->friendlyName);
+            free(streamSender->dateAndTime);
             free(streamSender);
         }
         *streamSenderHandle = NULL;
@@ -151,6 +190,11 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Free(ARSTREAM2_StreamSender_Handle *stre
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Unable to delete sender: %s", ARSTREAM2_Error_ToString(ret));
     }
+
+    ARSTREAM2_StreamStats_VideoStatsFileClose(&streamSender->videoStats);
+    free(streamSender->debugPath);
+    free(streamSender->friendlyName);
+    free(streamSender->dateAndTime);
 
     free(streamSender);
     *streamSenderHandle = NULL;
@@ -319,4 +363,64 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetMonitoring(ARSTREAM2_StreamSender_Han
     }
 
     return ARSTREAM2_RtpSender_GetMonitoring(streamSender->sender, startTime, timeIntervalUs, monitoringData);
+}
+
+
+static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_StreamSender_ReceiverReportData_t *report, void *userPtr)
+{
+    ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)userPtr;
+
+    if (!streamSender)
+    {
+        return;
+    }
+
+    if ((report) && (report->videoStats))
+    {
+        /* Map the video stats */
+        ARSTREAM2_H264_VideoStats_t vs;
+        int i, j;
+        memset(&vs, 0, sizeof(ARSTREAM2_H264_VideoStats_t));
+        vs.timestamp = report->videoStats->timestamp;
+        vs.rssi = report->videoStats->rssi;
+        vs.totalFrameCount = report->videoStats->totalFrameCount;
+        vs.outputFrameCount = report->videoStats->outputFrameCount;
+        vs.erroredOutputFrameCount = report->videoStats->erroredOutputFrameCount;
+        vs.missedFrameCount = report->videoStats->missedFrameCount;
+        vs.discardedFrameCount = report->videoStats->discardedFrameCount;
+        vs.erroredSecondCount = report->videoStats->erroredSecondCount;
+        vs.timestampDeltaIntegral = report->videoStats->timestampDeltaIntegral;
+        vs.timestampDeltaIntegralSq = report->videoStats->timestampDeltaIntegralSq;
+        vs.timingErrorIntegral = report->videoStats->timingErrorIntegral;
+        vs.timingErrorIntegralSq = report->videoStats->timingErrorIntegralSq;
+        vs.estimatedLatencyIntegral = report->videoStats->estimatedLatencyIntegral;
+        vs.estimatedLatencyIntegralSq = report->videoStats->estimatedLatencyIntegralSq;
+
+#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
+    #error "MB_STATUS_ZONE_COUNT mismatch!"
+#endif
+#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
+    #error "MB_STATUS_CLASS_COUNT mismatch!"
+#endif
+
+        for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+        {
+            vs.erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
+        }
+        for (j = 0; j < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT; j++)
+        {
+            for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+            {
+                vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j][i];
+            }
+        }
+
+        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamSender->videoStats, &vs);
+    }
+
+    if (streamSender->receiverReportCallback)
+    {
+        /* Call the receiver report callback function */
+        streamSender->receiverReportCallback(report, streamSender->receiverReportCallbackUserPtr);
+    }
 }

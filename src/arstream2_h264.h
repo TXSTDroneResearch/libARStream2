@@ -49,6 +49,10 @@
 #define ARSTREAM2_H264_AU_NALU_MAX_COUNT    (128)
 #define ARSTREAM2_H264_AU_MIN_REALLOC_SIZE  (10 * 1024)
 
+#define ARSTREAM2_H264_MB_STATUS_CLASS_COUNT (6)
+#define ARSTREAM2_H264_MB_STATUS_ZONE_COUNT (5)
+
+
 /*
  * Types
  */
@@ -304,6 +308,36 @@ typedef struct ARSTREAM2_H264_AuFifo_s
     ARSTREAM2_H264_AuFifoBuffer_t *bufferFree;
 
 } ARSTREAM2_H264_AuFifo_t;
+
+
+/**
+ * @brief Video stats
+ */
+typedef struct ARSTREAM2_H264_VideoStats_s
+{
+    uint64_t timestamp;
+    int8_t rssi;
+    uint32_t totalFrameCount;
+    uint32_t outputFrameCount;
+    uint32_t erroredOutputFrameCount;
+    uint32_t discardedFrameCount;
+    uint32_t missedFrameCount;
+    uint32_t erroredSecondCount;
+    uint64_t erroredSecondStartTime;
+    uint32_t erroredSecondCountByZone[ARSTREAM2_H264_MB_STATUS_ZONE_COUNT];
+    uint64_t erroredSecondStartTimeByZone[ARSTREAM2_H264_MB_STATUS_ZONE_COUNT];
+    uint32_t macroblockStatus[ARSTREAM2_H264_MB_STATUS_CLASS_COUNT][ARSTREAM2_H264_MB_STATUS_ZONE_COUNT];
+    uint32_t timestampDelta;
+    uint64_t timestampDeltaIntegral;
+    uint64_t timestampDeltaIntegralSq;
+    int32_t timingError;
+    uint64_t timingErrorIntegral;
+    uint64_t timingErrorIntegralSq;
+    uint32_t estimatedLatency;
+    uint64_t estimatedLatencyIntegral;
+    uint64_t estimatedLatencyIntegralSq;
+
+} ARSTREAM2_H264_VideoStats_t;
 
 
 typedef int (*ARSTREAM2_H264_ReceiverAuCallback_t)(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);

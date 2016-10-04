@@ -28,15 +28,6 @@
 
 
 /*
- * Macros
- */
-
-#define ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT (ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT)
-#define ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT (ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT)
-#define ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL (1000000)
-
-
-/*
  * Types
  */
 
@@ -69,31 +60,6 @@ typedef struct
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
 } ARSTREAM2_H264Filter_Config_t;
-
-
-typedef struct ARSTREAM2_H264Filter_VideoStats_s
-{
-    uint32_t totalFrameCount;
-    uint32_t outputFrameCount;
-    uint32_t erroredOutputFrameCount;
-    uint32_t discardedFrameCount;
-    uint32_t missedFrameCount;
-    uint32_t erroredSecondCount;
-    uint64_t erroredSecondStartTime;
-    uint32_t erroredSecondCountByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
-    uint64_t erroredSecondStartTimeByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
-    uint32_t macroblockStatus[ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT][ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
-    uint32_t timestampDelta;
-    uint64_t timestampDeltaIntegral;
-    uint64_t timestampDeltaIntegralSq;
-    int32_t timingError;
-    uint64_t timingErrorIntegral;
-    uint64_t timingErrorIntegralSq;
-    uint32_t estimatedLatency;
-    uint64_t estimatedLatencyIntegral;
-    uint64_t estimatedLatencyIntegralSq;
-
-} ARSTREAM2_H264Filter_VideoStats_t;
 
 
 typedef struct ARSTREAM2_H264Filter_s
@@ -132,7 +98,7 @@ typedef struct ARSTREAM2_H264Filter_s
     int currentAuInferredPreviousSliceFirstMb;
 
     /* H.264-level stats */
-    ARSTREAM2_H264Filter_VideoStats_t stats;
+    ARSTREAM2_H264_VideoStats_t stats;
 
     ARSTREAM2_H264Parser_Handle parser;
     ARSTREAM2_H264Writer_Handle writer;

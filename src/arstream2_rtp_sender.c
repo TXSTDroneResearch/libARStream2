@@ -1371,6 +1371,8 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 if ((gotReceptionReport) && (sender->receiverReportCallback != NULL))
                 {
                     ARSTREAM2_StreamSender_ReceiverReportData_t report;
+                    ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
+
                     memset(&report, 0, sizeof(ARSTREAM2_StreamSender_ReceiverReportData_t));
                     report.lastReceiverReportReceptionTimestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
                     report.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
@@ -1383,6 +1385,50 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     report.senderReportIntervalByteCount = sender->rtcpSenderContext.srIntervalByteCount;
                     report.peerClockDelta = sender->rtcpSenderContext.clockDelta.clockDeltaAvg;
                     report.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDelta.rtDelay;
+
+                    report.videoStats = NULL;
+                    if (sender->rtcpSenderContext.videoStats.updatedSinceLastTime)
+                    {
+                        int i, j;
+                        memset(&videoStats, 0, sizeof(ARSTREAM2_StreamReceiver_VideoStats_t));
+
+                        videoStats.timestamp = sender->rtcpSenderContext.videoStats.timestamp;
+                        videoStats.rssi = sender->rtcpSenderContext.videoStats.rssi;
+                        videoStats.totalFrameCount = sender->rtcpSenderContext.videoStats.totalFrameCount;
+                        videoStats.outputFrameCount = sender->rtcpSenderContext.videoStats.outputFrameCount;
+                        videoStats.erroredOutputFrameCount = sender->rtcpSenderContext.videoStats.erroredOutputFrameCount;
+                        videoStats.missedFrameCount = sender->rtcpSenderContext.videoStats.missedFrameCount;
+                        videoStats.discardedFrameCount = sender->rtcpSenderContext.videoStats.discardedFrameCount;
+                        videoStats.erroredSecondCount = sender->rtcpSenderContext.videoStats.erroredSecondCount;
+
+#if ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
+    #error "MB_STATUS_ZONE_COUNT mismatch!"
+#endif
+#if ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
+    #error "MB_STATUS_CLASS_COUNT mismatch!"
+#endif
+
+                        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+                        {
+                            videoStats.erroredSecondCountByZone[i] = sender->rtcpSenderContext.videoStats.erroredSecondCountByZone[i];
+                        }
+                        for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
+                        {
+                            for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+                            {
+                                videoStats.macroblockStatus[j][i] = sender->rtcpSenderContext.videoStats.macroblockStatus[j][i];
+                            }
+                        }
+                        videoStats.timestampDeltaIntegral = sender->rtcpSenderContext.videoStats.timestampDeltaIntegral;
+                        videoStats.timestampDeltaIntegralSq = sender->rtcpSenderContext.videoStats.timestampDeltaIntegralSq;
+                        videoStats.timingErrorIntegral = sender->rtcpSenderContext.videoStats.timingErrorIntegral;
+                        videoStats.timingErrorIntegralSq = sender->rtcpSenderContext.videoStats.timingErrorIntegralSq;
+                        videoStats.estimatedLatencyIntegral = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegral;
+                        videoStats.estimatedLatencyIntegralSq = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegralSq;
+
+                        report.videoStats = &videoStats;
+                        sender->rtcpSenderContext.videoStats.updatedSinceLastTime = 0;
+                    }
 
                     /* Call the receiver report callback function */
                     sender->receiverReportCallback(&report, sender->receiverReportCallbackUserPtr);

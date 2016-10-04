@@ -487,11 +487,45 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
 }
 
 
+int ARSTREAM2_RTCP_GetApplicationPacketSubtype(const ARSTREAM2_RTCP_Application_t *app)
+{
+    if (!app)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    uint8_t version = (app->flags >> 6) & 0x3;
+    if (version != 2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet protocol version (%d)", version);
+        return -1;
+    }
+
+    if (app->packetType != ARSTREAM2_RTCP_APP_PACKET_TYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet type (%d)", app->packetType);
+        return -1;
+    }
+
+    uint32_t name = ntohl(app->name);
+    if (name != ARSTREAM2_RTCP_APP_PACKET_NAME)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet name (0x%08X)", name);
+        return -1;
+    }
+
+    uint8_t subType = (app->flags & 0x1F);
+
+    return subType;
+}
+
+
 int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
                                                  uint64_t sendTimestamp, uint32_t ssrc,
                                                  ARSTREAM2_RTCP_ClockDeltaContext_t *context)
 {
-    if ((!app) || (!clockDelta))
+    if ((!app) || (!clockDelta) || (!context))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
@@ -598,6 +632,149 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
 }
 
 
+int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_VideoStats_t *videoStats,
+                                                 uint64_t sendTimestamp, uint32_t ssrc,
+                                                 ARSTREAM2_RTCP_VideoStatsContext_t *context)
+{
+    int i, j;
+
+    if ((!app) || (!videoStats) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    app->flags = (2 << 6) | (ARSTREAM2_RTCP_APP_PACKET_VIDEOSTATS_SUBTYPE & 0x1F);
+    app->packetType = ARSTREAM2_RTCP_APP_PACKET_TYPE;
+    app->length = htons((sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t)) / 4 - 1);
+    app->ssrc = htonl(ssrc);
+    app->name = htonl(ARSTREAM2_RTCP_APP_PACKET_NAME);
+
+    videoStats->timestampH = htonl((uint32_t)(context->timestamp >> 32));
+    videoStats->timestampL = htonl((uint32_t)(context->timestamp & 0xFFFFFFFF));
+    videoStats->totalFrameCount = htonl(context->totalFrameCount);
+    videoStats->outputFrameCount = htonl(context->outputFrameCount);
+    videoStats->erroredOutputFrameCount = htonl(context->erroredOutputFrameCount);
+    videoStats->missedFrameCount = htonl(context->missedFrameCount);
+    videoStats->discardedFrameCount = htonl(context->discardedFrameCount);
+    videoStats->erroredSecondCount = htonl(context->erroredSecondCount);
+    for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+    {
+        videoStats->erroredSecondCountByZone[i] = htonl(context->erroredSecondCountByZone[i]);
+    }
+    for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
+    {
+        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+        {
+            videoStats->macroblockStatus[j][i] = htonl(context->macroblockStatus[j][i]);
+        }
+    }
+    videoStats->timestampDeltaIntegralH = htonl((uint32_t)(context->timestampDeltaIntegral >> 32));
+    videoStats->timestampDeltaIntegralL = htonl((uint32_t)(context->timestampDeltaIntegral & 0xFFFFFFFF));
+    videoStats->timestampDeltaIntegralSqH = htonl((uint32_t)(context->timestampDeltaIntegralSq >> 32));
+    videoStats->timestampDeltaIntegralSqL = htonl((uint32_t)(context->timestampDeltaIntegralSq & 0xFFFFFFFF));
+    videoStats->timingErrorIntegralH = htonl((uint32_t)(context->timingErrorIntegral >> 32));
+    videoStats->timingErrorIntegralL = htonl((uint32_t)(context->timingErrorIntegral & 0xFFFFFFFF));
+    videoStats->timingErrorIntegralSqH = htonl((uint32_t)(context->timingErrorIntegralSq >> 32));
+    videoStats->timingErrorIntegralSqL = htonl((uint32_t)(context->timingErrorIntegralSq & 0xFFFFFFFF));
+    videoStats->estimatedLatencyIntegralH = htonl((uint32_t)(context->estimatedLatencyIntegral >> 32));
+    videoStats->estimatedLatencyIntegralL = htonl((uint32_t)(context->estimatedLatencyIntegral & 0xFFFFFFFF));
+    videoStats->estimatedLatencyIntegralSqH = htonl((uint32_t)(context->estimatedLatencyIntegralSq >> 32));
+    videoStats->estimatedLatencyIntegralSqL = htonl((uint32_t)(context->estimatedLatencyIntegralSq & 0xFFFFFFFF));
+    videoStats->rssi = context->rssi;
+    videoStats->reserved1 = videoStats->reserved2 = videoStats->reserved3 = 0;
+
+    return 0;
+}
+
+
+int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application_t *app,
+                                                const ARSTREAM2_RTCP_VideoStats_t *videoStats,
+                                                uint64_t receptionTimestamp, uint32_t peerSsrc,
+                                                ARSTREAM2_RTCP_VideoStatsContext_t *context)
+{
+    int i, j;
+
+    if ((!app) || (!videoStats) || (!context))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    uint8_t version = (app->flags >> 6) & 0x3;
+    if (version != 2)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet protocol version (%d)", version);
+        return -1;
+    }
+
+    if (app->packetType != ARSTREAM2_RTCP_APP_PACKET_TYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet type (%d)", app->packetType);
+        return -1;
+    }
+
+    uint32_t name = ntohl(app->name);
+    if (name != ARSTREAM2_RTCP_APP_PACKET_NAME)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet name (0x%08X)", name);
+        return -1;
+    }
+
+    uint8_t subType = (app->flags & 0x1F);
+    if (subType != ARSTREAM2_RTCP_APP_PACKET_VIDEOSTATS_SUBTYPE)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet subtype (%d)", subType);
+        return -1;
+    }
+
+    uint32_t ssrc = ntohl(app->ssrc);
+    if (ssrc != peerSsrc)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Unexpected peer SSRC");
+        return -1;
+    }
+
+    uint16_t length = ntohs(app->length);
+    if (length != (sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t)) / 4 - 1)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet length (%d)", length);
+        return -1;
+    }
+
+    context->timestamp = ((uint64_t)ntohl(videoStats->timestampH) << 32) + (uint64_t)ntohl(videoStats->timestampL);
+    context->totalFrameCount = ntohl(videoStats->totalFrameCount);
+    context->outputFrameCount = ntohl(videoStats->outputFrameCount);
+    context->erroredOutputFrameCount = ntohl(videoStats->erroredOutputFrameCount);
+    context->missedFrameCount = ntohl(videoStats->missedFrameCount);
+    context->discardedFrameCount = ntohl(videoStats->discardedFrameCount);
+    context->erroredSecondCount = ntohl(videoStats->erroredSecondCount);
+    for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+    {
+        context->erroredSecondCountByZone[i] = ntohl(videoStats->erroredSecondCountByZone[i]);
+    }
+    for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
+    {
+        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+        {
+            context->macroblockStatus[j][i] = ntohl(videoStats->macroblockStatus[j][i]);
+        }
+    }
+    context->timestampDeltaIntegral = ((uint64_t)ntohl(videoStats->timestampDeltaIntegralH) << 32) + (uint64_t)ntohl(videoStats->timestampDeltaIntegralL);
+    context->timestampDeltaIntegralSq = ((uint64_t)ntohl(videoStats->timestampDeltaIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->timestampDeltaIntegralSqL);
+    context->timingErrorIntegral = ((uint64_t)ntohl(videoStats->timingErrorIntegralH) << 32) + (uint64_t)ntohl(videoStats->timingErrorIntegralL);
+    context->timingErrorIntegralSq = ((uint64_t)ntohl(videoStats->timingErrorIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->timingErrorIntegralSqL);
+    context->estimatedLatencyIntegral = ((uint64_t)ntohl(videoStats->estimatedLatencyIntegralH) << 32) + (uint64_t)ntohl(videoStats->estimatedLatencyIntegralL);
+    context->estimatedLatencyIntegralSq = ((uint64_t)ntohl(videoStats->estimatedLatencyIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->estimatedLatencyIntegralSqL);
+    context->rssi = videoStats->rssi;
+
+    context->lastReceivedTime = receptionTimestamp;
+    context->updatedSinceLastTime = 1;
+
+    return 0;
+}
+
+
 int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                  uint64_t sendTimestamp, int generateSenderReport,
                                                  int generateSourceDescription, int generateApplicationClockDelta,
@@ -673,7 +850,7 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
 int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                    uint64_t sendTimestamp, int generateReceiverReport,
                                                    int generateSourceDescription, int generateApplicationClockDelta,
-                                                   ARSTREAM2_RTCP_ReceiverContext_t *context,
+                                                   int generateApplicationVideoStats, ARSTREAM2_RTCP_ReceiverContext_t *context,
                                                    unsigned int *size)
 {
     int ret = 0;
@@ -738,6 +915,22 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
         }
     }
 
+    if ((ret == 0) && (generateApplicationVideoStats) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t) <= maxPacketSize))
+    {
+        ret = ARSTREAM2_RTCP_GenerateApplicationVideoStats((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
+                                                           (ARSTREAM2_RTCP_VideoStats_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                           sendTimestamp, context->receiverSsrc,
+                                                           &context->videoStats);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined video stats (%d)", ret);
+        }
+        else
+        {
+            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t);
+        }
+    }
+
     if (size) *size = totalSize;
     return ret;
 }
@@ -749,7 +942,7 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                                                 int *gotReceptionReport)
 {
     unsigned int readSize = 0, size = 0;
-    int receptionReportCount = 0, type, ret, _ret = 0;
+    int receptionReportCount = 0, type, subType, ret, _ret = 0;
 
     if ((!packet) || (!context))
     {
@@ -795,18 +988,40 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 break;
             case ARSTREAM2_RTCP_APP_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
-                                                                  (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                                  receptionTimestamp, context->receiverSsrc,
-                                                                  &context->clockDelta);
-                if (ret != 0)
+                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((ARSTREAM2_RTCP_Application_t*)packet);
+                switch (subType)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
-                }
-                else
-                {
-                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
-                                context->clockDelta.clockDelta, context->clockDelta.rtDelay);*/
+                    case ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE:
+                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                          receptionTimestamp, context->receiverSsrc,
+                                                                          &context->clockDelta);
+                        if (ret != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
+                        }
+                        else
+                        {
+                            /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                        context->clockDelta.clockDelta, context->clockDelta.rtDelay);*/
+                        }
+                        break;
+                    case ARSTREAM2_RTCP_APP_PACKET_VIDEOSTATS_SUBTYPE:
+                        ret = ARSTREAM2_RTCP_ProcessApplicationVideoStats((ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (ARSTREAM2_RTCP_VideoStats_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                          receptionTimestamp, context->receiverSsrc,
+                                                                          &context->videoStats);
+                        if (ret != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application video stats (%d)", ret);
+                        }
+                        else
+                        {
+                            /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Video stats");*/
+                        }
+                        break;
+                    default:
+                        break;
                 }
                 break;
             default:
@@ -825,7 +1040,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                                                   ARSTREAM2_RTCP_ReceiverContext_t *context)
 {
     unsigned int readSize = 0, size = 0;
-    int type, ret, _ret = 0;
+    int type, subType, ret, _ret = 0;
 
     if ((!packet) || (!context))
     {
@@ -865,18 +1080,26 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 break;
             case ARSTREAM2_RTCP_APP_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
-                                                                  (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                                  receptionTimestamp, context->senderSsrc,
-                                                                  &context->clockDelta);
-                if (ret != 0)
+                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((ARSTREAM2_RTCP_Application_t*)packet);
+                switch (subType)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
-                }
-                else
-                {
-                    /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
-                                context->clockDelta.clockDeltaAvg, context->clockDelta.rtDelay);*/
+                    case ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE:
+                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                                          receptionTimestamp, context->senderSsrc,
+                                                                          &context->clockDelta);
+                        if (ret != 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process application clock delta (%d)", ret);
+                        }
+                        else
+                        {
+                            /*ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Clock delta: delta=%lli RTD=%lli",
+                                        context->clockDelta.clockDeltaAvg, context->clockDelta.rtDelay);*/
+                        }
+                        break;
+                    default:
+                        break;
                 }
                 break;
             default:

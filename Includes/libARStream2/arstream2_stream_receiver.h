@@ -42,6 +42,11 @@ extern "C" {
  */
 #define ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT                  (5)
 
+/**
+ * @brief Macroblock status class count (@see eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS)
+ */
+#define ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT (6)
+
 
 /**
  * @brief ARSTREAM2 StreamReceiver instance handle.
@@ -84,8 +89,6 @@ typedef enum
 
 } eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS;
 
-#define ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MAX
-
 
 /**
  * @brief ARSTREAM2 StreamReceiver AuReadyCallback function timestamps.
@@ -110,6 +113,8 @@ typedef struct
  */
 typedef struct
 {
+    uint64_t timestamp;                                             /**< Timestamp associated with the stats */
+    int8_t rssi;                                                    /**< RSSI */
     uint32_t totalFrameCount;                                       /**< Total frame counter */
     uint32_t outputFrameCount;                                      /**< Output frame counter */
     uint32_t erroredOutputFrameCount;                               /**< Errored output frame counter (included in outputFrameCount) */

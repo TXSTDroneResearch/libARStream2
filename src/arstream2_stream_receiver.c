@@ -15,6 +15,7 @@
 #include "arstream2_rtp_receiver.h"
 #include "arstream2_h264_filter.h"
 #include "arstream2_h264.h"
+#include "arstream2_stream_stats.h"
 
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
@@ -33,9 +34,7 @@
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME "videorec"
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT "mp4"
 
-#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH "videostats"
-#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME "videostats"
-#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT "dat"
+#define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_RTCP_SEND_INTERVAL (1000000)
 
 
 typedef struct ARSTREAM2_StreamReceiver_s
@@ -104,9 +103,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
     char *friendlyName;
     char *dateAndTime;
     char *debugPath;
-    char *videoStatsFileName;
-    uint64_t videoStatsFileOutputTimestamp;
-    FILE *videoStatsFile;
+    ARSTREAM2_StreamStats_VideoStats_t videoStats;
 
 } ARSTREAM2_StreamReceiver_t;
 
@@ -119,9 +116,6 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_
 static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_t *streamReceiver);
-static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver);
-static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver);
-static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au, uint64_t curTime);
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
@@ -193,7 +187,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
         streamReceiver->dateAndTime = strndup(szDate, 200);
         ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
-        ARSTREAM2_StreamReceiver_VideoStatsFileOpen(streamReceiver);
+        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamReceiver->videoStats, streamReceiver->debugPath, streamReceiver->friendlyName, streamReceiver->dateAndTime);
     }
     if (ret == ARSTREAM2_OK)
     {
@@ -285,7 +279,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         int auFifoRet = ARSTREAM2_H264_AuFifoInit(&streamReceiver->auFifo, ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT,
                                                   ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT,
                                                   ARSTREAM2_STREAM_RECEIVER_AU_BUFFER_SIZE, ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE,
-                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE, sizeof(ARSTREAM2_H264Filter_VideoStats_t));
+                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE, sizeof(ARSTREAM2_H264_VideoStats_t));
         if (auFifoRet != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoInit() failed (%d)", auFifoRet);
@@ -332,6 +326,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.maxPacketSize = config->maxPacketSize;
         receiverConfig.insertStartCodes = 1;
         receiverConfig.generateReceiverReports = config->generateReceiverReports;
+        receiverConfig.videoStatsSendTimeInterval = ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_RTCP_SEND_INTERVAL;
 
         if (usemux) {
             receiver_mux_config.mux = mux_config->mux;
@@ -397,7 +392,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (appOutputCallbackCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
             if (recorderMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->recorder.mutex));
             if (fifoMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->fifoMutex));
-            ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
+            ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStats);
             free(streamReceiver->debugPath);
             free(streamReceiver->friendlyName);
             free(streamReceiver->dateAndTime);
@@ -458,7 +453,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     free(streamReceiver->recorder.fileName);
     free(streamReceiver->pSps);
     free(streamReceiver->pPps);
-    ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
+    ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStats);
     free(streamReceiver->debugPath);
     free(streamReceiver->friendlyName);
     free(streamReceiver->dateAndTime);
@@ -467,157 +462,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     *streamReceiverHandle = NULL;
 
     return ret;
-}
-
-
-static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver)
-{
-    char szOutputFileName[500];
-    szOutputFileName[0] = '\0';
-
-    if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
-    {
-        snprintf(szOutputFileName, 500, "%s/%s", streamReceiver->debugPath,
-                 ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH);
-        if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
-        {
-            // directory exists and we have write permission
-            snprintf(szOutputFileName, 500, "%s/%s/%s_%s.%s", streamReceiver->debugPath,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME,
-                     streamReceiver->dateAndTime,
-                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
-            if (access(szOutputFileName, F_OK) != -1)
-            {
-                // the file already exists
-                szOutputFileName[0] = '\0';
-            }
-        }
-        else
-        {
-            szOutputFileName[0] = '\0';
-        }
-    }
-
-    if (strlen(szOutputFileName))
-    {
-        streamReceiver->videoStatsFileName = strdup(szOutputFileName);
-        if (!streamReceiver->videoStatsFileName)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed for video stats output file '%s'", szOutputFileName);
-            return;
-        }
-        streamReceiver->videoStatsFile = fopen(szOutputFileName, "w");
-        if (!streamReceiver->videoStatsFile)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to open video stats output file '%s'", szOutputFileName);
-        }
-        else
-        {
-            ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Opened video stats output file '%s'", szOutputFileName);
-        }
-    }
-
-    if (streamReceiver->videoStatsFile)
-    {
-        char szTitle[200];
-        int titleLen = 0;
-        szTitle[0] = '\0';
-        if ((streamReceiver->friendlyName) && (strlen(streamReceiver->friendlyName)))
-        {
-            titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s ", streamReceiver->friendlyName);
-        }
-        titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s", streamReceiver->dateAndTime);
-        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Video stats output file title: '%s'", szTitle);
-        fprintf(streamReceiver->videoStatsFile, "# %s\n", szTitle);
-        fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount erroredSecondCount");
-        int i, j;
-        for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-        {
-            fprintf(streamReceiver->videoStatsFile, " erroredSecondCountByZone[%d]", i);
-        }
-        for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
-        {
-            for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-            {
-                fprintf(streamReceiver->videoStatsFile, " macroblockStatus[%d][%d]", j, i);
-            }
-        }
-        fprintf(streamReceiver->videoStatsFile, " timestampDeltaIntegral timestampDeltaIntegralSq timingErrorIntegral timingErrorIntegralSq estimatedLatencyIntegral estimatedLatencyIntegralSq");
-        fprintf(streamReceiver->videoStatsFile, "\n");
-    }
-}
-
-
-static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver)
-{
-    if (streamReceiver->videoStatsFile)
-    {
-        fclose(streamReceiver->videoStatsFile);
-        streamReceiver->videoStatsFile = NULL;
-    }
-    free(streamReceiver->videoStatsFileName);
-    streamReceiver->videoStatsFileName = NULL;
-}
-
-
-static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au, uint64_t curTime)
-{
-    if ((!videoStats) || (!au))
-    {
-        return;
-    }
-
-    if (!streamReceiver->videoStatsFile)
-    {
-        return;
-    }
-
-    if (streamReceiver->videoStatsFileOutputTimestamp == 0)
-    {
-        /* init */
-        streamReceiver->videoStatsFileOutputTimestamp = curTime;
-    }
-    if (curTime >= streamReceiver->videoStatsFileOutputTimestamp + ARSTREAM2_H264_FILTER_STATS_OUTPUT_INTERVAL)
-    {
-        if (streamReceiver->videoStatsFile)
-        {
-            /* get the RSSI from the streaming metadata */
-            //TODO: remove this hack once we have a better way of getting the RSSI
-            int rssi = 0;
-            if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5031))
-            {
-                rssi = (int8_t)au->buffer->metadataBuffer[26];
-            }
-            if ((au->metadataSize >= 55) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5032))
-            {
-                rssi = (int8_t)au->buffer->metadataBuffer[54];
-            }
-
-            fprintf(streamReceiver->videoStatsFile, "%llu %i %lu %lu %lu %lu %lu %lu", (long long unsigned int)curTime, rssi,
-                    (long unsigned int)videoStats->totalFrameCount, (long unsigned int)videoStats->outputFrameCount,
-                    (long unsigned int)videoStats->erroredOutputFrameCount, (long unsigned int)videoStats->discardedFrameCount,
-                    (long unsigned int)videoStats->missedFrameCount, (long unsigned int)videoStats->erroredSecondCount);
-            int i, j;
-            for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-            {
-                fprintf(streamReceiver->videoStatsFile, " %lu", (long unsigned int)videoStats->erroredSecondCountByZone[i]);
-            }
-            for (j = 0; j < ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT; j++)
-            {
-                for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
-                {
-                    fprintf(streamReceiver->videoStatsFile, " %lu", (long unsigned int)videoStats->macroblockStatus[j][i]);
-                }
-            }
-            fprintf(streamReceiver->videoStatsFile, " %llu %llu %llu %llu %llu %llu",
-                    (long long unsigned int)videoStats->timestampDeltaIntegral, (long long unsigned int)videoStats->timestampDeltaIntegralSq,
-                    (long long unsigned int)videoStats->timingErrorIntegral,(long long unsigned int)videoStats->timingErrorIntegralSq,
-                    (long long unsigned int)videoStats->estimatedLatencyIntegral, (long long unsigned int)videoStats->estimatedLatencyIntegralSq);
-            fprintf(streamReceiver->videoStatsFile, "\n");
-        }
-        streamReceiver->videoStatsFileOutputTimestamp = curTime;
-    }
 }
 
 
@@ -838,7 +682,7 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
     {
         if (auItem->au.videoStatsAvailable)
         {
-            ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
+            ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
             uint32_t ntpTimestampDelta = ((auItem->au.ntpTimestamp) && (streamReceiver->lastAuNtpTimestamp))
                     ? (uint32_t)(auItem->au.ntpTimestamp - streamReceiver->lastAuNtpTimestamp) : 0;
             uint32_t ntpTimestampRawDelta = ((auItem->au.ntpTimestampRaw) && (streamReceiver->lastAuNtpTimestampRaw))
@@ -871,7 +715,7 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             struct timespec t1;
             ARSAL_Time_GetTime(&t1);
             uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-            ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
+            ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
             uint32_t outputTimestampDelta = (streamReceiver->lastAuOutputTimestamp)
                     ? (uint32_t)(curTime - streamReceiver->lastAuOutputTimestamp) : 0;
             uint32_t estimatedLatency = ((auItem->au.ntpTimestampLocal) && (curTime > auItem->au.ntpTimestampLocal))
@@ -889,7 +733,25 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             streamReceiver->estimatedLatencyIntegralSq += (uint64_t)estimatedLatency * (uint64_t)estimatedLatency;
             vs->estimatedLatencyIntegralSq = streamReceiver->estimatedLatencyIntegralSq;
             streamReceiver->lastAuOutputTimestamp = curTime;
-            ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, vs, &auItem->au, curTime);
+            vs->timestamp = auItem->au.ntpTimestampRaw;
+
+            /* get the RSSI from the streaming metadata */
+            //TODO: remove this hack once we have a better way of getting the RSSI
+            if ((auItem->au.metadataSize >= 27) && (ntohs(*((uint16_t*)auItem->au.buffer->metadataBuffer)) == 0x5031))
+            {
+                vs->rssi = (int8_t)auItem->au.buffer->metadataBuffer[26];
+            }
+            if ((auItem->au.metadataSize >= 55) && (ntohs(*((uint16_t*)auItem->au.buffer->metadataBuffer)) == 0x5032))
+            {
+                vs->rssi = (int8_t)auItem->au.buffer->metadataBuffer[54];
+            }
+
+            eARSTREAM2_ERROR recvErr = ARSTREAM2_RtpReceiver_UpdateVideoStats(streamReceiver->receiver, vs);
+            if (recvErr != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_UpdateVideoStats() failed (%d)", recvErr);
+            }
+            ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStats, vs);
         }
 
         /* stream recording */
@@ -1409,7 +1271,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
                     if (au->videoStatsAvailable)
                     {
-                        ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)au->buffer->videoStatsBuffer;
+                        ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)au->buffer->videoStatsBuffer;
                         uint32_t outputTimestampDelta = (streamReceiver->lastAuOutputTimestamp)
                                 ? (uint32_t)(curTime - streamReceiver->lastAuOutputTimestamp) : 0;
                         uint32_t estimatedLatency = ((au->ntpTimestampLocal) && (curTime > au->ntpTimestampLocal))
@@ -1426,7 +1288,25 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         vs->estimatedLatencyIntegral = streamReceiver->estimatedLatencyIntegral;
                         streamReceiver->estimatedLatencyIntegralSq += (uint64_t)estimatedLatency * (uint64_t)estimatedLatency;
                         vs->estimatedLatencyIntegralSq = streamReceiver->estimatedLatencyIntegralSq;
-                        ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, vs, au, curTime);
+                        vs->timestamp = au->ntpTimestampRaw;
+
+                        /* get the RSSI from the streaming metadata */
+                        //TODO: remove this hack once we have a better way of getting the RSSI
+                        if ((au->metadataSize >= 27) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5031))
+                        {
+                            vs->rssi = (int8_t)au->buffer->metadataBuffer[26];
+                        }
+                        if ((au->metadataSize >= 55) && (ntohs(*((uint16_t*)au->buffer->metadataBuffer)) == 0x5032))
+                        {
+                            vs->rssi = (int8_t)au->buffer->metadataBuffer[54];
+                        }
+
+                        eARSTREAM2_ERROR recvErr = ARSTREAM2_RtpReceiver_UpdateVideoStats(streamReceiver->receiver, vs);
+                        if (recvErr != ARSTREAM2_OK)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_UpdateVideoStats() failed (%d)", recvErr);
+                        }
+                        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStats, vs);
                     }
 
                     /* timestamps and metadata */
@@ -1447,9 +1327,12 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     auMetadata.mbStatus = (au->mbStatusAvailable) ? au->buffer->mbStatusBuffer : NULL;
                     if (au->videoStatsAvailable)
                     {
-                        ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)au->buffer->videoStatsBuffer;
+                        /* Map the video stats */
+                        ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)au->buffer->videoStatsBuffer;
                         int i, j;
                         memset(&videoStats, 0, sizeof(videoStats));
+                        videoStats.timestamp = vs->timestamp;
+                        videoStats.rssi = vs->rssi;
                         videoStats.totalFrameCount = vs->totalFrameCount;
                         videoStats.outputFrameCount = vs->outputFrameCount;
                         videoStats.erroredOutputFrameCount = vs->erroredOutputFrameCount;
@@ -1462,6 +1345,14 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         videoStats.timingErrorIntegralSq = vs->timingErrorIntegralSq;
                         videoStats.estimatedLatencyIntegral = vs->estimatedLatencyIntegral;
                         videoStats.estimatedLatencyIntegralSq = vs->estimatedLatencyIntegralSq;
+
+#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
+    #error "MB_STATUS_ZONE_COUNT mismatch!"
+#endif
+#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
+    #error "MB_STATUS_CLASS_COUNT mismatch!"
+#endif
+
                         for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
                         {
                             videoStats.erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
@@ -1903,7 +1794,7 @@ static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_
     if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
     {
         snprintf(szOutputFileName, 500, "%s/%s", streamReceiver->debugPath,
-                 ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH);
+                 ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH);
         if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
         {
             // directory exists and we have write permission

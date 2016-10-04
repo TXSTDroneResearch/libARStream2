@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
+#include <libARStream2/arstream2_stream_receiver.h>
 #include <libARSAL/ARSAL_Socket.h>
 
 
@@ -108,6 +109,7 @@ typedef struct ARSTREAM2_StreamSender_ReceiverReportData_t
     uint32_t senderReportIntervalByteCount;         /**< Sent bytes count over the last sender report interval */
     int64_t peerClockDelta;                         /**< Peer clock delta in microseconds */
     uint32_t roundTripDelayFromClockDelta;          /**< Round-trip delay in microseconds (from the clock delta computation) */
+    ARSTREAM2_StreamReceiver_VideoStats_t *videoStats; /**< Receiver video stats */
 
 } ARSTREAM2_StreamSender_ReceiverReportData_t;
 
@@ -189,6 +191,7 @@ typedef struct ARSTREAM2_StreamSender_Config_t
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
+    const char *debugPath;                          /**< Optional path for writing debug files (optional, can be NULL) */
 
 } ARSTREAM2_StreamSender_Config_t;
 

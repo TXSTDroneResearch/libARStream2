@@ -102,6 +102,7 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int insertStartCodes;                           /**< Boolean-like (0-1) flag: if active insert a start code prefix before NAL units */
     int generateReceiverReports;                    /**< Boolean-like (0-1) flag: if active generate RTCP receiver reports */
+    uint32_t videoStatsSendTimeInterval;            /**< Time interval for sending video stats in compound RTCP packets (optional, can be null) */
 } ARSTREAM2_RtpReceiver_Config_t;
 
 
@@ -318,6 +319,19 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
 void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
+
+
+/**
+ * @brief Update the video stats
+ * The video stats are provided by the upper layer to be sent in RTCP compound packets.
+ *
+ * @param[in] receiver The receiver instance
+ * @param[in] videoStats Video stats data
+ *
+ * @return ARSTREAM2_OK if no error occured.
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if either the receiver or videoStats is invalid.
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_UpdateVideoStats(ARSTREAM2_RtpReceiver_t *receiver, const ARSTREAM2_H264_VideoStats_t *videoStats);
 
 
 /**

@@ -1085,6 +1085,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->rtcpReceiverContext.rtcpByteRate = ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
         retReceiver->rtcpReceiverContext.cname = retReceiver->canonicalName;
         retReceiver->rtcpReceiverContext.name = retReceiver->friendlyName;
+        retReceiver->rtcpReceiverContext.videoStats.sendTimeInterval = config->videoStatsSendTimeInterval;
 
         if (retReceiver->rtpReceiverContext.maxPacketSize < sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t))
         {
@@ -1584,9 +1585,20 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
             if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
+                int generateVideoStats = 0;
+
+                if ((receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime)
+                        && (receiver->rtcpReceiverContext.videoStats.sendTimeInterval > 0)
+                        && ((receiver->rtcpReceiverContext.videoStats.lastSendTime == 0)
+                            || (curTime >= receiver->rtcpReceiverContext.videoStats.lastSendTime + receiver->rtcpReceiverContext.videoStats.sendTimeInterval)))
+                {
+                    generateVideoStats = 1;
+                    receiver->rtcpReceiverContext.videoStats.lastSendTime = curTime;
+                    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 0;
+                }
 
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
-                                                                     curTime, 1, 1, 1, &receiver->rtcpReceiverContext, &size);
+                                                                     curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
                 if ((ret == 0) && (size > 0))
                 {
                     bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
@@ -1781,9 +1793,20 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
             if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
+                int generateVideoStats = 0;
+
+                if ((receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime)
+                        && (receiver->rtcpReceiverContext.videoStats.sendTimeInterval > 0)
+                        && ((receiver->rtcpReceiverContext.videoStats.lastSendTime == 0)
+                            || (curTime >= receiver->rtcpReceiverContext.videoStats.lastSendTime + receiver->rtcpReceiverContext.videoStats.sendTimeInterval)))
+                {
+                    generateVideoStats = 1;
+                    receiver->rtcpReceiverContext.videoStats.lastSendTime = curTime;
+                    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 0;
+                }
 
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
-                                                                     curTime, 1, 1, 1, &receiver->rtcpReceiverContext, &size);
+                                                                     curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
                 if ((ret == 0) && (size > 0))
                 {
                     ssize_t bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
@@ -1866,6 +1889,56 @@ void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param)
     {
         return ARSTREAM2_RtpReceiver_RunNetThread(ARSTREAM2_RtpReceiver_t_Param);
     }
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_UpdateVideoStats(ARSTREAM2_RtpReceiver_t *receiver, const ARSTREAM2_H264_VideoStats_t *videoStats)
+{
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int i, j;
+
+    if ((receiver == NULL) || (videoStats == 0))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    receiver->rtcpReceiverContext.videoStats.timestamp = videoStats->timestamp;
+    receiver->rtcpReceiverContext.videoStats.rssi = videoStats->rssi;
+    receiver->rtcpReceiverContext.videoStats.totalFrameCount = videoStats->totalFrameCount;
+    receiver->rtcpReceiverContext.videoStats.outputFrameCount = videoStats->outputFrameCount;
+    receiver->rtcpReceiverContext.videoStats.erroredOutputFrameCount = videoStats->erroredOutputFrameCount;
+    receiver->rtcpReceiverContext.videoStats.missedFrameCount = videoStats->missedFrameCount;
+    receiver->rtcpReceiverContext.videoStats.discardedFrameCount = videoStats->discardedFrameCount;
+    receiver->rtcpReceiverContext.videoStats.erroredSecondCount = videoStats->erroredSecondCount;
+
+#if ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
+    #error "MB_STATUS_ZONE_COUNT mismatch!"
+#endif
+#if ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
+    #error "MB_STATUS_CLASS_COUNT mismatch!"
+#endif
+
+    for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+    {
+        receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone[i] = videoStats->erroredSecondCountByZone[i];
+    }
+    for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
+    {
+        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
+        {
+            receiver->rtcpReceiverContext.videoStats.macroblockStatus[j][i] = videoStats->macroblockStatus[j][i];
+        }
+    }
+    receiver->rtcpReceiverContext.videoStats.timestampDeltaIntegral = videoStats->timestampDeltaIntegral;
+    receiver->rtcpReceiverContext.videoStats.timestampDeltaIntegralSq = videoStats->timestampDeltaIntegralSq;
+    receiver->rtcpReceiverContext.videoStats.timingErrorIntegral = videoStats->timingErrorIntegral;
+    receiver->rtcpReceiverContext.videoStats.timingErrorIntegralSq = videoStats->timingErrorIntegralSq;
+    receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegral = videoStats->estimatedLatencyIntegral;
+    receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegralSq = videoStats->estimatedLatencyIntegralSq;
+
+    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 1;
+
+    return ret;
 }
 
 
