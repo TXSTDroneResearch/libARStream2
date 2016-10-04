@@ -12,15 +12,7 @@
 
 #define ARSTREAM2_STREAM_RECEIVER_JNI_TAG "ARSTREAM2_StreamReceiver_JNI"
 
-#define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
-#ifdef ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
-    #include <stdio.h>
-    #define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264 "/sdcard/FF/stream_h264"
-    #define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4 "/sdcard/FF/stream_mp4"
-    #define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILENAME "stream"
-    #define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_H264 "264"
-    #define ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_MP4 "mp4"
-#endif
+#define ARSTREAM2_STREAM_RECEIVER_JNI_DEBUG_PATH "/sdcard/FF/streamdebug"
 
 static jmethodID g_onSpsPpsReady = 0;
 static jmethodID g_getFreeBufferIdx = 0;
@@ -66,7 +58,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
     config.replaceStartCodesWithNaluSize = 0;
     config.generateSkippedPSlices = 1;
     config.generateFirstGrayIFrame = 1;
-    config.debugPath = "/sdcard/FF/streamdebug";
+    config.debugPath = ARSTREAM2_STREAM_RECEIVER_JNI_DEBUG_PATH;
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, &net_config, NULL);
@@ -80,48 +72,6 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeNetInit(JNIEnv *env, jobj
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Error in ARSTREAM2_StreamReceiver_Init(): %s", ARSTREAM2_Error_ToString(result));
         return (jlong)(intptr_t)NULL;
     }
-
-#ifdef ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
-    {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        char *pszFileExt = NULL;
-        szOutputFileName[0] = '\0';
-        if ((access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4, F_OK) == 0) && (access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4;
-            pszFileExt = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_MP4;
-        }
-        else if ((access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264, F_OK) == 0) && (access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264;
-            pszFileExt = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_H264;
-        }
-        if ((pszFilePath) && (pszFileExt))
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.%s", pszFilePath, ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILENAME, i, pszFileExt);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            result = ARSTREAM2_StreamReceiver_StartRecorder(streamReceiverHandle, szOutputFileName);
-            if (result != ARSTREAM2_OK)
-            {
-                ARSAL_PRINT (ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARSTREAM2_StreamReceiver_StartRecording() failed: %s", ARSTREAM2_Error_ToString(result));
-            }
-        }
-    }
-#endif //#ifdef ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
 
     return (jlong)(intptr_t)streamReceiverHandle;
 }
@@ -150,7 +100,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
     config.replaceStartCodesWithNaluSize = 0;
     config.generateSkippedPSlices = 1;
     config.generateFirstGrayIFrame = 1;
-    config.debugPath = "/sdcard/FF/streamdebug";
+    config.debugPath = ARSTREAM2_STREAM_RECEIVER_JNI_DEBUG_PATH;
 
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = 0;
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_Init(&streamReceiverHandle, &config, NULL, &mux_config);
@@ -163,48 +113,6 @@ Java_com_parrot_arsdk_arstream2_ARStream2Manager_nativeMuxInit(JNIEnv *env, jobj
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Error in ARSTREAM2_StreamReceiver_Init(): %s", ARSTREAM2_Error_ToString(result));
         return (jlong)(intptr_t)NULL;
     }
-
-#ifdef ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
-    {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
-        char *pszFileExt = NULL;
-        szOutputFileName[0] = '\0';
-        if ((access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4, F_OK) == 0) && (access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_MP4;
-            pszFileExt = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_MP4;
-        }
-        else if ((access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264, F_OK) == 0) && (access(ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ANDROID_PATH_H264;
-            pszFileExt = ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILE_EXT_H264;
-        }
-        if ((pszFilePath) && (pszFileExt))
-        {
-            for (i = 0; i < 1000; i++)
-            {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.%s", pszFilePath, ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_FILENAME, i, pszFileExt);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
-                szOutputFileName[0] = '\0';
-            }
-        }
-
-        if (strlen(szOutputFileName))
-        {
-            result = ARSTREAM2_StreamReceiver_StartRecorder(streamReceiverHandle, szOutputFileName);
-            if (result != ARSTREAM2_OK)
-            {
-                ARSAL_PRINT (ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARSTREAM2_StreamReceiver_StartRecording() failed: %s", ARSTREAM2_Error_ToString(result));
-            }
-        }
-    }
-#endif //#ifdef ARSTREAM2_STREAM_RECEIVER_JNI_RECORD_ENABLE
 
     return (jlong)(intptr_t)streamReceiverHandle;
 }

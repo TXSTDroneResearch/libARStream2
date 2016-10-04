@@ -102,6 +102,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
 
     /* Debug files */
     char *friendlyName;
+    char *dateAndTime;
     char *debugPath;
     char *videoStatsFileName;
     uint64_t videoStatsFileOutputTimestamp;
@@ -183,10 +184,17 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         {
             streamReceiver->friendlyName = strndup(config->canonicalName, 40);
         }
+        char szDate[200];
+        time_t rawtime;
+        struct tm timeinfo;
+        time(&rawtime);
+        localtime_r(&rawtime, &timeinfo);
+        /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
+        strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
+        streamReceiver->dateAndTime = strndup(szDate, 200);
         ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
         ARSTREAM2_StreamReceiver_VideoStatsFileOpen(streamReceiver);
     }
-
     if (ret == ARSTREAM2_OK)
     {
         int mutexInitRet = ARSAL_Mutex_Init(&(streamReceiver->fifoMutex));
@@ -392,6 +400,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
             free(streamReceiver->debugPath);
             free(streamReceiver->friendlyName);
+            free(streamReceiver->dateAndTime);
             free(streamReceiver);
         }
         *streamReceiverHandle = NULL;
@@ -452,6 +461,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
     free(streamReceiver->debugPath);
     free(streamReceiver->friendlyName);
+    free(streamReceiver->dateAndTime);
 
     free(streamReceiver);
     *streamReceiverHandle = NULL;
@@ -472,18 +482,14 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
         if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
         {
             // directory exists and we have write permission
-            int i;
-            for (i = 0; i < 1000; i++)
+            snprintf(szOutputFileName, 500, "%s/%s/%s_%s.%s", streamReceiver->debugPath,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME,
+                     streamReceiver->dateAndTime,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
+            if (access(szOutputFileName, F_OK) != -1)
             {
-                snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILENAME, i,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_FILEEXT);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
+                // the file already exists
                 szOutputFileName[0] = '\0';
             }
         }
@@ -516,17 +522,12 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
     {
         char szTitle[200];
         int titleLen = 0;
-        time_t rawtime;
-        struct tm timeinfo;
-        time(&rawtime);
-        localtime_r(&rawtime, &timeinfo);
-        /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
         szTitle[0] = '\0';
         if ((streamReceiver->friendlyName) && (strlen(streamReceiver->friendlyName)))
         {
             titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s ", streamReceiver->friendlyName);
         }
-        titleLen += strftime(szTitle + titleLen, 200 - titleLen, "%FT%H%M%S%z", &timeinfo);
+        titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s", streamReceiver->dateAndTime);
         ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Video stats output file title: '%s'", szTitle);
         fprintf(streamReceiver->videoStatsFile, "# %s\n", szTitle);
         fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount erroredSecondCount");
@@ -1902,22 +1903,18 @@ static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_
     if ((streamReceiver->debugPath) && (strlen(streamReceiver->debugPath)))
     {
         snprintf(szOutputFileName, 500, "%s/%s", streamReceiver->debugPath,
-                 ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH);
+                 ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_OUTPUT_PATH);
         if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
         {
             // directory exists and we have write permission
-            int i;
-            for (i = 0; i < 1000; i++)
+            snprintf(szOutputFileName, 500, "%s/%s/%s_%s.%s", streamReceiver->debugPath,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME,
+                     streamReceiver->dateAndTime,
+                     ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT);
+            if (access(szOutputFileName, F_OK) != -1)
             {
-                snprintf(szOutputFileName, 500, "%s/%s/%s_%03d.%s", streamReceiver->debugPath,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_PATH,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME, i,
-                         ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
+                // the file already exists
                 szOutputFileName[0] = '\0';
             }
         }
