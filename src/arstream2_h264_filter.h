@@ -83,6 +83,15 @@ typedef struct ARSTREAM2_H264Filter_VideoStats_s
     uint32_t erroredSecondCountByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
     uint64_t erroredSecondStartTimeByZone[ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
     uint32_t macroblockStatus[ARSTREAM2_H264_FILTER_MB_STATUS_CLASS_COUNT][ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT];
+    uint32_t timestampDelta;
+    uint64_t timestampDeltaIntegral;
+    uint64_t timestampDeltaIntegralSq;
+    int32_t timingError;
+    uint64_t timingErrorIntegral;
+    uint64_t timingErrorIntegralSq;
+    uint32_t estimatedLatency;
+    uint64_t estimatedLatencyIntegral;
+    uint64_t estimatedLatencyIntegralSq;
 
 } ARSTREAM2_H264Filter_VideoStats_t;
 

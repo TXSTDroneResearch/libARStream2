@@ -51,6 +51,15 @@ typedef struct ARSTREAM2_StreamReceiver_s
     int spsSize;
     uint8_t *pPps;
     int ppsSize;
+    uint64_t lastAuNtpTimestamp;
+    uint64_t lastAuNtpTimestampRaw;
+    uint64_t lastAuOutputTimestamp;
+    uint64_t timestampDeltaIntegral;
+    uint64_t timestampDeltaIntegralSq;
+    uint64_t timingErrorIntegral;
+    uint64_t timingErrorIntegralSq;
+    uint64_t estimatedLatencyIntegral;
+    uint64_t estimatedLatencyIntegralSq;
 
     struct
     {
@@ -92,6 +101,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
     } recorder;
 
     /* Debug files */
+    char *friendlyName;
     char *debugPath;
     char *videoStatsFileName;
     uint64_t videoStatsFileOutputTimestamp;
@@ -110,7 +120,7 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_
 static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceiver_t *streamReceiver);
-static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au);
+static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au, uint64_t curTime);
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *streamReceiverHandle,
@@ -164,6 +174,14 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         if ((config->debugPath) && (strlen(config->debugPath)))
         {
             streamReceiver->debugPath = strdup(config->debugPath);
+        }
+        if ((config->friendlyName) && (strlen(config->friendlyName)))
+        {
+            streamReceiver->friendlyName = strndup(config->friendlyName, 40);
+        }
+        else if ((config->canonicalName) && (strlen(config->canonicalName)))
+        {
+            streamReceiver->friendlyName = strndup(config->canonicalName, 40);
         }
         ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
         ARSTREAM2_StreamReceiver_VideoStatsFileOpen(streamReceiver);
@@ -373,6 +391,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (fifoMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->fifoMutex));
             ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
             free(streamReceiver->debugPath);
+            free(streamReceiver->friendlyName);
             free(streamReceiver);
         }
         *streamReceiverHandle = NULL;
@@ -432,6 +451,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     free(streamReceiver->pPps);
     ARSTREAM2_StreamReceiver_VideoStatsFileClose(streamReceiver);
     free(streamReceiver->debugPath);
+    free(streamReceiver->friendlyName);
 
     free(streamReceiver);
     *streamReceiverHandle = NULL;
@@ -494,6 +514,21 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
 
     if (streamReceiver->videoStatsFile)
     {
+        char szTitle[200];
+        int titleLen = 0;
+        time_t rawtime;
+        struct tm timeinfo;
+        time(&rawtime);
+        localtime_r(&rawtime, &timeinfo);
+        /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
+        szTitle[0] = '\0';
+        if ((streamReceiver->friendlyName) && (strlen(streamReceiver->friendlyName)))
+        {
+            titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s ", streamReceiver->friendlyName);
+        }
+        titleLen += strftime(szTitle + titleLen, 200 - titleLen, "%FT%H%M%S%z", &timeinfo);
+        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "Video stats output file title: '%s'", szTitle);
+        fprintf(streamReceiver->videoStatsFile, "# %s\n", szTitle);
         fprintf(streamReceiver->videoStatsFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount erroredSecondCount");
         int i, j;
         for (i = 0; i < ARSTREAM2_H264_FILTER_MB_STATUS_ZONE_COUNT; i++)
@@ -507,6 +542,7 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileOpen(ARSTREAM2_StreamReceiver
                 fprintf(streamReceiver->videoStatsFile, " macroblockStatus[%d][%d]", j, i);
             }
         }
+        fprintf(streamReceiver->videoStatsFile, " timestampDeltaIntegral timestampDeltaIntegralSq timingErrorIntegral timingErrorIntegralSq estimatedLatencyIntegral estimatedLatencyIntegralSq");
         fprintf(streamReceiver->videoStatsFile, "\n");
     }
 }
@@ -524,7 +560,7 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileClose(ARSTREAM2_StreamReceive
 }
 
 
-static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au)
+static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264Filter_VideoStats_t *videoStats, ARSTREAM2_H264_AccessUnit_t *au, uint64_t curTime)
 {
     if ((!videoStats) || (!au))
     {
@@ -535,10 +571,6 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceive
     {
         return;
     }
-
-    struct timespec t1;
-    ARSAL_Time_GetTime(&t1);
-    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
     if (streamReceiver->videoStatsFileOutputTimestamp == 0)
     {
@@ -577,6 +609,10 @@ static void ARSTREAM2_StreamReceiver_VideoStatsFileWrite(ARSTREAM2_StreamReceive
                     fprintf(streamReceiver->videoStatsFile, " %lu", (long unsigned int)videoStats->macroblockStatus[j][i]);
                 }
             }
+            fprintf(streamReceiver->videoStatsFile, " %llu %llu %llu %llu %llu %llu",
+                    (long long unsigned int)videoStats->timestampDeltaIntegral, (long long unsigned int)videoStats->timestampDeltaIntegralSq,
+                    (long long unsigned int)videoStats->timingErrorIntegral,(long long unsigned int)videoStats->timingErrorIntegralSq,
+                    (long long unsigned int)videoStats->estimatedLatencyIntegral, (long long unsigned int)videoStats->estimatedLatencyIntegralSq);
             fprintf(streamReceiver->videoStatsFile, "\n");
         }
         streamReceiver->videoStatsFileOutputTimestamp = curTime;
@@ -799,6 +835,24 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
     ret = ARSTREAM2_H264Filter_ProcessAu(streamReceiver->filter, &auItem->au);
     if (ret == 1)
     {
+        if (auItem->au.videoStatsAvailable)
+        {
+            ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
+            uint32_t ntpTimestampDelta = ((auItem->au.ntpTimestamp) && (streamReceiver->lastAuNtpTimestamp))
+                    ? (uint32_t)(auItem->au.ntpTimestamp - streamReceiver->lastAuNtpTimestamp) : 0;
+            uint32_t ntpTimestampRawDelta = ((auItem->au.ntpTimestampRaw) && (streamReceiver->lastAuNtpTimestampRaw))
+                    ? (uint32_t)(auItem->au.ntpTimestampRaw - streamReceiver->lastAuNtpTimestampRaw) : 0;
+            vs->timestampDelta = ((auItem->au.ntpTimestamp) && (streamReceiver->lastAuNtpTimestamp))
+                    ? ntpTimestampDelta : ((auItem->au.ntpTimestampRaw) && (streamReceiver->lastAuNtpTimestampRaw))
+                        ? ntpTimestampRawDelta : 0;
+            streamReceiver->timestampDeltaIntegral += vs->timestampDelta;
+            vs->timestampDeltaIntegral = streamReceiver->timestampDeltaIntegral;
+            streamReceiver->timestampDeltaIntegralSq += (uint64_t)vs->timestampDelta * (uint64_t)vs->timestampDelta;
+            vs->timestampDeltaIntegralSq = streamReceiver->timestampDeltaIntegralSq;
+        }
+        streamReceiver->lastAuNtpTimestamp = auItem->au.ntpTimestamp;
+        streamReceiver->lastAuNtpTimestampRaw = auItem->au.ntpTimestampRaw;
+
         /* application output */
         ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
         int appOutputRunning = streamReceiver->appOutput.running;
@@ -810,6 +864,31 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_AppOutputAuEnqueue() failed (%d)", ret);
             }
+        }
+        else if (auItem->au.videoStatsAvailable)
+        {
+            struct timespec t1;
+            ARSAL_Time_GetTime(&t1);
+            uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+            ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer;
+            uint32_t outputTimestampDelta = (streamReceiver->lastAuOutputTimestamp)
+                    ? (uint32_t)(curTime - streamReceiver->lastAuOutputTimestamp) : 0;
+            uint32_t estimatedLatency = ((auItem->au.ntpTimestampLocal) && (curTime > auItem->au.ntpTimestampLocal))
+                    ? (uint32_t)(curTime - auItem->au.ntpTimestampLocal) : 0;
+            int32_t timingError = ((vs->timestampDelta) && (streamReceiver->lastAuOutputTimestamp))
+                    ? ((int32_t)vs->timestampDelta - (int32_t)outputTimestampDelta) : 0;
+            vs->timingError = timingError;
+            streamReceiver->timingErrorIntegral += (timingError < 0) ? (uint32_t)(-timingError) : (uint32_t)timingError;
+            vs->timingErrorIntegral = streamReceiver->timingErrorIntegral;
+            streamReceiver->timingErrorIntegralSq += (int64_t)timingError * (int64_t)timingError;
+            vs->timingErrorIntegralSq = streamReceiver->timingErrorIntegralSq;
+            vs->estimatedLatency = estimatedLatency;
+            streamReceiver->estimatedLatencyIntegral += estimatedLatency;
+            vs->estimatedLatencyIntegral = streamReceiver->estimatedLatencyIntegral;
+            streamReceiver->estimatedLatencyIntegralSq += (uint64_t)estimatedLatency * (uint64_t)estimatedLatency;
+            vs->estimatedLatencyIntegralSq = streamReceiver->estimatedLatencyIntegralSq;
+            streamReceiver->lastAuOutputTimestamp = curTime;
+            ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, vs, &auItem->au, curTime);
         }
 
         /* stream recording */
@@ -823,11 +902,6 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_RecorderAuEnqueue() failed (%d)", ret);
             }
-        }
-
-        if (auItem->au.videoStatsAvailable)
-        {
-            ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, (ARSTREAM2_H264Filter_VideoStats_t*)auItem->au.buffer->videoStatsBuffer, &auItem->au);
         }
     }
     else
@@ -875,6 +949,9 @@ static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoIt
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer");
         return -1;
     }
+
+    streamReceiver->lastAuNtpTimestamp = auItem->au.ntpTimestamp;
+    streamReceiver->lastAuNtpTimestampRaw = auItem->au.ntpTimestampRaw;
 
     /* application output */
     ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
@@ -1327,6 +1404,30 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                             break;
                     }
 
+                    ARSAL_Time_GetTime(&t1);
+                    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+                    if (au->videoStatsAvailable)
+                    {
+                        ARSTREAM2_H264Filter_VideoStats_t *vs = (ARSTREAM2_H264Filter_VideoStats_t*)au->buffer->videoStatsBuffer;
+                        uint32_t outputTimestampDelta = (streamReceiver->lastAuOutputTimestamp)
+                                ? (uint32_t)(curTime - streamReceiver->lastAuOutputTimestamp) : 0;
+                        uint32_t estimatedLatency = ((au->ntpTimestampLocal) && (curTime > au->ntpTimestampLocal))
+                                ? (uint32_t)(curTime - au->ntpTimestampLocal) : 0;
+                        int32_t timingError = ((vs->timestampDelta) && (streamReceiver->lastAuOutputTimestamp))
+                                ? ((int32_t)vs->timestampDelta - (int32_t)outputTimestampDelta) : 0;
+                        vs->timingError = timingError;
+                        streamReceiver->timingErrorIntegral += (timingError < 0) ? (uint32_t)(-timingError) : (uint32_t)timingError;
+                        vs->timingErrorIntegral = streamReceiver->timingErrorIntegral;
+                        streamReceiver->timingErrorIntegralSq += (int64_t)timingError * (int64_t)timingError;
+                        vs->timingErrorIntegralSq = streamReceiver->timingErrorIntegralSq;
+                        vs->estimatedLatency = estimatedLatency;
+                        streamReceiver->estimatedLatencyIntegral += estimatedLatency;
+                        vs->estimatedLatencyIntegral = streamReceiver->estimatedLatencyIntegral;
+                        streamReceiver->estimatedLatencyIntegralSq += (uint64_t)estimatedLatency * (uint64_t)estimatedLatency;
+                        vs->estimatedLatencyIntegralSq = streamReceiver->estimatedLatencyIntegralSq;
+                        ARSTREAM2_StreamReceiver_VideoStatsFileWrite(streamReceiver, vs, au, curTime);
+                    }
+
                     /* timestamps and metadata */
                     memset(&auTimestamps, 0, sizeof(auTimestamps));
                     memset(&auMetadata, 0, sizeof(auMetadata));
@@ -1354,6 +1455,12 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         videoStats.missedFrameCount = vs->missedFrameCount;
                         videoStats.discardedFrameCount = vs->discardedFrameCount;
                         videoStats.erroredSecondCount = vs->erroredSecondCount;
+                        videoStats.timestampDeltaIntegral = vs->timestampDeltaIntegral;
+                        videoStats.timestampDeltaIntegralSq = vs->timestampDeltaIntegralSq;
+                        videoStats.timingErrorIntegral = vs->timingErrorIntegral;
+                        videoStats.timingErrorIntegralSq = vs->timingErrorIntegralSq;
+                        videoStats.estimatedLatencyIntegral = vs->estimatedLatencyIntegral;
+                        videoStats.estimatedLatencyIntegralSq = vs->estimatedLatencyIntegralSq;
                         for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
                         {
                             videoStats.erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
@@ -1372,9 +1479,6 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         auMetadata.videoStats = NULL;
                     }
                     auMetadata.debugString = NULL; //TODO
-
-                    ARSAL_Time_GetTime(&t1);
-                    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
                     if (streamReceiver->appOutput.auReadyCallback)
                     {
@@ -1402,6 +1506,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                             }
                         }
                     }
+                    streamReceiver->lastAuOutputTimestamp = curTime;
                 }
             }
 

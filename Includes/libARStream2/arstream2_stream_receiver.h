@@ -118,6 +118,12 @@ typedef struct
     uint32_t erroredSecondCount;                                    /**< Errored second counter */
     uint32_t erroredSecondCountByZone[ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT]; /**< Errored second counters for each picture zone */
     uint32_t macroblockStatus[ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT][ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT]; /**< Macroblock status counters for each picture zone */
+    uint64_t timestampDeltaIntegral;                                /**< Frame timestamp delta integral value */
+    uint64_t timestampDeltaIntegralSq;                              /**< Frame timestamp delta squared integral value */
+    uint64_t timingErrorIntegral;                                   /**< Frame timing error integral value */
+    uint64_t timingErrorIntegralSq;                                 /**< Frame timing error squared integral value */
+    uint64_t estimatedLatencyIntegral;                              /**< Frame estimated latency integral value */
+    uint64_t estimatedLatencyIntegralSq;                            /**< Frame estimated latency squared integral value */
 
 } ARSTREAM2_StreamReceiver_VideoStats_t;
 
