@@ -1803,11 +1803,6 @@ static void ARSTREAM2_StreamReceiver_AutoStartRecorder(ARSTREAM2_StreamReceiver_
                      ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILENAME,
                      streamReceiver->dateAndTime,
                      ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT);
-            if (access(szOutputFileName, F_OK) != -1)
-            {
-                // the file already exists
-                szOutputFileName[0] = '\0';
-            }
         }
         else
         {

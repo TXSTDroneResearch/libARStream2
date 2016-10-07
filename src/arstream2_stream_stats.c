@@ -44,11 +44,6 @@ void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t
                      ARSTREAM2_STREAM_STATS_VIDEO_STATS_OUTPUT_FILENAME,
                      dateAndTime,
                      ARSTREAM2_STREAM_STATS_VIDEO_STATS_OUTPUT_FILEEXT);
-            if (access(szOutputFileName, F_OK) != -1)
-            {
-                // the file already exists
-                szOutputFileName[0] = '\0';
-            }
         }
         else
         {
