@@ -7,6 +7,7 @@
 
 #include <config.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -93,23 +94,9 @@
     } while (0)
 
 
-#define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
-    #include <stdio.h>
-
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_DRONE
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_DRONE "/data/ftp/internal_000/streamdebug"
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_NAP_USB
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_USB "/tmp/mnt/STREAMDEBUG/streamdebug"
-    //#define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_INTERNAL "/data/skycontroller/streamdebug"
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL "/sdcard/FF/streamdebug"
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_PCLINUX
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_PCLINUX "./streamdebug"
-
-    #define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILENAME "sender_monitor"
-#endif
+#define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH "rtpmonitor"
+#define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILENAME "sender_rtp_monitor"
+#define ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILEEXT "dat"
 
 
 typedef struct ARSTREAM2_RtpSender_MonitoringPoint_s {
@@ -175,13 +162,13 @@ struct ARSTREAM2_RtpSender_t {
     unsigned int msgVecCount;
 
     /* Monitoring */
+    char *dateAndTime;
+    char *debugPath;
     ARSAL_Mutex_t monitoringMutex;
     int monitoringCount;
     int monitoringIndex;
     ARSTREAM2_RtpSender_MonitoringPoint_t monitoringPoint[ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS];
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     FILE* fMonitorOut;
-#endif
     unsigned int timeoutDropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     unsigned int timeoutDropStatsTotalPackets;
     uint64_t timeoutDropLogStartTime;
@@ -559,7 +546,6 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
 
     ARSAL_Mutex_Unlock(&(sender->monitoringMutex));
 
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     if (sender->fMonitorOut)
     {
         fprintf(sender->fMonitorOut, "%llu ", (long long unsigned int)ntpTimestamp);
@@ -568,7 +554,6 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
         fprintf(sender->fMonitorOut, "%lu %u %u %u %u %lu %lu\n", (long unsigned int)rtpTimestamp, seqNum, markerBit,
                 importance, priority, (long unsigned int)bytesSent, (long unsigned int)bytesDropped);
     }
-#endif
 }
 
 
@@ -703,6 +688,15 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: max packet size is too small to hold a sender report");
             internalError = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        }
+
+        if ((config->debugPath) && (strlen(config->debugPath)))
+        {
+            retSender->debugPath = strdup(config->debugPath);
+        }
+        if ((config->dateAndTime) && (strlen(config->dateAndTime)))
+        {
+            retSender->dateAndTime = strdup(config->dateAndTime);
         }
 
         struct timespec t1;
@@ -859,56 +853,26 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
     }
 
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
     if (internalError == ARSTREAM2_OK)
     {
-        int i;
-        char szOutputFileName[128];
-        char *pszFilePath = NULL;
+        char szOutputFileName[500];
         szOutputFileName[0] = '\0';
-        if (0)
+
+        if ((retSender->debugPath) && (strlen(retSender->debugPath)) && (retSender->dateAndTime) && (strlen(retSender->dateAndTime)))
         {
-        }
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_DRONE
-        else if ((access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_DRONE, F_OK) == 0) && (access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_DRONE, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_DRONE;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_NAP_USB
-        else if ((access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_USB, F_OK) == 0) && (access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_USB, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_USB;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_NAP_INTERNAL
-        else if ((access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_NAP_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_ANDROID_INTERNAL
-        else if ((access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, F_OK) == 0) && (access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_ANDROID_INTERNAL;
-        }
-#endif
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_ALLOW_PCLINUX
-        else if ((access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_PCLINUX, F_OK) == 0) && (access(ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_PCLINUX, W_OK) == 0))
-        {
-            pszFilePath = ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH_PCLINUX;
-        }
-#endif
-        if (pszFilePath)
-        {
-            for (i = 0; i < 1000; i++)
+            snprintf(szOutputFileName, 500, "%s/%s", retSender->debugPath,
+                     ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH);
+            if ((access(szOutputFileName, F_OK) == 0) && (access(szOutputFileName, W_OK) == 0))
             {
-                snprintf(szOutputFileName, 128, "%s/%s_%03d.dat", pszFilePath, ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILENAME, i);
-                if (access(szOutputFileName, F_OK) == -1)
-                {
-                    // file does not exist
-                    break;
-                }
+                // directory exists and we have write permission
+                snprintf(szOutputFileName, 500, "%s/%s/%s_%s.%s", retSender->debugPath,
+                         ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_PATH,
+                         ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILENAME,
+                         retSender->dateAndTime,
+                         ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT_FILEEXT);
+            }
+            else
+            {
                 szOutputFileName[0] = '\0';
             }
         }
@@ -918,7 +882,11 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             retSender->fMonitorOut = fopen(szOutputFileName, "w");
             if (!retSender->fMonitorOut)
             {
-                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Unable to open monitor output file '%s'", szOutputFileName);
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Unable to open RTP monitor output file '%s'", szOutputFileName);
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_SENDER_TAG, "Opened RTP monitor output file '%s'", szOutputFileName);
             }
         }
 
@@ -927,7 +895,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             fprintf(retSender->fMonitorOut, "ntpTimestamp inputTimestamp outputTimestamp rtpTimestamp rtpSeqNum rtpMarkerBit importance priority bytesSent bytesDropped\n");
         }
     }
-#endif //#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
 
     if ((internalError != ARSTREAM2_OK) &&
         (retSender != NULL))
@@ -979,12 +946,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         free(retSender->clientAddr);
         free(retSender->mcastAddr);
         free(retSender->mcastIfaceAddr);
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
+        free(retSender->debugPath);
+        free(retSender->dateAndTime);
         if (retSender->fMonitorOut)
         {
             fclose(retSender->fMonitorOut);
         }
-#endif
         free(retSender);
         retSender = NULL;
     }
@@ -1058,12 +1025,12 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             free((*sender)->clientAddr);
             free((*sender)->mcastAddr);
             free((*sender)->mcastIfaceAddr);
-#ifdef ARSTREAM2_RTP_SENDER_MONITORING_OUTPUT
+            free((*sender)->debugPath);
+            free((*sender)->dateAndTime);
             if ((*sender)->fMonitorOut)
             {
                 fclose((*sender)->fMonitorOut);
             }
-#endif
             free(*sender);
             *sender = NULL;
             retVal = ARSTREAM2_OK;

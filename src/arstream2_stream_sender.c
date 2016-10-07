@@ -120,6 +120,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
         senderConfig.maxBitrate = config->maxBitrate;
         senderConfig.maxLatencyMs = config->maxLatencyMs;
+        senderConfig.debugPath = streamSender->debugPath;
+        senderConfig.dateAndTime = streamSender->dateAndTime;
         for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
         {
             senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs[i];

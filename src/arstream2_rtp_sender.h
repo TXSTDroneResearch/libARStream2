@@ -66,6 +66,8 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
     int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
+    const char *dateAndTime;
+    const char *debugPath;
 
 } ARSTREAM2_RtpSender_Config_t;
 
