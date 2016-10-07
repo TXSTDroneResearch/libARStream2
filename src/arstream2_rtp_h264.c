@@ -423,7 +423,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue,
-                                                  uint64_t curTime, unsigned int *newPacketsCount)
+                                                  uint64_t curTime, int dropOnTimeout, unsigned int *newPacketsCount)
 {
     ARSTREAM2_H264_NalUnit_t nalu;
     int ret = 0, fifoRes, naluCount = 0, err;
@@ -458,7 +458,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
         }
 
         /* check that the NALU is not too old */
-        if ((nalu.timeoutTimestamp == 0) || (nalu.timeoutTimestamp > curTime))
+        if ((!dropOnTimeout) || ((nalu.timeoutTimestamp == 0) || (nalu.timeoutTimestamp > curTime)))
         {
             /* Fragments count evaluation */
             unsigned int fragmentCount = (nalu.naluSize + ((context->useRtpHeaderExtensions) ? nalu.metadataSize : 0) + context->targetPacketSize / 2) / context->targetPacketSize;

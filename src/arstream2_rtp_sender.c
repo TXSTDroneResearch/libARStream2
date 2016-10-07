@@ -29,7 +29,12 @@
 
 
 //#define ARSTREAM2_RTP_SENDER_RANDOM_DROP
-#define ARSTREAM2_RTP_SENDER_DROP_RATIO 0.1
+#define ARSTREAM2_RTP_SENDER_RANDOM_DROP_RATIO 0.01
+//#define ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
+#define ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN 0
+#define ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MAX 60000
+#define ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN 0.8
+#define ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MAX 1.0
 
 /**
  * Tag for ARSAL_PRINT
@@ -1506,9 +1511,15 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 
         /* RTP packets creation */
         unsigned int newPacketsCount = 0;
+#ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
+        int dropOnTimeout = 0;
+#else
+        int dropOnTimeout = 1;
+#endif
         ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
         ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo,
-                                                            &sender->packetFifo, &sender->packetFifoQueue, curTime, &newPacketsCount);
+                                                            &sender->packetFifo, &sender->packetFifoQueue,
+                                                            dropOnTimeout, curTime, &newPacketsCount);
         ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (ret != 0)
         {
@@ -1518,7 +1529,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_DROP
         ret = ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(&sender->rtpSenderContext, &sender->packetFifo,
-                                                        &sender->packetFifoQueue, ARSTREAM2_RTP_SENDER_DROP_RATIO, curTime);
+                                                        &sender->packetFifoQueue, ARSTREAM2_RTP_SENDER_RANDOM_DROP_RATIO, curTime);
         if (ret < 0)
         {
             if (ret != -2)
@@ -1526,6 +1537,11 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_Sender_PacketFifoRandomDrop() failed (%d)", ret);
             }
         }
+#endif
+
+#ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
+        uint32_t waitTime = ((uint64_t)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN);
+        usleep(waitTime);
 #endif
 
         /* RTP packets sending */
@@ -1543,6 +1559,10 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             {
                 int msgVecCount = ret;
                 int msgVecSentCount = 0;
+
+#ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
+                msgVecCount = round((float)msgVecCount * ((float)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN));
+    #endif
 
                 packetsPending = 1;
                 ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0);
