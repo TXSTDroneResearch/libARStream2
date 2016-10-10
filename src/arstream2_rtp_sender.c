@@ -151,7 +151,6 @@ struct ARSTREAM2_RtpSender_t {
     int controlSocket;
     
     /* NAL unit FIFO */
-    ARSAL_Mutex_t naluFifoMutex;
     int naluFifoPipe[2];
     ARSTREAM2_H264_NaluFifo_t naluFifo;
 
@@ -564,7 +563,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     int monitoringMutexWasInit = 0;
     int packetFifoWasCreated = 0;
     int naluFifoWasCreated = 0;
-    int naluFifoMutexWasInit = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -751,18 +749,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             naluFifoWasCreated = 1;
         }
     }
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retSender->naluFifoMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            naluFifoMutexWasInit = 1;
-        }
-    }
 
     /* Setup the packet FIFO */
     if (internalError == ARSTREAM2_OK)
@@ -935,10 +921,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             ARSTREAM2_H264_NaluFifoFree(&retSender->naluFifo);
         }
-        if (naluFifoMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retSender->naluFifoMutex));
-        }
         free(retSender->msgVec);
         free(retSender->rtcpMsgBuffer);
         free(retSender->canonicalName);
@@ -998,7 +980,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
             ARSTREAM2_RTP_PacketFifoFree(&(*sender)->packetFifo);
             ARSTREAM2_H264_NaluFifoFree(&(*sender)->naluFifo);
-            ARSAL_Mutex_Destroy(&((*sender)->naluFifoMutex));
             if ((*sender)->naluFifoPipe[0] != -1)
             {
                 close((*sender)->naluFifoPipe[0]);
@@ -1079,8 +1060,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
 
     if (retVal == ARSTREAM2_OK)
     {
-        ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-
         ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
         if (item)
         {
@@ -1117,7 +1096,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, 
             retVal = ARSTREAM2_ERROR_QUEUE_FULL;
         }
 
-        ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (sender->naluFifoPipe[1] != -1)
         {
             char * buff = "x";
@@ -1167,8 +1145,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
 
     if (retVal == ARSTREAM2_OK)
     {
-        ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
-
         for (k = 0; k < naluCount; k++)
         {
             ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
@@ -1210,7 +1186,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
             }
         }
 
-        ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (sender->naluFifoPipe[1] != -1)
         {
             char * buff = "x";
@@ -1239,10 +1214,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
         ARSAL_Time_GetTime(&t1);
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-        ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
         int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
-        ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
-
         if (ret != 0)
         {
             retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
@@ -1483,11 +1455,9 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 #else
         int dropOnTimeout = 1;
 #endif
-        ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
         ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo,
                                                             &sender->packetFifo, &sender->packetFifoQueue,
                                                             dropOnTimeout, curTime, &newPacketsCount);
-        ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
@@ -1647,9 +1617,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     /* flush the NALU FIFO and packet FIFO */
     ARSAL_Time_GetTime(&t1);
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-    ARSAL_Mutex_Lock(&(sender->naluFifoMutex));
     ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
-    ARSAL_Mutex_Unlock(&(sender->naluFifoMutex));
     ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, &sender->packetFifo, curTime);
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");

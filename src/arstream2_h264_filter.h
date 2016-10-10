@@ -16,8 +16,6 @@
 #include <arpa/inet.h>
 
 #include <libARSAL/ARSAL_Print.h>
-#include <libARSAL/ARSAL_Mutex.h>
-#include <libARSAL/ARSAL_Thread.h>
 
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
@@ -47,7 +45,6 @@ typedef struct
 {
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
-    ARSAL_Mutex_t *fifoMutex;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
@@ -123,7 +120,6 @@ typedef struct ARSTREAM2_H264Filter_s
     /* NAL unit and access unit FIFO */
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSTREAM2_H264_AuFifo_t *auFifo;
-    ARSAL_Mutex_t *fifoMutex;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
 

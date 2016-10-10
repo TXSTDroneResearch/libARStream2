@@ -96,7 +96,6 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
-    ARSAL_Mutex_t *fifoMutex;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
@@ -249,7 +248,6 @@ struct ARSTREAM2_RtpReceiver_t {
     /* NAL unit and access unit FIFO */
     ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSTREAM2_H264_AuFifo_t *auFifo;
-    ARSAL_Mutex_t *fifoMutex;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;

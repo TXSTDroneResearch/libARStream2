@@ -209,6 +209,7 @@ typedef struct ARSTREAM2_H264_NaluFifo_s
     ARSTREAM2_H264_NaluFifoItem_t *tail;
     ARSTREAM2_H264_NaluFifoItem_t *free;
     ARSTREAM2_H264_NaluFifoItem_t *pool;
+    ARSAL_Mutex_t mutex;
 
 } ARSTREAM2_H264_NaluFifo_t;
 
@@ -286,6 +287,7 @@ typedef struct ARSTREAM2_H264_AuFifoQueue_s
     int count;
     ARSTREAM2_H264_AuFifoItem_t *head;
     ARSTREAM2_H264_AuFifoItem_t *tail;
+    ARSAL_Mutex_t mutex;
 
     struct ARSTREAM2_H264_AuFifoQueue_s* prev;
     struct ARSTREAM2_H264_AuFifoQueue_s* next;
@@ -306,6 +308,7 @@ typedef struct ARSTREAM2_H264_AuFifo_s
     int bufferPoolSize;
     ARSTREAM2_H264_AuFifoBuffer_t *bufferPool;
     ARSTREAM2_H264_AuFifoBuffer_t *bufferFree;
+    ARSAL_Mutex_t mutex;
 
 } ARSTREAM2_H264_AuFifo_t;
 
@@ -380,7 +383,7 @@ int ARSTREAM2_H264_AuFifoRemoveQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
 
 ARSTREAM2_H264_AuFifoBuffer_t* ARSTREAM2_H264_AuFifoGetBuffer(ARSTREAM2_H264_AuFifo_t *fifo);
 
-int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifoBuffer_t *buffer);
+int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoBuffer_t *buffer);
 
 int ARSTREAM2_H264_AuFifoUnrefBuffer(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoBuffer_t *buffer);
 

@@ -64,9 +64,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue,
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
-                                                  ARSAL_Mutex_t *naluFifoMutex,
                                                   ARSTREAM2_H264_AuFifo_t *auFifo,
-                                                  ARSAL_Mutex_t *auFifoMutex,
                                                   uint64_t curTime, ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext);
 
 #endif /* _ARSTREAM2_RTPH264_H_ */

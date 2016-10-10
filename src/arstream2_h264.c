@@ -155,6 +155,14 @@ int ARSTREAM2_H264_NaluFifoInit(ARSTREAM2_H264_NaluFifo_t *fifo, int maxCount)
     }
 
     memset(fifo, 0, sizeof(ARSTREAM2_H264_NaluFifo_t));
+
+    int mutexRet = ARSAL_Mutex_Init(&(fifo->mutex));
+    if (mutexRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Mutex creation failed (%d)", mutexRet);
+        return -1;
+    }
+
     fifo->size = maxCount;
     fifo->pool = malloc(maxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
     if (!fifo->pool)
@@ -188,6 +196,7 @@ int ARSTREAM2_H264_NaluFifoFree(ARSTREAM2_H264_NaluFifo_t *fifo)
         return -1;
     }
 
+    ARSAL_Mutex_Destroy(&(fifo->mutex));
     free(fifo->pool);
     memset(fifo, 0, sizeof(ARSTREAM2_H264_NaluFifo_t));
 
@@ -203,6 +212,8 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoPopFreeItem(ARSTREAM2_H264
         return NULL;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->free)
     {
         ARSTREAM2_H264_NaluFifoItem_t* cur = fifo->free;
@@ -210,10 +221,12 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoPopFreeItem(ARSTREAM2_H264
         if (cur->next) cur->next->prev = NULL;
         cur->prev = NULL;
         cur->next = NULL;
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         return cur;
     }
     else
     {
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "NALU FIFO is full");
         return NULL;
     }
@@ -228,6 +241,8 @@ int ARSTREAM2_H264_NaluFifoPushFreeItem(ARSTREAM2_H264_NaluFifo_t *fifo, ARSTREA
         return -1;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->free)
     {
         fifo->free->prev = item;
@@ -239,6 +254,8 @@ int ARSTREAM2_H264_NaluFifoPushFreeItem(ARSTREAM2_H264_NaluFifo_t *fifo, ARSTREA
     }
     fifo->free = item;
     item->prev = NULL;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return 0;
 }
@@ -252,8 +269,11 @@ int ARSTREAM2_H264_NaluFifoEnqueueItem(ARSTREAM2_H264_NaluFifo_t *fifo, ARSTREAM
         return -1;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->count >= fifo->size)
     {
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "NALU FIFO is full");
         return -2;
     }
@@ -275,6 +295,8 @@ int ARSTREAM2_H264_NaluFifoEnqueueItem(ARSTREAM2_H264_NaluFifo_t *fifo, ARSTREAM
     }
     fifo->count++;
 
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
+
     return 0;
 }
 
@@ -289,8 +311,11 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoDequeueItem(ARSTREAM2_H264
         return NULL;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if ((!fifo->head) || (!fifo->count))
     {
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "NALU FIFO is empty");
         return NULL;
     }
@@ -310,6 +335,8 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoDequeueItem(ARSTREAM2_H264
     }
     cur->prev = NULL;
     cur->next = NULL;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return cur;
 }
@@ -363,6 +390,13 @@ int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, i
     }
 
     memset(fifo, 0, sizeof(ARSTREAM2_H264_AuFifo_t));
+
+    int mutexRet = ARSAL_Mutex_Init(&(fifo->mutex));
+    if (mutexRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Mutex creation failed (%d)", mutexRet);
+        return -1;
+    }
 
     fifo->itemPoolSize = itemMaxCount;
     fifo->itemPool = malloc(itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
@@ -482,6 +516,7 @@ int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo)
         return -1;
     }
 
+    ARSAL_Mutex_Destroy(&(fifo->mutex));
     free(fifo->itemPool);
 
     if (fifo->bufferPool)
@@ -517,9 +552,18 @@ int ARSTREAM2_H264_AuFifoAddQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_
         return -1;
     }
 
+    int mutexRet = ARSAL_Mutex_Init(&(queue->mutex));
+    if (mutexRet != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Mutex creation failed (%d)", mutexRet);
+        return -1;
+    }
+
     queue->count = 0;
     queue->head = NULL;
     queue->tail = NULL;
+
+    ARSAL_Mutex_Lock(&(fifo->mutex));
 
     queue->prev = NULL;
     queue->next = fifo->queue;
@@ -527,8 +571,11 @@ int ARSTREAM2_H264_AuFifoAddQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_
     {
         queue->next->prev = queue;
     }
+
     fifo->queue = queue;
     fifo->queueCount++;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return 0;
 }
@@ -541,6 +588,8 @@ int ARSTREAM2_H264_AuFifoRemoveQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
+
+    ARSAL_Mutex_Lock(&(fifo->mutex));
 
     if (queue->prev)
     {
@@ -555,11 +604,15 @@ int ARSTREAM2_H264_AuFifoRemoveQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
         fifo->queue = NULL;
     }
     fifo->queueCount--;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
+
     queue->prev = NULL;
     queue->next = NULL;
     queue->count = 0;
     queue->head = NULL;
     queue->tail = NULL;
+    ARSAL_Mutex_Destroy(&(queue->mutex));
 
     return 0;
 }
@@ -573,6 +626,8 @@ ARSTREAM2_H264_AuFifoBuffer_t* ARSTREAM2_H264_AuFifoGetBuffer(ARSTREAM2_H264_AuF
         return NULL;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->bufferFree)
     {
         ARSTREAM2_H264_AuFifoBuffer_t* cur = fifo->bufferFree;
@@ -581,17 +636,19 @@ ARSTREAM2_H264_AuFifoBuffer_t* ARSTREAM2_H264_AuFifoGetBuffer(ARSTREAM2_H264_AuF
         cur->prev = NULL;
         cur->next = NULL;
         cur->refCount = 1;
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         return cur;
     }
     else
     {
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "No free buffer in pool");
         return NULL;
     }
 }
 
 
-int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifoBuffer_t *buffer)
+int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_AuFifoBuffer_t *buffer)
 {
     if (!buffer)
     {
@@ -599,7 +656,11 @@ int ARSTREAM2_H264_AuFifoBufferAddRef(ARSTREAM2_H264_AuFifoBuffer_t *buffer)
         return -1;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     buffer->refCount++;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return 0;
 }
@@ -612,6 +673,8 @@ int ARSTREAM2_H264_AuFifoUnrefBuffer(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
+
+    ARSAL_Mutex_Lock(&(fifo->mutex));
 
     if (buffer->refCount != 0)
     {
@@ -637,6 +700,8 @@ int ARSTREAM2_H264_AuFifoUnrefBuffer(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
         buffer->prev = NULL;
     }
 
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
+
     return 0;
 }
 
@@ -649,6 +714,8 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoPopFreeItem(ARSTREAM2_H264_AuF
         return NULL;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->itemFree)
     {
         ARSTREAM2_H264_AuFifoItem_t* cur = fifo->itemFree;
@@ -656,11 +723,13 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoPopFreeItem(ARSTREAM2_H264_AuF
         if (cur->next) cur->next->prev = NULL;
         cur->prev = NULL;
         cur->next = NULL;
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         return cur;
     }
     else
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "AU FIFO is full");
+        ARSAL_Mutex_Unlock(&(fifo->mutex));
         return NULL;
     }
 }
@@ -674,6 +743,8 @@ int ARSTREAM2_H264_AuFifoPushFreeItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H
         return -1;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     if (fifo->itemFree)
     {
         fifo->itemFree->prev = item;
@@ -686,6 +757,8 @@ int ARSTREAM2_H264_AuFifoPushFreeItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H
     fifo->itemFree = item;
     item->prev = NULL;
 
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
+
     return 0;
 }
 
@@ -697,6 +770,8 @@ int ARSTREAM2_H264_AuFifoEnqueueItem(ARSTREAM2_H264_AuFifoQueue_t *queue, ARSTRE
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
         return -1;
     }
+
+    ARSAL_Mutex_Lock(&(queue->mutex));
 
     item->next = NULL;
     if (queue->tail)
@@ -715,6 +790,8 @@ int ARSTREAM2_H264_AuFifoEnqueueItem(ARSTREAM2_H264_AuFifoQueue_t *queue, ARSTRE
     }
     queue->count++;
 
+    ARSAL_Mutex_Unlock(&(queue->mutex));
+
     return 0;
 }
 
@@ -729,8 +806,11 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuF
         return NULL;
     }
 
+    ARSAL_Mutex_Lock(&(queue->mutex));
+
     if ((!queue->head) || (!queue->count))
     {
+        ARSAL_Mutex_Unlock(&(queue->mutex));
         //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_H264_TAG, "FIFO is empty");
         return NULL;
     }
@@ -750,6 +830,8 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDequeueItem(ARSTREAM2_H264_AuF
     }
     cur->prev = NULL;
     cur->next = NULL;
+
+    ARSAL_Mutex_Unlock(&(queue->mutex));
 
     return cur;
 }
