@@ -763,6 +763,13 @@ int ARSTREAM2_H264_AuFifoPushFreeItem(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H
         return -1;
     }
 
+    int ret = ARSTREAM2_H264_AuNaluFifoFlush(&item->au);
+    if (ret != 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "ARSTREAM2_H264_AuNaluFifoFlush() failed (%d)", ret);
+        return -1;
+    }
+
     ARSAL_Mutex_Lock(&(fifo->mutex));
 
     if (fifo->itemFree)
@@ -1144,6 +1151,29 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_Acces
 }
 
 
+int ARSTREAM2_H264_AuNaluFifoFlush(ARSTREAM2_H264_AccessUnit_t *au)
+{
+    ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+
+    if (!au)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(au)) != NULL)
+    {
+        int ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(au, naluItem);
+        if (ret != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to push free item in the AU-NALU FIFO (%d)", ret);
+        }
+    }
+
+    return 0;
+}
+
+
 ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_AuFifo_t *auFifo,
                                                                 ARSTREAM2_H264_AuFifoItem_t *auItem)
 {
@@ -1193,15 +1223,6 @@ ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_A
 
     if (needFree)
     {
-        ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-        while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auCopyItem->au)) != NULL)
-        {
-            ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auCopyItem->au, naluItem);
-            if (ret != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
-            }
-        }
         ret = ARSTREAM2_H264_AuFifoPushFreeItem(auFifo, auCopyItem);
         if (ret != 0)
         {

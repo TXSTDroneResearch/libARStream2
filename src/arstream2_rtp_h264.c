@@ -1058,16 +1058,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid access unit callback function");
                             ret = -1;
 
-                            /* free the access unit and associated NAL units */
-                            ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-                            while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&context->auItem->au)) != NULL)
-                            {
-                                ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&context->auItem->au, naluItem);
-                                if (ret != 0)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
-                                }
-                            }
+                            /* free the access unit */
                             ret = ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, context->auItem->au.buffer);
                             if (ret != 0)
                             {
@@ -1276,16 +1267,7 @@ int ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(ARSTREAM2_RTPH264_ReceiverCont
                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Invalid access unit callback function");
                             ret = -1;
 
-                            /* free the access unit and associated NAL units */
-                            ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-                            while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&context->auItem->au)) != NULL)
-                            {
-                                ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&context->auItem->au, naluItem);
-                                if (ret != 0)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
-                                }
-                            }
+                            /* free the access unit */
                             ret = ARSTREAM2_H264_AuFifoUnrefBuffer(auFifo, context->auItem->au.buffer);
                             if (ret != 0)
                             {

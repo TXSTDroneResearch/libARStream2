@@ -417,6 +417,8 @@ int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM
 
 ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au);
 
+int ARSTREAM2_H264_AuNaluFifoFlush(ARSTREAM2_H264_AccessUnit_t *au);
+
 ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_AuFifo_t *auFifo,
                                                                 ARSTREAM2_H264_AuFifoItem_t *auItem);
 
