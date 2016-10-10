@@ -763,11 +763,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No access unit FIFO provided");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if (!config->naluFifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No NAL unit FIFO provided");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
     if (!config->auCallback)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No access unit callback function provided");
@@ -789,7 +784,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         filter->generateSkippedPSlices = (config->generateSkippedPSlices > 0) ? 1 : 0;
         filter->generateFirstGrayIFrame = (config->generateFirstGrayIFrame > 0) ? 1 : 0;
         filter->auFifo = config->auFifo;
-        filter->naluFifo = config->naluFifo;
         filter->auCallback = config->auCallback;
         filter->auCallbackUserPtr = config->auCallbackUserPtr;
         filter->spsPpsCallback = config->spsPpsCallback;

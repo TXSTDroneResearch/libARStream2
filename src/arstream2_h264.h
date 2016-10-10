@@ -259,9 +259,12 @@ typedef struct ARSTREAM2_H264_AccessUnit_s
     uint64_t ntpTimestampLocal;
     uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;
+    uint32_t naluPoolSize;
     uint32_t naluCount;
     ARSTREAM2_H264_NaluFifoItem_t *naluHead;
     ARSTREAM2_H264_NaluFifoItem_t *naluTail;
+    ARSTREAM2_H264_NaluFifoItem_t *naluFree;
+    ARSTREAM2_H264_NaluFifoItem_t *naluPool;
 
 } ARSTREAM2_H264_AccessUnit_t;
 
@@ -372,7 +375,7 @@ ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_NaluFifoDequeueItem(ARSTREAM2_H264
 
 int ARSTREAM2_H264_NaluFifoFlush(ARSTREAM2_H264_NaluFifo_t *fifo);
 
-int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, int bufferMaxCount,
+int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, int itemNaluMaxCount, int bufferMaxCount,
                               int auBufferSize, int metadataBufferSize, int userDataBufferSize, int videoStatsBufferSize);
 
 int ARSTREAM2_H264_AuFifoFree(ARSTREAM2_H264_AuFifo_t *fifo);
@@ -399,6 +402,14 @@ int ARSTREAM2_H264_AuFifoFlushQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H26
 
 int ARSTREAM2_H264_AuFifoFlush(ARSTREAM2_H264_AuFifo_t *fifo);
 
+int ARSTREAM2_H264_AuNaluFifoInit(ARSTREAM2_H264_AccessUnit_t *au, int naluItemMaxCount);
+
+int ARSTREAM2_H264_AuNaluFifoFree(ARSTREAM2_H264_AccessUnit_t *au);
+
+ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuNaluFifoPopFreeItem(ARSTREAM2_H264_AccessUnit_t *au);
+
+int ARSTREAM2_H264_AuNaluFifoPushFreeItem(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *item);
+
 int ARSTREAM2_H264_AuEnqueueNalu(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem);
 
 int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NaluFifoItem_t *naluItem,
@@ -407,7 +418,6 @@ int ARSTREAM2_H264_AuEnqueueNaluBefore(ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM
 ARSTREAM2_H264_NaluFifoItem_t* ARSTREAM2_H264_AuDequeueNalu(ARSTREAM2_H264_AccessUnit_t *au);
 
 ARSTREAM2_H264_AuFifoItem_t* ARSTREAM2_H264_AuFifoDuplicateItem(ARSTREAM2_H264_AuFifo_t *auFifo,
-                                                                ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                                 ARSTREAM2_H264_AuFifoItem_t *auItem);
 
 int ARSTREAM2_H264_AuCheckSizeRealloc(ARSTREAM2_H264_AccessUnit_t *au, unsigned int size);

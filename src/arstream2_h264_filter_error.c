@@ -70,7 +70,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
     if ((ret == 0) && (auItem->au.auSize + filter->spsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert SPS before the I-frame */
-        spsItem = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
+        spsItem = ARSTREAM2_H264_AuNaluFifoPopFreeItem(&auItem->au);
         if (spsItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
@@ -89,7 +89,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
     if ((ret == 0) && (auItem->au.auSize + filter->ppsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert PPS before the I-frame */
-        ppsItem = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
+        ppsItem = ARSTREAM2_H264_AuNaluFifoPopFreeItem(&auItem->au);
         if (ppsItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
@@ -107,7 +107,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
 
     if (ret == 0)
     {
-        naluItem = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
+        naluItem = ARSTREAM2_H264_AuNaluFifoPopFreeItem(&auItem->au);
         if (naluItem)
         {
             ARSTREAM2_H264_NaluReset(&naluItem->nalu);
@@ -259,7 +259,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         int ret2;
         if (spsItem)
         {
-            ret2 = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, spsItem);
+            ret2 = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, spsItem);
             if (ret2 != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret2);
@@ -267,7 +267,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
         if (ppsItem)
         {
-            ret2 = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, ppsItem);
+            ret2 = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, ppsItem);
             if (ret2 != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret2);
@@ -275,7 +275,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
         if (naluItem)
         {
-            ret2 = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, naluItem);
+            ret2 = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, naluItem);
             if (ret2 != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret2);
@@ -452,7 +452,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
         }
         if (ret == 0)
         {
-            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
+            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_AuNaluFifoPopFreeItem(au);
             if (item)
             {
                 ARSTREAM2_H264_NaluReset(&item->nalu);
@@ -511,7 +511,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
 
                 if (ret != 0)
                 {
-                    err = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, item);
+                    err = ARSTREAM2_H264_AuNaluFifoPushFreeItem(au, item);
                     if (err < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free FIFO item");
@@ -658,7 +658,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
         }
         if (ret == 0)
         {
-            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
+            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_AuNaluFifoPopFreeItem(au);
             if (item)
             {
                 ARSTREAM2_H264_NaluReset(&item->nalu);
@@ -717,7 +717,7 @@ int ARSTREAM2_H264FilterError_HandleMissingEndOfFrame(ARSTREAM2_H264Filter_t *fi
 
                 if (ret != 0)
                 {
-                    err = ARSTREAM2_H264_NaluFifoPushFreeItem(filter->naluFifo, item);
+                    err = ARSTREAM2_H264_AuNaluFifoPushFreeItem(au, item);
                     if (err < 0)
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free FIFO item");

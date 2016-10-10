@@ -979,12 +979,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retReceiver;
     }
-    if (!config->naluFifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No NAL unit FIFO provided");
-        SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
-        return retReceiver;
-    }
     if (!config->auCallback)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No access unit callback function provided");
@@ -1061,7 +1055,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->friendlyName = strndup(config->friendlyName, 40);
         }
         retReceiver->auFifo = config->auFifo;
-        retReceiver->naluFifo = config->naluFifo;
         retReceiver->rtph264ReceiverContext.auCallback = config->auCallback;
         retReceiver->rtph264ReceiverContext.auCallbackUserPtr = config->auCallbackUserPtr;
         retReceiver->rtpReceiverContext.maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
@@ -1563,7 +1556,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
 
         /* RTP packets processing */
         ret = ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(&receiver->rtph264ReceiverContext, &receiver->packetFifo,
-                                                            &receiver->packetFifoQueue, receiver->naluFifo, receiver->auFifo,
+                                                            &receiver->packetFifoQueue, receiver->auFifo,
                                                             curTime, &receiver->rtcpReceiverContext);
         if (ret < 0)
         {
@@ -1770,7 +1763,7 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
 
         /* RTP packets processing */
         ret = ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(&receiver->rtph264ReceiverContext, &receiver->packetFifo,
-                                                            &receiver->packetFifoQueue, receiver->naluFifo, receiver->auFifo,
+                                                            &receiver->packetFifoQueue, receiver->auFifo,
                                                             curTime, &receiver->rtcpReceiverContext);
         if (ret < 0)
         {

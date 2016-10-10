@@ -44,7 +44,6 @@ typedef int (*ARSTREAM2_H264Filter_SpsPpsSyncCallback_t)(uint8_t *spsBuffer, int
 typedef struct
 {
     ARSTREAM2_H264_AuFifo_t *auFifo;
-    ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
@@ -112,7 +111,6 @@ typedef struct ARSTREAM2_H264Filter_s
     int maxFrameNum;
 
     /* NAL unit and access unit FIFO */
-    ARSTREAM2_H264_NaluFifo_t *naluFifo;
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;

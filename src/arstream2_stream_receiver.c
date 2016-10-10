@@ -24,8 +24,8 @@
 
 #define ARSTREAM2_STREAM_RECEIVER_TIMEOUT_US (100 * 1000)
 
-#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_NALU_FIFO_SIZE (3000)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT (200)
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_NALU_COUNT (128)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT (60)
 
 #define ARSTREAM2_STREAM_RECEIVER_AU_BUFFER_SIZE (128 * 1024)
@@ -42,7 +42,6 @@
 typedef struct ARSTREAM2_StreamReceiver_s
 {
     ARSTREAM2_H264_AuFifo_t auFifo;
-    ARSTREAM2_H264_NaluFifo_t naluFifo;
     ARSTREAM2_H264Filter_Handle filter;
     ARSTREAM2_RtpReceiver_t *receiver;
 
@@ -126,7 +125,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     ARSTREAM2_StreamReceiver_t *streamReceiver = NULL;
-    int auFifoCreated = 0, naluFifoCreated = 0;
+    int auFifoCreated = 0;
     int appOutputThreadMutexInit = 0, appOutputThreadCondInit = 0;
     int appOutputCallbackMutexInit = 0, appOutputCallbackCondInit = 0;
     int recorderMutexInit = 0;
@@ -264,10 +263,14 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     /* Setup the access unit FIFO */
     if (ret == ARSTREAM2_OK)
     {
-        int auFifoRet = ARSTREAM2_H264_AuFifoInit(&streamReceiver->auFifo, ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT,
+        int auFifoRet = ARSTREAM2_H264_AuFifoInit(&streamReceiver->auFifo,
+                                                  ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT,
+                                                  ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_NALU_COUNT,
                                                   ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT,
-                                                  ARSTREAM2_STREAM_RECEIVER_AU_BUFFER_SIZE, ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE,
-                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE, sizeof(ARSTREAM2_H264_VideoStats_t));
+                                                  ARSTREAM2_STREAM_RECEIVER_AU_BUFFER_SIZE,
+                                                  ARSTREAM2_STREAM_RECEIVER_AU_METADATA_BUFFER_SIZE,
+                                                  ARSTREAM2_STREAM_RECEIVER_AU_USER_DATA_BUFFER_SIZE,
+                                                  sizeof(ARSTREAM2_H264_VideoStats_t));
         if (auFifoRet != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoInit() failed (%d)", auFifoRet);
@@ -276,21 +279,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         else
         {
             auFifoCreated = 1;
-        }
-    }
-
-    /* Setup the NAL unit FIFO */
-    if (ret == ARSTREAM2_OK)
-    {
-        int naluFifoRet = ARSTREAM2_H264_NaluFifoInit(&streamReceiver->naluFifo, ARSTREAM2_STREAM_RECEIVER_DEFAULT_NALU_FIFO_SIZE);
-        if (naluFifoRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_NaluFifoInit() failed (%d)", naluFifoRet);
-            ret = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            naluFifoCreated = 1;
         }
     }
 
@@ -307,7 +295,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.canonicalName = config->canonicalName;
         receiverConfig.friendlyName = config->friendlyName;
         receiverConfig.auFifo = &(streamReceiver->auFifo);
-        receiverConfig.naluFifo = &(streamReceiver->naluFifo);
         receiverConfig.auCallback = ARSTREAM2_StreamReceiver_RtpReceiverAuCallback;
         receiverConfig.auCallbackUserPtr = streamReceiver;
         receiverConfig.maxPacketSize = config->maxPacketSize;
@@ -341,7 +328,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         ARSTREAM2_H264Filter_Config_t filterConfig;
         memset(&filterConfig, 0, sizeof(filterConfig));
         filterConfig.auFifo = &(streamReceiver->auFifo);
-        filterConfig.naluFifo = &(streamReceiver->naluFifo);
         filterConfig.auCallback = ARSTREAM2_StreamReceiver_H264FilterAuCallback;
         filterConfig.auCallbackUserPtr = streamReceiver;
         filterConfig.spsPpsCallback = ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback;
@@ -368,7 +354,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (streamReceiver->receiver) ARSTREAM2_RtpReceiver_Delete(&(streamReceiver->receiver));
             if (streamReceiver->filter) ARSTREAM2_H264Filter_Free(&(streamReceiver->filter));
             if (auFifoCreated) ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
-            if (naluFifoCreated) ARSTREAM2_H264_NaluFifoFree(&(streamReceiver->naluFifo));
             if (appOutputThreadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
             if (appOutputThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
             if (appOutputCallbackMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
@@ -425,7 +410,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     }
 
     ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
-    ARSTREAM2_H264_NaluFifoFree(&(streamReceiver->naluFifo));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
@@ -460,7 +444,7 @@ static int ARSTREAM2_StreamReceiver_AppOutputAuEnqueue(ARSTREAM2_StreamReceiver_
     if (ret == 0)
     {
         /* duplicate the AU and associated NALUs */
-        appOutputAuItem = ARSTREAM2_H264_AuFifoDuplicateItem(&streamReceiver->auFifo, &streamReceiver->naluFifo, auItem);
+        appOutputAuItem = ARSTREAM2_H264_AuFifoDuplicateItem(&streamReceiver->auFifo, auItem);
         if (appOutputAuItem)
         {
             appOutputAuItem->au.buffer = auItem->au.buffer;
@@ -502,7 +486,7 @@ static int ARSTREAM2_StreamReceiver_AppOutputAuEnqueue(ARSTREAM2_StreamReceiver_
         ARSTREAM2_H264_NaluFifoItem_t *naluItem;
         while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&appOutputAuItem->au)) != NULL)
         {
-            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+            ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&appOutputAuItem->au, naluItem);
             if (ret != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
@@ -542,7 +526,7 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
     if (ret == 0)
     {
         /* duplicate the AU and associated NALUs */
-        recordtAuItem = ARSTREAM2_H264_AuFifoDuplicateItem(&streamReceiver->auFifo, &streamReceiver->naluFifo, auItem);
+        recordtAuItem = ARSTREAM2_H264_AuFifoDuplicateItem(&streamReceiver->auFifo, auItem);
         if (recordtAuItem)
         {
             recordtAuItem->au.buffer = auItem->au.buffer;
@@ -608,7 +592,7 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
         ARSTREAM2_H264_NaluFifoItem_t *naluItem;
         while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&recordtAuItem->au)) != NULL)
         {
-            ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+            ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&recordtAuItem->au, naluItem);
             if (ret != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
@@ -748,7 +732,7 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
     ARSTREAM2_H264_NaluFifoItem_t *naluItem;
     while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
     {
-        ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+        ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, naluItem);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
@@ -813,7 +797,7 @@ static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoIt
     ARSTREAM2_H264_NaluFifoItem_t *naluItem;
     while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
     {
-        ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+        ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, naluItem);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
@@ -924,7 +908,7 @@ static void ARSTREAM2_StreamReceiver_StreamRecorderAuCallback(eARSTREAM2_STREAM_
     /* free the access unit and associated NAL units */
     while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
     {
-        ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+        ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, naluItem);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
@@ -1368,7 +1352,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
             /* free the access unit and associated NAL units */
             while ((naluItem = ARSTREAM2_H264_AuDequeueNalu(&auItem->au)) != NULL)
             {
-                ret = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamReceiver->naluFifo, naluItem);
+                ret = ARSTREAM2_H264_AuNaluFifoPushFreeItem(&auItem->au, naluItem);
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the NALU FIFO (%d)", ret);
