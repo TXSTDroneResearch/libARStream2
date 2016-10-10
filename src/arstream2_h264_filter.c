@@ -786,9 +786,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         memset(filter, 0, sizeof(*filter));
 
         filter->outputIncompleteAu = (config->outputIncompleteAu > 0) ? 1 : 0;
-        filter->filterOutSpsPps = (config->filterOutSpsPps > 0) ? 1 : 0;
-        filter->filterOutSei = (config->filterOutSei > 0) ? 1 : 0;
-        filter->replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
         filter->generateSkippedPSlices = (config->generateSkippedPSlices > 0) ? 1 : 0;
         filter->generateFirstGrayIFrame = (config->generateFirstGrayIFrame > 0) ? 1 : 0;
         filter->auFifo = config->auFifo;

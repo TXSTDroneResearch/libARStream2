@@ -50,9 +50,6 @@ typedef struct
     ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
     void *spsPpsCallbackUserPtr;
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
-    int filterOutSpsPps;                                            /**< if true, filter out SPS and PPS NAL units */
-    int filterOutSei;                                               /**< if true, filter out SEI NAL units */
-    int replaceStartCodesWithNaluSize;                              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
     int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
@@ -62,9 +59,6 @@ typedef struct
 typedef struct ARSTREAM2_H264Filter_s
 {
     int outputIncompleteAu;
-    int filterOutSpsPps;
-    int filterOutSei;
-    int replaceStartCodesWithNaluSize;
     int generateSkippedPSlices;
     int generateFirstGrayIFrame;
 

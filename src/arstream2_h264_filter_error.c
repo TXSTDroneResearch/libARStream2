@@ -67,7 +67,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
     }
 
-    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->spsSize <= auItem->au.buffer->auBufferSize))
+    if ((ret == 0) && (auItem->au.auSize + filter->spsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert SPS before the I-frame */
         spsItem = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);
@@ -86,7 +86,7 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         }
     }
 
-    if ((ret == 0) && (!filter->filterOutSpsPps) && (auItem->au.auSize + filter->ppsSize <= auItem->au.buffer->auBufferSize))
+    if ((ret == 0) && (auItem->au.auSize + filter->ppsSize <= auItem->au.buffer->auBufferSize))
     {
         /* insert PPS before the I-frame */
         ppsItem = ARSTREAM2_H264_NaluFifoPopFreeItem(filter->naluFifo);

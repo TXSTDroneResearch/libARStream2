@@ -347,9 +347,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         filterConfig.spsPpsCallback = ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback;
         filterConfig.spsPpsCallbackUserPtr = streamReceiver;
         filterConfig.outputIncompleteAu = config->outputIncompleteAu;
-        filterConfig.filterOutSpsPps = config->filterOutSpsPps;
-        filterConfig.filterOutSei = config->filterOutSei;
-        filterConfig.replaceStartCodesWithNaluSize = config->replaceStartCodesWithNaluSize;
         filterConfig.generateSkippedPSlices = config->generateSkippedPSlices;
         filterConfig.generateFirstGrayIFrame = config->generateFirstGrayIFrame;
 
