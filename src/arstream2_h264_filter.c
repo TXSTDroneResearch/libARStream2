@@ -627,22 +627,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
 }
 
 
-int ARSTREAM2_H264Filter_ForceResync(ARSTREAM2_H264Filter_t *filter)
-{
-    int ret = 0;
-
-    if (!filter)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    filter->resyncPending = 1;
-
-    return ret;
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;

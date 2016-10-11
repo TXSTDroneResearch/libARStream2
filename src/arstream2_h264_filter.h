@@ -171,9 +171,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
 void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter);
 
 
-int ARSTREAM2_H264Filter_ForceResync(ARSTREAM2_H264Filter_t *filter);
-
-
 /*
  * Error concealment functions
  */

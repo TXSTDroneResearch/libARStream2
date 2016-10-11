@@ -1566,11 +1566,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopAppOutput(ARSTREAM2_StreamReceiver
     streamReceiver->appOutput.getAuBufferCallbackUserPtr = NULL;
     streamReceiver->appOutput.auReadyCallback = NULL;
     streamReceiver->appOutput.auReadyCallbackUserPtr = NULL;
-    int err = ARSTREAM2_H264Filter_ForceResync(streamReceiver->filter);
-    if (err != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264Filter_ForceResync() failed (%d)", err);
-    }
     ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
     ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
