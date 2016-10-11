@@ -594,7 +594,7 @@ static int ARSTREAM2_StreamRecorder_FifoPushFreeItem(ARSTREAM2_StreamRecorder_Au
     fifo->free = item;
     item->prev = NULL;
 
-    ARSAL_Mutex_Lock(&(fifo->mutex));
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return 0;
 }
@@ -634,7 +634,7 @@ static int ARSTREAM2_StreamRecorder_FifoEnqueueItem(ARSTREAM2_StreamRecorder_AuF
     }
     fifo->count++;
 
-    ARSAL_Mutex_Lock(&(fifo->mutex));
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
 
     return 0;
 }
