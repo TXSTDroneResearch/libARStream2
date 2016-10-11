@@ -11,25 +11,22 @@
 #define ARSTREAM2_H264_FILTER_ERROR_TAG "ARSTREAM2_H264FilterError"
 
 
-int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *nextAu)
+int ARSTREAM2_H264FilterError_GenerateGrayIdrFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *nextAu,
+                                                   ARSTREAM2_H264_AuFifoItem_t *auItem)
 {
-    int ret = 0;
+    int ret = 0, _ret;;
     eARSTREAM2_ERROR err = ARSTREAM2_OK;
-    ARSTREAM2_H264_SliceContext_t *sliceContextNext = NULL;
     ARSTREAM2_H264_SliceContext_t sliceContext;
-    ARSTREAM2_H264_AuFifoBuffer_t *buffer = NULL;
-    ARSTREAM2_H264_AuFifoItem_t *auItem = NULL;
     ARSTREAM2_H264_NaluFifoItem_t *naluItem = NULL, *spsItem = NULL, *ppsItem = NULL;
 
-    err = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, (void**)&sliceContextNext);
-    if (err != ARSTREAM2_OK)
+    if (!filter->savedSliceContextAvailable)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "ARSTREAM2_H264Parser_GetSliceContext() failed (%d)", err);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "No slice context available");
         ret = -1;
     }
     else
     {
-        memcpy(&sliceContext, sliceContextNext, sizeof(sliceContext));
+        memcpy(&sliceContext, &filter->savedSliceContext, sizeof(sliceContext));
         sliceContext.nal_ref_idc = 3;
         sliceContext.nal_unit_type = ARSTREAM2_H264_NALU_TYPE_SLICE_IDR;
         sliceContext.idrPicFlag = 1;
@@ -38,33 +35,6 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
         sliceContext.idr_pic_id = 0;
         sliceContext.no_output_of_prior_pics_flag = 0;
         sliceContext.long_term_reference_flag = 0;
-    }
-
-    if (ret == 0)
-    {
-        buffer = ARSTREAM2_H264_AuFifoGetBuffer(filter->auFifo);
-        auItem = ARSTREAM2_H264_AuFifoPopFreeItem(filter->auFifo);
-        if ((!buffer) || (!auItem))
-        {
-            if (buffer)
-            {
-                ARSTREAM2_H264_AuFifoUnrefBuffer(filter->auFifo, buffer);
-                buffer = NULL;
-            }
-            if (auItem)
-            {
-                ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
-                auItem = NULL;
-            }
-            int _ret = ARSTREAM2_H264_AuFifoFlush(filter->auFifo);
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "AU FIFO is full, cannot generate gray I-frame => flush to recover (%d AU flushed)", _ret);
-            ret = -1;
-        }
-        else
-        {
-            ARSTREAM2_H264_AuReset(&auItem->au);
-            auItem->au.buffer = buffer;
-        }
     }
 
     if ((ret == 0) && (auItem->au.auSize + filter->spsSize <= auItem->au.buffer->auBufferSize))
@@ -130,25 +100,6 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 auItem->au.auSize += outputSize;
                 ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_ERROR_TAG, "Gray I slice NALU output size: %d", outputSize);
 
-                /* save the current AU context */
-                int savedAuIncomplete = filter->currentAuIncomplete;
-                int savedAuSlicesAllI = filter->currentAuSlicesAllI;
-                int savedAuStreamingInfoAvailable = filter->currentAuStreamingInfoAvailable;
-                int savedAuStreamingInfoV1Available = filter->currentAuStreamingInfoV1Available;
-                int savedAuStreamingInfoV2Available = filter->currentAuStreamingInfoV2Available;
-                int savedAuPreviousSliceIndex = filter->currentAuPreviousSliceIndex;
-                int savedAuPreviousSliceFirstMb = filter->currentAuPreviousSliceFirstMb;
-                int savedAuCurrentSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
-                int savedAuIsRef = filter->currentAuIsRef;
-                int savedAuFrameNum = filter->currentAuFrameNum;
-                uint8_t *savedAuMacroblockStatus = NULL;
-                if (filter->currentAuMacroblockStatus)
-                {
-                    savedAuMacroblockStatus = malloc(filter->mbCount * sizeof(uint8_t));
-                    if (savedAuMacroblockStatus) memcpy(savedAuMacroblockStatus, filter->currentAuMacroblockStatus, filter->mbCount * sizeof(uint8_t));
-                }
-
-                ARSTREAM2_H264Filter_ResetAu(filter);
                 auItem->au.syncType = ARSTREAM2_H264_AU_SYNC_TYPE_IDR;
                 auItem->au.isComplete = 1;
                 auItem->au.hasErrors = 1;
@@ -159,9 +110,15 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                 auItem->au.ntpTimestamp = nextAu->ntpTimestamp - ((nextAu->ntpTimestamp >= 1000) ? 1000 : ((nextAu->ntpTimestamp >= 1) ? 1 : 0));
                 auItem->au.ntpTimestampRaw = nextAu->ntpTimestampRaw - ((nextAu->ntpTimestampRaw >= 1000) ? 1000 : ((nextAu->ntpTimestampRaw >= 1) ? 1 : 0));
                 auItem->au.ntpTimestampLocal = nextAu->ntpTimestampLocal - ((nextAu->ntpTimestampLocal >= 1000) ? 1000 : ((nextAu->ntpTimestampLocal >= 1) ? 1 : 0));
-                if (filter->currentAuMacroblockStatus)
+                _ret = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(&auItem->au, filter->mbCount);
+                if (_ret == 0)
                 {
-                    memset(filter->currentAuMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE, filter->mbCount);
+                    memset(auItem->au.buffer->mbStatusBuffer, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE, filter->mbCount);
+                    auItem->au.mbStatusAvailable = 1;
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "MB status buffer is too small");
                 }
 
                 /* associate the NAL units with the access unit */
@@ -188,61 +145,6 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
                     {
                         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to enqueue slice (%d)", ret);
                     }
-                }
-
-                if (ret == 0)
-                {
-                    /* output the access unit */
-                    if (filter->auCallback)
-                    {
-                        int _ret;
-                        if (filter->currentAuMacroblockStatus)
-                        {
-                            _ret = ARSTREAM2_H264_AuMbStatusCheckSizeRealloc(&auItem->au, filter->mbCount);
-                            if (_ret == 0)
-                            {
-                                memcpy(auItem->au.buffer->mbStatusBuffer, filter->currentAuMacroblockStatus, filter->mbCount);
-                                auItem->au.mbStatusAvailable = 1;
-                            }
-                            else
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "MB status buffer is too small");
-                            }
-                        }
-                        _ret = filter->auCallback(auItem, filter->auCallbackUserPtr);
-                        if (_ret != 0)
-                        {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to output the access unit");
-                            ret = -1;
-                        }
-                        naluItem = NULL;
-                        spsItem = NULL;
-                        ppsItem = NULL;
-                        auItem = NULL;
-                    }
-                    else
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Invalid access unit callback function");
-                        ret = -1;
-                    }
-                }
-
-                /* restore the current AU context */
-                ARSTREAM2_H264Filter_ResetAu(filter);
-                filter->currentAuIncomplete = savedAuIncomplete;
-                filter->currentAuSlicesAllI = savedAuSlicesAllI;
-                filter->currentAuStreamingInfoAvailable = savedAuStreamingInfoAvailable;
-                filter->currentAuStreamingInfoV1Available = savedAuStreamingInfoV1Available;
-                filter->currentAuStreamingInfoV2Available = savedAuStreamingInfoV2Available;
-                filter->currentAuPreviousSliceIndex = savedAuPreviousSliceIndex;
-                filter->currentAuPreviousSliceFirstMb = savedAuPreviousSliceFirstMb;
-                filter->currentAuCurrentSliceFirstMb = savedAuCurrentSliceFirstMb;
-                filter->currentAuIsRef = savedAuIsRef;
-                filter->currentAuFrameNum = savedAuFrameNum;
-                if ((filter->currentAuMacroblockStatus) && (savedAuMacroblockStatus))
-                {
-                    memcpy(filter->currentAuMacroblockStatus, savedAuMacroblockStatus, filter->mbCount * sizeof(uint8_t));
-                    free(savedAuMacroblockStatus);
                 }
             }
         }
@@ -279,22 +181,6 @@ int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter,
             if (ret2 != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the NALU FIFO (%d)", ret2);
-            }
-        }
-        if (buffer)
-        {
-            ret2 = ARSTREAM2_H264_AuFifoUnrefBuffer(filter->auFifo, buffer);
-            if (ret2 != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to unref buffer (%d)", ret2);
-            }
-        }
-        if (auItem)
-        {
-            ret2 = ARSTREAM2_H264_AuFifoPushFreeItem(filter->auFifo, auItem);
-            if (ret2 != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "Failed to push free item in the AU FIFO (%d)", ret2);
             }
         }
     }

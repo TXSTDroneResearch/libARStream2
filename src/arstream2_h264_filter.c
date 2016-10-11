@@ -61,10 +61,6 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
     if (ret == 0)
     {
         filter->sync = 1;
-        if (filter->generateFirstGrayIFrame)
-        {
-            filter->firstGrayIFramePending = 1;
-        }
 
         ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_FILTER_TAG, "SPS/PPS sync OK");
 
@@ -153,6 +149,15 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                                 {
                                     memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING, filter->mbCount);
                                 }
+                            }
+                            _err = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, (void**)&filter->savedSliceContext);
+                            if (_err != ARSTREAM2_OK)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Parser_GetSliceContext() failed (%d)", err);
+                            }
+                            else
+                            {
+                                filter->savedSliceContextAvailable = 1;
                             }
                         }
                     }
@@ -304,6 +309,7 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
     if (filter->currentAuIsRef) filter->previousAuFrameNum = filter->currentAuFrameNum;
     filter->currentAuFrameNum = -1;
     filter->currentAuIsRef = 0;
+    filter->savedSliceContextAvailable = 0;
 }
 
 
@@ -401,21 +407,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
         if (err == 0)
         {
             filter->previousSliceType = naluItem->nalu.sliceType;
-
-            if ((filter->firstGrayIFramePending)
-                    && ((naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SLICE_IDR)
-                        || (naluItem->nalu.naluType == ARSTREAM2_H264_NALU_TYPE_SLICE)))
-            {
-                err = ARSTREAM2_H264FilterError_OutputGrayIdrFrame(filter, au);
-                if (err != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264FilterError_OutputGrayIdrFrame() failed (%d)", err);
-                }
-                else
-                {
-                    filter->firstGrayIFramePending = 0;
-                }
-            }
 
             if (naluItem->nalu.missingPacketsBefore)
             {
@@ -652,25 +643,6 @@ int ARSTREAM2_H264Filter_ForceResync(ARSTREAM2_H264Filter_t *filter)
 }
 
 
-int ARSTREAM2_H264Filter_ForceIdr(ARSTREAM2_H264Filter_t *filter)
-{
-    int ret = 0;
-
-    if (!filter)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (filter->generateFirstGrayIFrame)
-    {
-        filter->firstGrayIFramePending = 1;
-    }
-
-    return ret;
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_H264Filter_GetSpsPps(ARSTREAM2_H264Filter_Handle filterHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize)
 {
     ARSTREAM2_H264Filter_t* filter = (ARSTREAM2_H264Filter_t*)filterHandle;
@@ -758,16 +730,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "Invalid pointer for config");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if (!config->auFifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No access unit FIFO provided");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if (!config->auCallback)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "No access unit callback function provided");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
 
     filter = (ARSTREAM2_H264Filter_t*)malloc(sizeof(*filter));
     if (!filter)
@@ -782,10 +744,6 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
 
         filter->outputIncompleteAu = (config->outputIncompleteAu > 0) ? 1 : 0;
         filter->generateSkippedPSlices = (config->generateSkippedPSlices > 0) ? 1 : 0;
-        filter->generateFirstGrayIFrame = (config->generateFirstGrayIFrame > 0) ? 1 : 0;
-        filter->auFifo = config->auFifo;
-        filter->auCallback = config->auCallback;
-        filter->auCallbackUserPtr = config->auCallbackUserPtr;
         filter->spsPpsCallback = config->spsPpsCallback;
         filter->spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
     }

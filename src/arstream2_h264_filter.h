@@ -43,14 +43,12 @@ typedef int (*ARSTREAM2_H264Filter_SpsPpsSyncCallback_t)(uint8_t *spsBuffer, int
  */
 typedef struct
 {
-    ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
     void *spsPpsCallbackUserPtr;
     int outputIncompleteAu;                                         /**< if true, output incomplete access units */
     int generateSkippedPSlices;                                     /**< if true, generate skipped P slices to replace missing slices */
-    int generateFirstGrayIFrame;                                    /**< if true, generate a first gray I frame to initialize the decoding (waitForSync must be enabled) */
 
 } ARSTREAM2_H264Filter_Config_t;
 
@@ -59,7 +57,6 @@ typedef struct ARSTREAM2_H264Filter_s
 {
     int outputIncompleteAu;
     int generateSkippedPSlices;
-    int generateFirstGrayIFrame;
 
     int currentAuOutputIndex;
     int currentAuSize;
@@ -92,6 +89,8 @@ typedef struct ARSTREAM2_H264Filter_s
 
     ARSTREAM2_H264Parser_Handle parser;
     ARSTREAM2_H264Writer_Handle writer;
+    ARSTREAM2_H264_SliceContext_t savedSliceContext;
+    int savedSliceContextAvailable;
 
     int sync;
     int spsSync;
@@ -102,18 +101,12 @@ typedef struct ARSTREAM2_H264Filter_s
     uint8_t* pPps;
     ARSTREAM2_H264Filter_SpsPpsSyncCallback_t spsPpsCallback;
     void *spsPpsCallbackUserPtr;
-    int firstGrayIFramePending;
     int resyncPending;
     int mbWidth;
     int mbHeight;
     int mbCount;
     float framerate;
     int maxFrameNum;
-
-    /* NAL unit and access unit FIFO */
-    ARSTREAM2_H264_AuFifo_t *auFifo;
-    ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
-    void *auCallbackUserPtr;
 
 } ARSTREAM2_H264Filter_t;
 
@@ -181,14 +174,12 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter);
 int ARSTREAM2_H264Filter_ForceResync(ARSTREAM2_H264Filter_t *filter);
 
 
-int ARSTREAM2_H264Filter_ForceIdr(ARSTREAM2_H264Filter_t *filter);
-
-
 /*
  * Error concealment functions
  */
 
-int ARSTREAM2_H264FilterError_OutputGrayIdrFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *nextAu);
+int ARSTREAM2_H264FilterError_GenerateGrayIdrFrame(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *nextAu,
+                                                   ARSTREAM2_H264_AuFifoItem_t *auItem);
 
 
 int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au,
