@@ -579,12 +579,11 @@ int ARSTREAM2_H264_AuFifoAddQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H264_
         return -1;
     }
 
+    ARSAL_Mutex_Lock(&(fifo->mutex));
+
     queue->count = 0;
     queue->head = NULL;
     queue->tail = NULL;
-
-    ARSAL_Mutex_Lock(&(fifo->mutex));
-
     queue->prev = NULL;
     queue->next = fifo->queue;
     if (queue->next)
@@ -625,13 +624,14 @@ int ARSTREAM2_H264_AuFifoRemoveQueue(ARSTREAM2_H264_AuFifo_t *fifo, ARSTREAM2_H2
     }
     fifo->queueCount--;
 
-    ARSAL_Mutex_Unlock(&(fifo->mutex));
-
     queue->prev = NULL;
     queue->next = NULL;
     queue->count = 0;
     queue->head = NULL;
     queue->tail = NULL;
+
+    ARSAL_Mutex_Unlock(&(fifo->mutex));
+
     ARSAL_Mutex_Destroy(&(queue->mutex));
 
     return 0;
