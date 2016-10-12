@@ -676,8 +676,23 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->rtpSenderContext.rtpClockRate = 90000;
         retSender->rtpSenderContext.rtpTimestampOffset = 0;
         retSender->rtcpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
-        retSender->rtcpSenderContext.cname = retSender->canonicalName;
-        retSender->rtcpSenderContext.name = retSender->friendlyName;
+        retSender->rtcpSenderContext.sdesItemCount = 0;
+        if ((retSender->canonicalName) && (strlen(retSender->canonicalName)))
+        {
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
+            strncpy(retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].value, retSender->canonicalName, 256);
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].sendTimeInterval = 0;
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].lastSendTime = 0;
+            retSender->rtcpSenderContext.sdesItemCount++;
+        }
+        if ((retSender->friendlyName) && (strlen(retSender->friendlyName)))
+        {
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_NAME_ITEM;
+            strncpy(retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].value, retSender->friendlyName, 256);
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].sendTimeInterval = 5000000;
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].lastSendTime = 0;
+            retSender->rtcpSenderContext.sdesItemCount++;
+        }
         retSender->rtcpSenderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->rtcpSenderContext.rtpClockRate = 90000;
         retSender->rtcpSenderContext.rtpTimestampOffset = 0;

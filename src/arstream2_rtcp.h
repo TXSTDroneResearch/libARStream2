@@ -44,6 +44,8 @@
 #define ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT (6)
 #define ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT (5)
 
+#define ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT 10
+
 
 /*
  * Types
@@ -162,6 +164,17 @@ typedef struct {
 
 
 /**
+ * @brief Source description item
+ */
+typedef struct ARSTREAM2_RTCP_SdesItem_s {
+    uint8_t type;
+    char prefix[256];
+    char value[256];
+    uint32_t sendTimeInterval;
+    uint64_t lastSendTime;
+} ARSTREAM2_RTCP_SdesItem_t;
+
+/**
  * @brief Application clock delta context
  */
 typedef struct ARSTREAM2_RTCP_ClockDeltaContext_s {
@@ -205,8 +218,10 @@ typedef struct ARSTREAM2_RTCP_SenderContext_s {
     uint32_t senderSsrc;
     uint32_t receiverSsrc;
     uint32_t rtcpByteRate;
-    const char *cname;
-    const char *name;
+    ARSTREAM2_RTCP_SdesItem_t sdesItem[ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT];
+    int sdesItemCount;
+    ARSTREAM2_RTCP_SdesItem_t peerSdesItem[ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT];
+    int peerSdesItemCount;
 
     uint32_t rtpClockRate;
     uint32_t rtpTimestampOffset;
@@ -236,8 +251,10 @@ typedef struct ARSTREAM2_RTCP_ReceiverContext_s {
     uint32_t receiverSsrc;
     uint32_t senderSsrc;
     uint32_t rtcpByteRate;
-    const char *cname;
-    const char *name;
+    ARSTREAM2_RTCP_SdesItem_t sdesItem[ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT];
+    int sdesItemCount;
+    ARSTREAM2_RTCP_SdesItem_t peerSdesItem[ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT];
+    int peerSdesItemCount;
 
     uint32_t prevSrRtpTimestamp;
     uint64_t prevSrNtpTimestamp;
@@ -294,10 +311,11 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
                                                    ARSTREAM2_RTCP_ReceiverContext_t *context,
                                                    unsigned int *size);
 
-int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc,
-                                             const char *cname, const char *name, unsigned int *size);
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc, uint64_t sendTimestamp,
+                                             ARSTREAM2_RTCP_SdesItem_t *sdesItem, int sdesItemCount, unsigned int *size);
 
-int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes);
+int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
+                                            int sdesItemMaxCount, int *sdesItemCount);
 
 int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
                                                  uint64_t sendTimestamp, uint32_t ssrc,

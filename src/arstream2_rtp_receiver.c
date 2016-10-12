@@ -1069,8 +1069,23 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         retReceiver->rtph264ReceiverContext.startCodeLength = (retReceiver->insertStartCodes) ? ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE_LENGTH : 0;
         retReceiver->rtcpReceiverContext.receiverSsrc = ARSTREAM2_RTP_RECEIVER_SSRC;
         retReceiver->rtcpReceiverContext.rtcpByteRate = ARSTREAM2_RTCP_RECEIVER_DEFAULT_BITRATE / 8;
-        retReceiver->rtcpReceiverContext.cname = retReceiver->canonicalName;
-        retReceiver->rtcpReceiverContext.name = retReceiver->friendlyName;
+        retReceiver->rtcpReceiverContext.sdesItemCount = 0;
+        if ((retReceiver->canonicalName) && (strlen(retReceiver->canonicalName)))
+        {
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
+            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->canonicalName, 256);
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 0;
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
+            retReceiver->rtcpReceiverContext.sdesItemCount++;
+        }
+        if ((retReceiver->friendlyName) && (strlen(retReceiver->friendlyName)))
+        {
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_NAME_ITEM;
+            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->friendlyName, 256);
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 5000000;
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
+            retReceiver->rtcpReceiverContext.sdesItemCount++;
+        }
         retReceiver->rtcpReceiverContext.videoStats.sendTimeInterval = config->videoStatsSendTimeInterval;
 
         if (retReceiver->rtpReceiverContext.maxPacketSize < sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t))

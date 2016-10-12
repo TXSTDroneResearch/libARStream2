@@ -359,44 +359,101 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 }
 
 
-int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc,
-                                             const char *cname, const char *name, unsigned int *size)
+int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc, uint64_t sendTimestamp,
+                                             ARSTREAM2_RTCP_SdesItem_t *sdesItem, int sdesItemCount, unsigned int *size)
 {
-    if ((!sdes) || (!cname))
+    int i;
+
+    if ((!sdes) || (!sdesItem))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
     }
-    unsigned int cname_len = strlen(cname);
-    unsigned int name_len = (name && strlen(name)) ? strlen(name) : 0;
-    unsigned int _size = (sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + cname_len + ((name_len > 0) ? 2 + name_len : 0) + 1 + 3) & ~0x3;
-    if (maxSize < _size)
+    if (sdesItemCount <= 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid SDES item count");
+        return -1;
+    }
+
+    unsigned int _size = sizeof(ARSTREAM2_RTCP_Sdes_t) + 4;
+    if (_size + 1 > maxSize)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
         return -1;
     }
-    memset(sdes, 0, _size);
 
     uint32_t *ssrc_1 = (uint32_t*)((uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t));
-    uint8_t *cnameItem = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4;
-    uint8_t *nameItem = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4 + 2 + cname_len;
+    uint8_t *item = (uint8_t*)sdes + sizeof(ARSTREAM2_RTCP_Sdes_t) + 4;
 
     int sourceCount = 1;
     sdes->flags = (2 << 6) | (sourceCount & 0x1F);
     sdes->packetType = ARSTREAM2_RTCP_SDES_PACKET_TYPE;
-    sdes->length = htons((4 + 2 + cname_len + ((name_len > 0) ? 2 + name_len : 0) + 1 + 3) / 4 * sourceCount);
     *ssrc_1 = htonl(ssrc);
 
-    *cnameItem = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
-    *(cnameItem + 1) = strlen(cname);
-    memcpy(cnameItem + 2, cname, strlen(cname));
-
-    if (name_len > 0)
+    /* SDES items list */
+    for (i = 0; i < sdesItemCount; i++)
     {
-        *nameItem = ARSTREAM2_RTCP_SDES_NAME_ITEM;
-        *(nameItem + 1) = strlen(name);
-        memcpy(nameItem + 2, name, strlen(name));
+        if ((sdesItem[i].value) && (strlen(sdesItem[i].value)))
+        {
+            if (sdesItem[i].type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+            {
+                /* private extension item */
+                if ((sdesItem[i].prefix) && (strlen(sdesItem[i].prefix)))
+                {
+                    if (_size + 2 + 1 + strlen(sdesItem[i].prefix) + strlen(sdesItem[i].value) + 1 > maxSize)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
+                        break;
+                    }
+                    if ((!sdesItem[i].lastSendTime) || (sendTimestamp >= sdesItem[i].lastSendTime + sdesItem[i].sendTimeInterval))
+                    {
+                        *item = sdesItem[i].type;
+                        *(item + 1) = 1 + strlen(sdesItem[i].prefix) + strlen(sdesItem[i].value);
+                        *(item + 2) = strlen(sdesItem[i].prefix);
+                        memcpy(item + 2 + 1, sdesItem[i].prefix, strlen(sdesItem[i].prefix));
+                        memcpy(item + 2 + 1 + strlen(sdesItem[i].prefix), sdesItem[i].value, strlen(sdesItem[i].value));
+                        item += 2 + 1 + strlen(sdesItem[i].prefix) + strlen(sdesItem[i].value);
+                        _size += 2 + 1 + strlen(sdesItem[i].prefix) + strlen(sdesItem[i].value);
+                        sdesItem[i].lastSendTime = sendTimestamp;
+                    }
+                }
+            }
+            else
+            {
+                if (_size + 2 + strlen(sdesItem[i].value) + 1 > maxSize)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
+                    break;
+                }
+                if ((sdesItem[i].type == ARSTREAM2_RTCP_SDES_CNAME_ITEM)
+                        || (!sdesItem[i].lastSendTime) || (sendTimestamp >= sdesItem[i].lastSendTime + sdesItem[i].sendTimeInterval))
+                {
+                    *item = sdesItem[i].type;
+                    *(item + 1) = strlen(sdesItem[i].value);
+                    memcpy(item + 2, sdesItem[i].value, strlen(sdesItem[i].value));
+                    item += 2 + strlen(sdesItem[i].value);
+                    _size += 2 + strlen(sdesItem[i].value);
+                    sdesItem[i].lastSendTime = sendTimestamp;
+                }
+            }
+        }
     }
+
+    /* terminating zero + padding */
+    do
+    {
+        if (_size + 1 > maxSize)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for SDES");
+            return -1;
+        }
+        *item = 0;
+        item++;
+        _size++;
+    }
+    while (_size & 3);
+
+    sdes->length = htons((_size - 4) / 4);
 
     if (size)
         *size = _size;
@@ -405,12 +462,23 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsign
 }
 
 
-int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
+int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
+                                            int sdesItemMaxCount, int *sdesItemCount)
 {
 
-    if (!sdes)
+    if ((!sdes) || (!sdesItem) || (!sdesItemCount))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+    if (sdesItemMaxCount <= 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid SDES item max count");
+        return -1;
+    }
+    if (*sdesItemCount < 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid SDES item count");
         return -1;
     }
 
@@ -436,9 +504,9 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
         return -1;
     }
 
-#if 0 // uncomment to log the SDES values received
-    static const char *ARSTREAM2_RTCP_SdesItemName[8] =
+    static const char *ARSTREAM2_RTCP_SdesItemName[] =
     {
+        "NULL",
         "CNAME",
         "NAME",
         "EMAIL",
@@ -454,11 +522,11 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
     int remLength = length * 4, i;
     for (i = 0; i < sc; i++)
     {
-        // read the SSRC
+        /* read the SSRC */
         ssrc = ntohl(*((uint32_t*)ptr));
         ptr += 4;
         remLength -= 4;
-        // read the SDES items
+        /* read the SDES items */
         while ((*ptr != 0) && (remLength >= 3))
         {
             uint8_t id = *ptr;
@@ -466,14 +534,67 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
             ptr += 2;
             remLength -= 2;
             char str[256];
-            memcpy(str, ptr, len);
-            str[len] = '\0';
-            if (id <= 8)
-                ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s=%s", ssrc, ARSTREAM2_RTCP_SdesItemName[id - 1], str);
+            uint8_t strLen = len;
+            char prefix[256];
+            uint8_t prefixLen = 0;
+            if ((id == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (len > 2))
+            {
+                /* private extension item */
+                prefixLen = *ptr;
+                strLen -= prefixLen - 1;
+                memcpy(prefix, ptr + 1, prefixLen);
+                prefix[prefixLen] = '\0';
+                memcpy(str, ptr + 1 + prefixLen, strLen);
+                str[strLen] = '\0';
+            }
+            else
+            {
+                strLen = len;
+                memcpy(str, ptr, strLen);
+                str[strLen] = '\0';
+            }
+            if (id <= 9)
+            {
+                /*if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s prefix='%s' value='%s'", ssrc, ARSTREAM2_RTCP_SdesItemName[id], prefix, str);
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s value='%s'", ssrc, ARSTREAM2_RTCP_SdesItemName[id], str);
+                }*/
+                int k, found;
+                /* existing item */
+                for (k = 0, found = 0; k < *sdesItemCount; k++)
+                {
+                    if (id == sdesItem[k].type)
+                    {
+                        strncpy(sdesItem[k].value, str, 256);
+                        if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+                        {
+                            strncpy(sdesItem[k].prefix, prefix, 256);
+                        }
+                        found = 1;
+                        break;
+                    }
+                }
+                /* new item */
+                if ((!found) && (*sdesItemCount < sdesItemMaxCount))
+                {
+                    k = *sdesItemCount;
+                    sdesItem[k].type = id;
+                    strncpy(sdesItem[k].value, str, 256);
+                    if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+                    {
+                        strncpy(sdesItem[k].prefix, prefix, 256);
+                    }
+                    *sdesItemCount = k + 1;
+                }
+            }
             ptr += len;
             remLength -= len;
         }
-        // align to multiple of 4 bytes
+        /* align to multiple of 4 bytes */
         if ((*ptr == 0) && (remLength))
         {
             int align = ((remLength + 3) & ~3) - remLength;
@@ -481,7 +602,6 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes)
             ptr += align;
         }
     }
-#endif
 
     return 0;
 }
@@ -811,11 +931,12 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
         }
     }
 
-    if ((ret == 0) && (generateSourceDescription) && (context->cname))
+    if ((ret == 0) && (generateSourceDescription))
     {
         unsigned int sdesSize = 0;
         ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
-                                                       context->senderSsrc, context->cname, context->name, &sdesSize);
+                                                       context->senderSsrc, sendTimestamp,
+                                                       context->sdesItem, context->sdesItemCount, &sdesSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
@@ -884,11 +1005,12 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
         }
     }
 
-    if ((ret == 0) && (generateSourceDescription) && (context->cname))
+    if ((ret == 0) && (generateSourceDescription))
     {
         unsigned int sdesSize = 0;
         ret = ARSTREAM2_RTCP_GenerateSourceDescription((ARSTREAM2_RTCP_Sdes_t*)(packet + totalSize), maxPacketSize - totalSize,
-                                                       context->receiverSsrc, context->cname, context->name, &sdesSize);
+                                                       context->receiverSsrc, sendTimestamp,
+                                                       context->sdesItem, context->sdesItemCount, &sdesSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate source description (%d)", ret);
@@ -981,7 +1103,8 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet);
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                                                              ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process source description (%d)", ret);
@@ -1073,7 +1196,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet);
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                                                              ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to process source description (%d)", ret);
