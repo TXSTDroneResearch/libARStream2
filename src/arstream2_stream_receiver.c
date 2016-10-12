@@ -93,11 +93,10 @@ typedef struct ARSTREAM2_StreamReceiver_s
         int startPending;
         int running;
         int grayIFramePending;
-        ARSTREAM2_StreamRecorder_Handle recorder;
-        ARSTREAM2_StreamRecorder_AccessUnit_t accessUnit;
         ARSAL_Thread_t thread;
-        ARSAL_Mutex_t mutex;
-        int auCount;
+        ARSAL_Mutex_t threadMutex;
+        ARSAL_Cond_t threadCond;
+        ARSTREAM2_StreamRecorder_Handle recorder;
 
     } recorder;
 
@@ -114,7 +113,6 @@ static int ARSTREAM2_StreamReceiver_GenerateGrayIdrFrame(ARSTREAM2_StreamReceive
 static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);
 static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);
 static int ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
-static void ARSTREAM2_StreamReceiver_StreamRecorderAuCallback(eARSTREAM2_STREAM_RECORDER_AU_STATUS status, void *auUserPtr, void *userPtr);
 static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_t *streamReceiver);
@@ -131,7 +129,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     int auFifoCreated = 0;
     int appOutputThreadMutexInit = 0, appOutputThreadCondInit = 0;
     int appOutputCallbackMutexInit = 0, appOutputCallbackCondInit = 0;
-    int recorderMutexInit = 0;
+    int recorderThreadMutexInit = 0, recorderThreadCondInit = 0;
 
     if (!streamReceiverHandle)
     {
@@ -251,7 +249,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 
     if (ret == ARSTREAM2_OK)
     {
-        int mutexInitRet = ARSAL_Mutex_Init(&(streamReceiver->recorder.mutex));
+        int mutexInitRet = ARSAL_Mutex_Init(&(streamReceiver->recorder.threadMutex));
         if (mutexInitRet != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Mutex creation failed (%d)", mutexInitRet);
@@ -259,7 +257,21 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         }
         else
         {
-            recorderMutexInit = 1;
+            recorderThreadMutexInit = 1;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        int condInitRet = ARSAL_Cond_Init(&(streamReceiver->recorder.threadCond));
+        if (condInitRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Cond creation failed (%d)", condInitRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            recorderThreadCondInit = 1;
         }
     }
 
@@ -358,7 +370,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (appOutputThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
             if (appOutputCallbackMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
             if (appOutputCallbackCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
-            if (recorderMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->recorder.mutex));
+            if (recorderThreadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->recorder.threadMutex));
+            if (recorderThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->recorder.threadCond));
             ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStats);
             free(streamReceiver->debugPath);
             free(streamReceiver->friendlyName);
@@ -414,7 +427,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
-    ARSAL_Mutex_Destroy(&(streamReceiver->recorder.mutex));
+    ARSAL_Mutex_Destroy(&(streamReceiver->recorder.threadMutex));
+    ARSAL_Cond_Destroy(&(streamReceiver->recorder.threadCond));
     free(streamReceiver->recorder.fileName);
     free(streamReceiver->pSps);
     free(streamReceiver->pPps);
@@ -532,44 +546,18 @@ static int ARSTREAM2_StreamReceiver_RecorderAuEnqueue(ARSTREAM2_StreamReceiver_t
 
     if ((ret == 0) && (recordtAuItem))
     {
-        ARSTREAM2_H264_AccessUnit_t *au = &recordtAuItem->au;
-        ARSTREAM2_H264_NaluFifoItem_t *naluItem;
-        memset(&streamReceiver->recorder.accessUnit, 0, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
-        streamReceiver->recorder.accessUnit.timestamp = au->ntpTimestamp;
-        streamReceiver->recorder.accessUnit.index = streamReceiver->recorder.auCount++;
-        for (naluItem = au->naluHead, streamReceiver->recorder.accessUnit.naluCount = 0; naluItem; naluItem = naluItem->next, streamReceiver->recorder.accessUnit.naluCount++)
+        /* enqueue the AU */
+        ret = ARSTREAM2_H264_AuFifoEnqueueItem(&streamReceiver->recorder.auFifoQueue, recordtAuItem);
+        if (ret < 0)
         {
-            streamReceiver->recorder.accessUnit.naluData[streamReceiver->recorder.accessUnit.naluCount] = naluItem->nalu.nalu;
-            streamReceiver->recorder.accessUnit.naluSize[streamReceiver->recorder.accessUnit.naluCount] = naluItem->nalu.naluSize;
-        }
-        /* map the access unit sync type */
-        switch (au->syncType)
-        {
-            default:
-            case ARSTREAM2_H264_AU_SYNC_TYPE_NONE:
-                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE;
-                break;
-            case ARSTREAM2_H264_AU_SYNC_TYPE_IDR:
-                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IDR;
-                break;
-            case ARSTREAM2_H264_AU_SYNC_TYPE_IFRAME:
-                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_IFRAME;
-                break;
-            case ARSTREAM2_H264_AU_SYNC_TYPE_PIR_START:
-                streamReceiver->recorder.accessUnit.auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_PIR_START;
-                break;
-        }
-        streamReceiver->recorder.accessUnit.auMetadata = au->buffer->metadataBuffer;
-        streamReceiver->recorder.accessUnit.auMetadataSize = au->metadataSize;
-        streamReceiver->recorder.accessUnit.auUserPtr = recordtAuItem;
-        eARSTREAM2_ERROR recErr = ARSTREAM2_StreamRecorder_PushAccessUnit(streamReceiver->recorder.recorder, &streamReceiver->recorder.accessUnit);
-        if (recErr != ARSTREAM2_OK)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamRecorder_PushAccessUnit() failed: %d (%s)",
-                        recErr, ARSTREAM2_Error_ToString(recErr));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoEnqueueItem() failed (%d)", ret);
             err = -1;
             needUnref = 1;
             needFree = 1;
+        }
+        else
+        {
+            ARSAL_Cond_Signal(&(streamReceiver->recorder.threadCond));
         }
     }
     else
@@ -682,9 +670,9 @@ static int ARSTREAM2_StreamReceiver_GenerateGrayIdrFrame(ARSTREAM2_StreamReceive
         }
 
         /* stream recording */
-        ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
         int recorderRunning = streamReceiver->recorder.running;
-        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
         if ((recorderRunning) && (streamReceiver->recorder.grayIFramePending))
         {
             ret = ARSTREAM2_StreamReceiver_RecorderAuEnqueue(streamReceiver, auItem);
@@ -814,9 +802,9 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
         }
 
         /* stream recording */
-        ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
         int recorderRunning = streamReceiver->recorder.running;
-        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
         if (recorderRunning)
         {
             ret = ARSTREAM2_StreamReceiver_RecorderAuEnqueue(streamReceiver, auItem);
@@ -878,9 +866,9 @@ static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoIt
     }
 
     /* stream recording */
-    ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
+    ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
     int recorderRunning = streamReceiver->recorder.running;
-    ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+    ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
     if (recorderRunning)
     {
         ret = ARSTREAM2_StreamReceiver_RecorderAuEnqueue(streamReceiver, auItem);
@@ -975,37 +963,6 @@ static int ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback(uint8_t *spsBuffer,
 }
 
 
-static void ARSTREAM2_StreamReceiver_StreamRecorderAuCallback(eARSTREAM2_STREAM_RECORDER_AU_STATUS status, void *auUserPtr, void *userPtr)
-{
-    ARSTREAM2_StreamReceiver_t *streamReceiver = (ARSTREAM2_StreamReceiver_t*)userPtr;
-    ARSTREAM2_H264_AuFifoItem_t *auItem = (ARSTREAM2_H264_AuFifoItem_t*)auUserPtr;
-    int ret;
-
-    if (!streamReceiver)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid recorder auCallback user pointer");
-        return;
-    }
-    if (!auItem)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid recorder access unit user pointer");
-        return;
-    }
-
-    /* free the access unit */
-    ret = ARSTREAM2_H264_AuFifoUnrefBuffer(&streamReceiver->auFifo, auItem->au.buffer);
-    if (ret != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to unref buffer (%d)", ret);
-    }
-    ret = ARSTREAM2_H264_AuFifoPushFreeItem(&streamReceiver->auFifo, auItem);
-    if (ret != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
-    }
-}
-
-
 static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_t *streamReceiver)
 {
     int ret = -1;
@@ -1037,9 +994,10 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_
         recConfig.pps = streamReceiver->pPps;
         recConfig.ppsSize = streamReceiver->ppsSize;
         recConfig.serviceType = 0; //TODO
-        recConfig.auFifoSize = streamReceiver->auFifo.bufferPoolSize;
-        recConfig.auCallback = ARSTREAM2_StreamReceiver_StreamRecorderAuCallback;
-        recConfig.auCallbackUserPtr = streamReceiver;
+        recConfig.auFifo = &streamReceiver->auFifo;
+        recConfig.auFifoQueue = &streamReceiver->recorder.auFifoQueue;
+        recConfig.mutex = &streamReceiver->recorder.threadMutex;
+        recConfig.cond = &streamReceiver->recorder.threadCond;
         recErr = ARSTREAM2_StreamRecorder_Init(&streamReceiver->recorder.recorder, &recConfig);
         if (recErr != ARSTREAM2_OK)
         {
@@ -1056,11 +1014,18 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_
             else
             {
                 ret = 0;
-                streamReceiver->recorder.auCount = 0;
-                ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
-                streamReceiver->recorder.grayIFramePending = 1;
-                streamReceiver->recorder.running = 1;
-                ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+                int auFifoRet = ARSTREAM2_H264_AuFifoAddQueue(&streamReceiver->auFifo, &streamReceiver->recorder.auFifoQueue);
+                if (auFifoRet != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoAddQueue() failed (%d)", auFifoRet);
+                }
+                else
+                {
+                    ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
+                    streamReceiver->recorder.grayIFramePending = 1;
+                    streamReceiver->recorder.running = 1;
+                    ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
+                }
             }
         }
     }
@@ -1085,9 +1050,9 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_
         }
         else
         {
-            ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
+            ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
             streamReceiver->recorder.running = 0;
-            ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+            ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
         }
     }
 
@@ -1103,9 +1068,9 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_
     {
         int thErr;
         eARSTREAM2_ERROR err;
-        ARSAL_Mutex_Lock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
         int recRunning = streamReceiver->recorder.running;
-        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.mutex));
+        ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
         if (recRunning)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Stream recorder is not stopped, cannot free");
@@ -1132,6 +1097,13 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderFree(ARSTREAM2_StreamReceiver_
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamRecorder_Free() failed (%d): %s",
                         err, ARSTREAM2_Error_ToString(err));
+            ret = -1;
+        }
+
+        int auFifoRet = ARSTREAM2_H264_AuFifoRemoveQueue(&streamReceiver->auFifo, &streamReceiver->recorder.auFifoQueue);
+        if (auFifoRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoRemoveQueue() failed (%d)", auFifoRet);
             ret = -1;
         }
     }

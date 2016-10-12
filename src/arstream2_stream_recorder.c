@@ -276,32 +276,8 @@ typedef enum
 } eARSTREAM2_STREAM_RECORDER_FILE_TYPE;
 
 
-typedef struct ARSTREAM2_StreamRecorder_AuFifoItem_s
-{
-    ARSTREAM2_StreamRecorder_AccessUnit_t au;
-
-    struct ARSTREAM2_StreamRecorder_AuFifoItem_s* prev;
-    struct ARSTREAM2_StreamRecorder_AuFifoItem_s* next;
-
-} ARSTREAM2_StreamRecorder_AuFifoItem_t;
-
-
-typedef struct ARSTREAM2_StreamRecorder_AuFifo_s
-{
-    int size;
-    int count;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *head;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *tail;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *free;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *pool;
-    ARSAL_Mutex_t mutex;
-
-} ARSTREAM2_StreamRecorder_AuFifo_t;
-
-
 typedef struct ARSTREAM2_StreamRecorder_s
 {
-    ARSAL_Mutex_t mutex;
     int threadShouldStop;
     int threadStarted;
     eARSTREAM2_STREAM_RECORDER_FILE_TYPE fileType;
@@ -312,11 +288,11 @@ typedef struct ARSTREAM2_StreamRecorder_s
     ARMEDIA_VideoEncapsuler_t* videoEncap;
     ARMEDIA_Frame_Header_t videoEncapFrameHeader;
 #endif
-    ARSTREAM2_StreamRecorder_AuFifo_t auFifo;
-    ARSAL_Mutex_t fifoMutex;
-    ARSAL_Cond_t fifoCond;
-    ARSTREAM2_StreamRecorder_AuCallback_t auCallback;
-    void *auCallbackUserPtr;
+    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSTREAM2_H264_AuFifoQueue_t *auFifoQueue;
+    ARSAL_Mutex_t *mutex;
+    ARSAL_Cond_t *cond;
+    uint32_t auCount;
     uint32_t lastSyncIndex;
     void *recordingMetadata;
     unsigned int recordingMetadataSize;
@@ -475,244 +451,11 @@ static int ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(uint64_t timest
 }
 
 
-static int ARSTREAM2_StreamRecorder_FifoInit(ARSTREAM2_StreamRecorder_AuFifo_t *fifo, int maxCount)
-{
-    int i;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t* cur;
-
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    if (maxCount <= 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid FIFO size (%d)", maxCount);
-        return -1;
-    }
-
-    memset(fifo, 0, sizeof(ARSTREAM2_StreamRecorder_AuFifo_t));
-
-    int mutexRet = ARSAL_Mutex_Init(&(fifo->mutex));
-    if (mutexRet != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Mutex creation failed (%d)", mutexRet);
-        return -1;
-    }
-
-    fifo->size = maxCount;
-    fifo->pool = malloc(maxCount * sizeof(ARSTREAM2_StreamRecorder_AuFifoItem_t));
-    if (!fifo->pool)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_StreamRecorder_AuFifoItem_t));
-        fifo->size = 0;
-        return -1;
-    }
-    memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_StreamRecorder_AuFifoItem_t));
-
-    for (i = 0; i < maxCount; i++)
-    {
-        cur = &fifo->pool[i];
-        if (fifo->free)
-        {
-            fifo->free->prev = cur;
-        }
-        cur->next = fifo->free;
-        cur->prev = NULL;
-        fifo->free = cur;
-    }
-
-    return 0;
-}
-
-
-static int ARSTREAM2_StreamRecorder_FifoFree(ARSTREAM2_StreamRecorder_AuFifo_t *fifo)
-{
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    ARSAL_Mutex_Destroy(&(fifo->mutex));
-    free(fifo->pool);
-    memset(fifo, 0, sizeof(ARSTREAM2_StreamRecorder_AuFifo_t));
-
-    return 0;
-}
-
-
-static ARSTREAM2_StreamRecorder_AuFifoItem_t* ARSTREAM2_StreamRecorder_FifoPopFreeItem(ARSTREAM2_StreamRecorder_AuFifo_t *fifo)
-{
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return NULL;
-    }
-
-    ARSAL_Mutex_Lock(&(fifo->mutex));
-
-    if (fifo->free)
-    {
-        ARSTREAM2_StreamRecorder_AuFifoItem_t* cur = fifo->free;
-        fifo->free = cur->next;
-        if (cur->next) cur->next->prev = NULL;
-        cur->prev = NULL;
-        cur->next = NULL;
-        ARSAL_Mutex_Unlock(&(fifo->mutex));
-        return cur;
-    }
-    else
-    {
-        ARSAL_Mutex_Unlock(&(fifo->mutex));
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "AU FIFO is full");
-        return NULL;
-    }
-}
-
-
-static int ARSTREAM2_StreamRecorder_FifoPushFreeItem(ARSTREAM2_StreamRecorder_AuFifo_t *fifo, ARSTREAM2_StreamRecorder_AuFifoItem_t *item)
-{
-    if ((!fifo) || (!item))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    ARSAL_Mutex_Lock(&(fifo->mutex));
-
-    if (fifo->free)
-    {
-        fifo->free->prev = item;
-        item->next = fifo->free;
-    }
-    else
-    {
-        item->next = NULL;
-    }
-    fifo->free = item;
-    item->prev = NULL;
-
-    ARSAL_Mutex_Unlock(&(fifo->mutex));
-
-    return 0;
-}
-
-
-static int ARSTREAM2_StreamRecorder_FifoEnqueueItem(ARSTREAM2_StreamRecorder_AuFifo_t *fifo, ARSTREAM2_StreamRecorder_AuFifoItem_t *item)
-{
-    if ((!fifo) || (!item))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    ARSAL_Mutex_Lock(&(fifo->mutex));
-
-    if (fifo->count >= fifo->size)
-    {
-        ARSAL_Mutex_Unlock(&(fifo->mutex));
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "FIFO is full");
-        return -2;
-    }
-
-    item->next = NULL;
-    if (fifo->tail)
-    {
-        fifo->tail->next = item;
-        item->prev = fifo->tail;
-    }
-    else
-    {
-        item->prev = NULL;
-    }
-    fifo->tail = item;
-    if (!fifo->head)
-    {
-        fifo->head = item;
-    }
-    fifo->count++;
-
-    ARSAL_Mutex_Unlock(&(fifo->mutex));
-
-    return 0;
-}
-
-
-static ARSTREAM2_StreamRecorder_AuFifoItem_t* ARSTREAM2_StreamRecorder_FifoDequeueItem(ARSTREAM2_StreamRecorder_AuFifo_t *fifo)
-{
-    ARSTREAM2_StreamRecorder_AuFifoItem_t* cur;
-
-    if (!fifo)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid pointer");
-        return NULL;
-    }
-
-    ARSAL_Mutex_Lock(&(fifo->mutex));
-
-    if ((!fifo->head) || (!fifo->count))
-    {
-        ARSAL_Mutex_Unlock(&(fifo->mutex));
-        //ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECORDER_TAG, "FIFO is empty");
-        return NULL;
-    }
-
-    cur = fifo->head;
-    if (cur->next)
-    {
-        cur->next->prev = NULL;
-        fifo->head = cur->next;
-        fifo->count--;
-    }
-    else
-    {
-        fifo->head = NULL;
-        fifo->count = 0;
-        fifo->tail = NULL;
-    }
-    cur->prev = NULL;
-    cur->next = NULL;
-
-    ARSAL_Mutex_Unlock(&(fifo->mutex));
-
-    return cur;
-}
-
-
-static void ARSTREAM2_StreamRecorder_FifoFlush(ARSTREAM2_StreamRecorder_t* streamRecorder)
-{
-    ARSTREAM2_StreamRecorder_AuFifoItem_t* item;
-
-    do
-    {
-        item = ARSTREAM2_StreamRecorder_FifoDequeueItem(&streamRecorder->auFifo);
-        if (item)
-        {
-            /* Call the auCallback */
-            if (streamRecorder->auCallback != NULL)
-            {
-                streamRecorder->auCallback(ARSTREAM2_STREAM_RECORDER_AU_STATUS_SUCCESS,
-                                                  item->au.auUserPtr, streamRecorder->auCallbackUserPtr);
-            }
-            int fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
-            if (fifoErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoPushFreeItem() failed (%d)", fifoErr);
-            }
-        }
-    }
-    while (item);
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *streamRecorderHandle,
                                                ARSTREAM2_StreamRecorder_Config_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     ARSTREAM2_StreamRecorder_t *streamRecorder = NULL;
-    int mutexWasInit = 0, fifoMutexWasInit = 0, fifoCondWasInit = 0;
 
     if (!streamRecorderHandle)
     {
@@ -747,9 +490,24 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid PPS");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if (config->auFifoSize <= 0)
+    if (!config->auFifo)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid access unit FIFO size");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid AU FIFO");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (!config->auFifoQueue)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid AU FIFO queue");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (!config->mutex)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid mutex");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (!config->cond)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid cond");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
@@ -763,8 +521,10 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
     if (ret == ARSTREAM2_OK)
     {
         memset(streamRecorder, 0, sizeof(*streamRecorder));
-        streamRecorder->auCallback = config->auCallback;
-        streamRecorder->auCallbackUserPtr = config->auCallbackUserPtr;
+        streamRecorder->auFifo = config->auFifo;
+        streamRecorder->auFifoQueue = config->auFifoQueue;
+        streamRecorder->mutex = config->mutex;
+        streamRecorder->cond = config->cond;
         streamRecorder->videoWidth = config->videoWidth;
         streamRecorder->videoHeight = config->videoHeight;
         if (strcasecmp(config->mediaFileName + mediaFileNameLen - 4, ".mp4") == 0)
@@ -774,16 +534,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
         else
         {
             streamRecorder->fileType = ARSTREAM2_STREAM_RECORDER_FILE_TYPE_H264_BYTE_STREAM;
-        }
-    }
-
-    if (ret == ARSTREAM2_OK)
-    {
-        int fifoErr = ARSTREAM2_StreamRecorder_FifoInit(&streamRecorder->auFifo, config->auFifoSize);
-        if (fifoErr != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoInit() failed (%d)", fifoErr);
-            ret = ARSTREAM2_ERROR_ALLOC;
         }
     }
 
@@ -841,58 +591,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
 
     if (ret == ARSTREAM2_OK)
     {
-        int mutexInitRet = ARSAL_Mutex_Init(&(streamRecorder->mutex));
-        if (mutexInitRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Mutex creation failed (%d)", mutexInitRet);
-            ret = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            mutexWasInit = 1;
-        }
-    }
-
-    if (ret == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(streamRecorder->fifoMutex));
-        if (mutexInitRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Mutex creation failed (%d)", mutexInitRet);
-            ret = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            fifoMutexWasInit = 1;
-        }
-    }
-
-    if (ret == ARSTREAM2_OK)
-    {
-        int condInitRet = ARSAL_Cond_Init(&(streamRecorder->fifoCond));
-        if (condInitRet != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Cond creation failed (%d)", condInitRet);
-            ret = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            fifoCondWasInit = 1;
-        }
-    }
-
-    if (ret == ARSTREAM2_OK)
-    {
         *streamRecorderHandle = (ARSTREAM2_StreamRecorder_Handle*)streamRecorder;
     }
     else
     {
         if (streamRecorder)
         {
-            if (streamRecorder->auFifo.size > 0) ARSTREAM2_StreamRecorder_FifoFree(&streamRecorder->auFifo);
-            if (fifoCondWasInit) ARSAL_Cond_Destroy(&(streamRecorder->fifoCond));
-            if (fifoMutexWasInit) ARSAL_Mutex_Destroy(&(streamRecorder->fifoMutex));
-            if (mutexWasInit) ARSAL_Mutex_Destroy(&(streamRecorder->mutex));
             if (streamRecorder->outputFile) fclose(streamRecorder->outputFile);
             free(streamRecorder);
         }
@@ -917,20 +621,16 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Free(ARSTREAM2_StreamRecorder_Handle *
 
     streamRecorder = (ARSTREAM2_StreamRecorder_t*)*streamRecorderHandle;
 
-    ARSAL_Mutex_Lock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Lock(streamRecorder->mutex);
     if (streamRecorder->threadStarted == 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_STREAM_RECORDER_TAG, "Thread is stopped");
         canDelete = 1;
     }
-    ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Unlock(streamRecorder->mutex);
 
     if (canDelete == 1)
     {
-        ARSTREAM2_StreamRecorder_FifoFree(&streamRecorder->auFifo);
-        ARSAL_Cond_Destroy(&(streamRecorder->fifoCond));
-        ARSAL_Mutex_Destroy(&(streamRecorder->fifoMutex));
-        ARSAL_Mutex_Destroy(&(streamRecorder->mutex));
         if (streamRecorder->outputFile) fclose(streamRecorder->outputFile);
         free(streamRecorder->recordingMetadata);
         free(streamRecorder->savedMetadata);
@@ -959,75 +659,11 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Stop(ARSTREAM2_StreamRecorder_Handle s
     }
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_STREAM_RECORDER_TAG, "Stopping stream recorder...");
-    ARSAL_Mutex_Lock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Lock(streamRecorder->mutex);
     streamRecorder->threadShouldStop = 1;
-    ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Unlock(streamRecorder->mutex);
     /* signal the thread to avoid a deadlock */
-    ARSAL_Cond_Signal(&(streamRecorder->fifoCond));
-
-    return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_PushAccessUnit(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle,
-                                                         ARSTREAM2_StreamRecorder_AccessUnit_t *accessUnit)
-{
-    ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)streamRecorderHandle;
-    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-
-    if (!streamRecorderHandle)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid handle");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if (!accessUnit)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid access unit");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *item;
-    item = ARSTREAM2_StreamRecorder_FifoPopFreeItem(&streamRecorder->auFifo);
-    if (item)
-    {
-        memcpy(&item->au, accessUnit, sizeof(ARSTREAM2_StreamRecorder_AccessUnit_t));
-        int fifoErr = ARSTREAM2_StreamRecorder_FifoEnqueueItem(&streamRecorder->auFifo, item);
-        if (fifoErr != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoEnqueueItem() failed (%d)", fifoErr);
-            fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
-            /* Flush the FIFO */
-            ARSTREAM2_StreamRecorder_FifoFlush(streamRecorder);
-            if (fifoErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoPushFreeItem() failed (%d)", fifoErr);
-            }
-        }
-    }
-    else
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Access unit FIFO is full");
-        return ARSTREAM2_ERROR_QUEUE_FULL;
-    }
-    ARSAL_Cond_Signal(&(streamRecorder->fifoCond));
-
-    return ret;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Flush(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle)
-{
-    ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)streamRecorderHandle;
-    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-
-    if (!streamRecorderHandle)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid handle");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    ARSTREAM2_StreamRecorder_FifoFlush(streamRecorder);
-    ARSAL_Cond_Signal(&(streamRecorder->fifoCond));
+    ARSAL_Cond_Signal(streamRecorder->cond);
 
     return ret;
 }
@@ -1036,7 +672,6 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Flush(ARSTREAM2_StreamRecorder_Handle 
 void* ARSTREAM2_StreamRecorder_RunThread(void *param)
 {
     ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)param;
-    ARSTREAM2_StreamRecorder_AuFifoItem_t *item;
     int shouldStop;
 
     if (!param)
@@ -1045,17 +680,24 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
         return 0;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECORDER_TAG, "Stream recorder thread is started");
-    ARSAL_Mutex_Lock(&(streamRecorder->mutex));
+    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECORDER_TAG, "Stream recorder thread running");
+    ARSAL_Mutex_Lock(streamRecorder->mutex);
     streamRecorder->threadStarted = 1;
     shouldStop = streamRecorder->threadShouldStop;
-    ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Unlock(streamRecorder->mutex);
 
     while (!shouldStop)
     {
-        item = ARSTREAM2_StreamRecorder_FifoDequeueItem(&streamRecorder->auFifo);
-        while (item)
+        ARSTREAM2_H264_AuFifoItem_t *auItem;
+
+        /* dequeue an access unit */
+        auItem = ARSTREAM2_H264_AuFifoDequeueItem(streamRecorder->auFifoQueue);
+
+        while (auItem != NULL)
         {
+            ARSTREAM2_H264_AccessUnit_t *au = &auItem->au;
+            ARSTREAM2_H264_NaluFifoItem_t *naluItem;
+
             /* Record the frame */
             switch (streamRecorder->fileType)
             {
@@ -1063,24 +705,17 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
             {
                 if (streamRecorder->outputFile)
                 {
-                    if (item->au.naluCount)
+                    for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
                     {
-                        unsigned int i;
-                        for (i = 0; i < item->au.naluCount; i++)
-                        {
-                            fwrite(item->au.naluData[i], item->au.naluSize[i], 1, streamRecorder->outputFile);
-                        }
+                        fwrite(naluItem->nalu.nalu, naluItem->nalu.naluSize, 1, streamRecorder->outputFile);
                     }
-                    else
-                    {
-                        fwrite(item->au.auData, item->au.auSize, 1, streamRecorder->outputFile);
-                    }
-                    if ((item->au.auSyncType != ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE)
-                            || (item->au.index >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
+
+                    if ((au->syncType != ARSTREAM2_H264_AU_SYNC_TYPE_NONE)
+                            || (streamRecorder->auCount >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
                     {
                         fflush(streamRecorder->outputFile);
                         fsync(fileno(streamRecorder->outputFile));
-                        streamRecorder->lastSyncIndex = item->au.index;
+                        streamRecorder->lastSyncIndex = streamRecorder->auCount;
                     }
                 }
                 break;
@@ -1091,30 +726,28 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 int gotMetadata = 0;
                 memset(&streamRecorder->videoEncapFrameHeader, 0, sizeof(ARMEDIA_Frame_Header_t));
                 streamRecorder->videoEncapFrameHeader.codec = CODEC_MPEG4_AVC;
-                streamRecorder->videoEncapFrameHeader.frame_size = item->au.auSize;
-                streamRecorder->videoEncapFrameHeader.frame_number = item->au.index;
+                streamRecorder->videoEncapFrameHeader.frame_size = au->auSize;
+                streamRecorder->videoEncapFrameHeader.frame_number = streamRecorder->auCount;
                 streamRecorder->videoEncapFrameHeader.width = streamRecorder->videoWidth;
                 streamRecorder->videoEncapFrameHeader.height = streamRecorder->videoHeight;
-                streamRecorder->videoEncapFrameHeader.timestamp = item->au.timestamp;
-                streamRecorder->videoEncapFrameHeader.frame_type = (item->au.auSyncType == ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
-                streamRecorder->videoEncapFrameHeader.frame = item->au.auData;
+                streamRecorder->videoEncapFrameHeader.timestamp = au->ntpTimestamp;
+                streamRecorder->videoEncapFrameHeader.frame_type = (au->syncType == ARSTREAM2_H264_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
+                streamRecorder->videoEncapFrameHeader.frame = au->buffer->auBuffer;
                 streamRecorder->videoEncapFrameHeader.avc_insert_ps = 0;
-                streamRecorder->videoEncapFrameHeader.avc_nalu_count = item->au.naluCount;
-                if (item->au.naluCount)
+                unsigned int naluCount = 0;
+                for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
                 {
-                    unsigned int i;
-                    for (i = 0; i < item->au.naluCount; i++)
-                    {
-                        streamRecorder->videoEncapFrameHeader.avc_nalu_size[i] = item->au.naluSize[i];
-                        streamRecorder->videoEncapFrameHeader.avc_nalu_data[i] = item->au.naluData[i];
-                    }
+                    streamRecorder->videoEncapFrameHeader.avc_nalu_size[naluCount] = naluItem->nalu.naluSize;
+                    streamRecorder->videoEncapFrameHeader.avc_nalu_data[naluCount] = naluItem->nalu.nalu;
+                    naluCount++;
                 }
+                streamRecorder->videoEncapFrameHeader.avc_nalu_count = naluCount;
 
-                if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize == 0))
+                if ((au->buffer->metadataBuffer) && (au->metadataSize) && (streamRecorder->recordingMetadataSize == 0))
                 {
                     /* Setup the metadata */
                     int size = 0;
-                    streamRecorder->recordingMetadataType = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(item->au.auMetadata, item->au.auMetadataSize, &size);
+                    streamRecorder->recordingMetadataType = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadataType(au->buffer->metadataBuffer, au->metadataSize, &size);
                     if (size > 0)
                     {
                         int ret = 0;
@@ -1169,11 +802,11 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                         }
                     }
                 }
-                if ((item->au.auMetadata) && (item->au.auMetadataSize) && (streamRecorder->recordingMetadataSize > 0))
+                if ((au->buffer->metadataBuffer) && (au->metadataSize) && (streamRecorder->recordingMetadataSize > 0))
                 {
                     /* Convert the metadata */
-                    int ret = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(item->au.timestamp,
-                                                                                    item->au.auMetadata, item->au.auMetadataSize,
+                    int ret = ARSTREAM2_StreamRecorder_StreamingToRecordingMetadata(au->ntpTimestamp,
+                                                                                    au->buffer->metadataBuffer, au->metadataSize,
                                                                                     streamRecorder->savedMetadata, streamRecorder->savedMetadataSize,
                                                                                     streamRecorder->recordingMetadata, streamRecorder->recordingMetadataSize,
                                                                                     streamRecorder->recordingMetadataType);
@@ -1199,37 +832,36 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 break;
             }
 
-            /* Call the auCallback */
-            if (streamRecorder->auCallback != NULL)
+            streamRecorder->auCount++;
+
+            /* free the access unit */
+            int ret = ARSTREAM2_H264_AuFifoUnrefBuffer(streamRecorder->auFifo, auItem->au.buffer);
+            if (ret != 0)
             {
-                streamRecorder->auCallback(ARSTREAM2_STREAM_RECORDER_AU_STATUS_SUCCESS,
-                                                  item->au.auUserPtr, streamRecorder->auCallbackUserPtr);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Failed to unref buffer (%d)", ret);
+            }
+            ret = ARSTREAM2_H264_AuFifoPushFreeItem(streamRecorder->auFifo, auItem);
+            if (ret != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
             }
 
-            int fifoErr = ARSTREAM2_StreamRecorder_FifoPushFreeItem(&streamRecorder->auFifo, item);
-            if (fifoErr != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARSTREAM2_StreamRecorder_FifoPushFreeItem() failed (%d)", fifoErr);
-            }
-
-            item = ARSTREAM2_StreamRecorder_FifoDequeueItem(&streamRecorder->auFifo);
+            /* dequeue the next access unit */
+            auItem = ARSTREAM2_H264_AuFifoDequeueItem(streamRecorder->auFifoQueue);
         }
 
-        ARSAL_Mutex_Lock(&(streamRecorder->mutex));
+        ARSAL_Mutex_Lock(streamRecorder->mutex);
         shouldStop = streamRecorder->threadShouldStop;
-        ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
+        ARSAL_Mutex_Unlock(streamRecorder->mutex);
 
         if (!shouldStop)
         {
             /* Wake up when a new AU is in the FIFO or when we need to exit */
-            ARSAL_Mutex_Lock(&(streamRecorder->fifoMutex));
-            ARSAL_Cond_Timedwait(&(streamRecorder->fifoCond), &(streamRecorder->fifoMutex), ARSTREAM2_STREAM_RECORDER_FIFO_COND_TIMEOUT_MS);
-            ARSAL_Mutex_Unlock(&(streamRecorder->fifoMutex));
+            ARSAL_Mutex_Lock(streamRecorder->mutex);
+            ARSAL_Cond_Timedwait(streamRecorder->cond, streamRecorder->mutex, ARSTREAM2_STREAM_RECORDER_FIFO_COND_TIMEOUT_MS);
+            ARSAL_Mutex_Unlock(streamRecorder->mutex);
         }
     }
-
-    /* Flush the FIFO */
-    ARSTREAM2_StreamRecorder_FifoFlush(streamRecorder);
 
 #if BUILD_LIBARMEDIA
     if (streamRecorder->fileType == ARSTREAM2_STREAM_RECORDER_FILE_TYPE_MP4)
@@ -1242,9 +874,9 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
     }
 #endif
 
-    ARSAL_Mutex_Lock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Lock(streamRecorder->mutex);
     streamRecorder->threadStarted = 0;
-    ARSAL_Mutex_Unlock(&(streamRecorder->mutex));
+    ARSAL_Mutex_Unlock(streamRecorder->mutex);
     ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECORDER_TAG, "Stream recorder thread has ended");
 
     return (void*)0;
