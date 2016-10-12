@@ -560,6 +560,7 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverNetConfig.clientControlPort = deviceManager->arstream2ClientControlPort;
         streamReceiverConfig.canonicalName = "StreamReceiverTest";
         streamReceiverConfig.friendlyName = "StreamReceiverTest";
+        streamReceiverConfig.applicationName = "StreamReceiverTest";
         streamReceiverConfig.maxPacketSize = deviceManager->arstream2MaxPacketSize;
         streamReceiverConfig.generateReceiverReports = 1;
         streamReceiverConfig.waitForSync = 1;

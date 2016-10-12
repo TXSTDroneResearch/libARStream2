@@ -1054,6 +1054,10 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             retReceiver->friendlyName = strndup(config->friendlyName, 40);
         }
+        if (config->applicationName)
+        {
+            retReceiver->applicationName = strndup(config->applicationName, 40);
+        }
         retReceiver->auFifo = config->auFifo;
         retReceiver->rtph264ReceiverContext.auCallback = config->auCallback;
         retReceiver->rtph264ReceiverContext.auCallbackUserPtr = config->auCallbackUserPtr;
@@ -1082,6 +1086,14 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_NAME_ITEM;
             strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->friendlyName, 256);
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 5000000;
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
+            retReceiver->rtcpReceiverContext.sdesItemCount++;
+        }
+        if ((retReceiver->applicationName) && (strlen(retReceiver->applicationName)))
+        {
+            retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_TOOL_ITEM;
+            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->applicationName, 256);
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 5000000;
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
             retReceiver->rtcpReceiverContext.sdesItemCount++;
@@ -1338,6 +1350,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         free(retReceiver->rtcpMsgBuffer);
         free(retReceiver->canonicalName);
         free(retReceiver->friendlyName);
+        free(retReceiver->applicationName);
         free(retReceiver->net.serverAddr);
         free(retReceiver->net.mcastAddr);
         free(retReceiver->net.mcastIfaceAddr);
@@ -1442,6 +1455,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             free((*receiver)->rtcpMsgBuffer);
             free((*receiver)->canonicalName);
             free((*receiver)->friendlyName);
+            free((*receiver)->applicationName);
             free((*receiver)->net.serverAddr);
             free((*receiver)->net.mcastAddr);
             free((*receiver)->net.mcastIfaceAddr);

@@ -117,6 +117,7 @@ struct ARSTREAM2_RtpSender_t {
     /* Configuration on New */
     char *canonicalName;
     char *friendlyName;
+    char *applicationName;
     char *clientAddr;
     char *mcastAddr;
     char *mcastIfaceAddr;
@@ -615,6 +616,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             retSender->friendlyName = strndup(config->friendlyName, 40);
         }
+        if (config->applicationName)
+        {
+            retSender->applicationName = strndup(config->applicationName, 40);
+        }
         if (config->clientAddr)
         {
             retSender->clientAddr = strndup(config->clientAddr, 16);
@@ -689,6 +694,14 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_NAME_ITEM;
             strncpy(retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].value, retSender->friendlyName, 256);
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].sendTimeInterval = 5000000;
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].lastSendTime = 0;
+            retSender->rtcpSenderContext.sdesItemCount++;
+        }
+        if ((retSender->applicationName) && (strlen(retSender->applicationName)))
+        {
+            retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_TOOL_ITEM;
+            strncpy(retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].value, retSender->applicationName, 256);
             retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].sendTimeInterval = 5000000;
             retSender->rtcpSenderContext.sdesItem[retSender->rtcpSenderContext.sdesItemCount].lastSendTime = 0;
             retSender->rtcpSenderContext.sdesItemCount++;
@@ -940,6 +953,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         free(retSender->rtcpMsgBuffer);
         free(retSender->canonicalName);
         free(retSender->friendlyName);
+        free(retSender->applicationName);
         free(retSender->clientAddr);
         free(retSender->mcastAddr);
         free(retSender->mcastIfaceAddr);
@@ -1018,6 +1032,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             free((*sender)->msgVec);
             free((*sender)->rtcpMsgBuffer);
             free((*sender)->friendlyName);
+            free((*sender)->applicationName);
             free((*sender)->clientAddr);
             free((*sender)->mcastAddr);
             free((*sender)->mcastIfaceAddr);

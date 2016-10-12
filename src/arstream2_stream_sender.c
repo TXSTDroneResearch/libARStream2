@@ -98,6 +98,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         memset(&senderConfig, 0, sizeof(senderConfig));
         senderConfig.canonicalName = config->canonicalName;
         senderConfig.friendlyName = config->friendlyName;
+        senderConfig.applicationName = config->applicationName;
         senderConfig.clientAddr = config->clientAddr;
         senderConfig.mcastAddr = config->mcastAddr;
         senderConfig.mcastIfaceAddr = config->mcastIfaceAddr;

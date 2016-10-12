@@ -297,6 +297,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 
         receiverConfig.canonicalName = config->canonicalName;
         receiverConfig.friendlyName = config->friendlyName;
+        receiverConfig.applicationName = config->applicationName;
         receiverConfig.auFifo = &(streamReceiver->auFifo);
         receiverConfig.auCallback = ARSTREAM2_StreamReceiver_RtpReceiverAuCallback;
         receiverConfig.auCallbackUserPtr = streamReceiver;
@@ -1691,6 +1692,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
 
     resenderConfig.canonicalName = config->canonicalName;
     resenderConfig.friendlyName = config->friendlyName;
+    resenderConfig.applicationName = config->applicationName;
     resenderConfig.clientAddr = config->clientAddr;
     resenderConfig.mcastAddr = config->mcastAddr;
     resenderConfig.mcastIfaceAddr = config->mcastIfaceAddr;

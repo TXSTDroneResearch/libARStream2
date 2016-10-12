@@ -238,6 +238,7 @@ ARSTREAM2_RtpReceiver_RtpResender_t* ARSTREAM2_RtpReceiverResender_New(ARSTREAM2
         memset(&senderConfig, 0, sizeof(senderConfig));
         senderConfig.canonicalName = config->canonicalName;
         senderConfig.friendlyName = config->friendlyName;
+        senderConfig.applicationName = config->applicationName;
         senderConfig.clientAddr = config->clientAddr;
         senderConfig.mcastAddr = config->mcastAddr;
         senderConfig.mcastIfaceAddr = config->mcastIfaceAddr;

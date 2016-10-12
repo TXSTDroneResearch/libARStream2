@@ -94,6 +94,7 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
 {
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
+    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
@@ -111,6 +112,7 @@ typedef struct ARSTREAM2_RtpReceiver_RtpResender_Config_t
 {
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
+    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
@@ -228,6 +230,7 @@ struct ARSTREAM2_RtpReceiver_t {
 
     char *canonicalName;
     char *friendlyName;
+    char *applicationName;
     int insertStartCodes;
     int generateReceiverReports;
     uint8_t *rtcpMsgBuffer;

@@ -269,6 +269,7 @@ typedef struct
 {
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
+    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int generateReceiverReports;                    /**< if true, generate RTCP receiver reports */
     int waitForSync;                                /**< if true, wait for SPS/PPS sync before outputting access anits */
@@ -290,6 +291,7 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
 {
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
+    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
