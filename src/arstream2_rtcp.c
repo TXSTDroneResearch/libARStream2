@@ -504,7 +504,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
         return -1;
     }
 
-    static const char *ARSTREAM2_RTCP_SdesItemName[] =
+    /*static const char *ARSTREAM2_RTCP_SdesItemName[] =
     {
         "NULL",
         "CNAME",
@@ -515,7 +515,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
         "TOOL",
         "NOTE",
         "PRIV",
-    };
+    };*/
 
     const uint8_t *ptr = (uint8_t*)sdes + 4;
     uint32_t ssrc;
@@ -541,7 +541,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
             {
                 /* private extension item */
                 prefixLen = *ptr;
-                strLen -= prefixLen - 1;
+                strLen = strLen - prefixLen - 1;
                 memcpy(prefix, ptr + 1, prefixLen);
                 prefix[prefixLen] = '\0';
                 memcpy(str, ptr + 1 + prefixLen, strLen);
@@ -569,13 +569,21 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
                 {
                     if (id == sdesItem[k].type)
                     {
-                        strncpy(sdesItem[k].value, str, 256);
                         if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
                         {
-                            strncpy(sdesItem[k].prefix, prefix, 256);
+                            if (!strncmp(prefix, sdesItem[k].prefix, 256))
+                            {
+                                strncpy(sdesItem[k].value, str, 256);
+                                found = 1;
+                                break;
+                            }
                         }
-                        found = 1;
-                        break;
+                        else
+                        {
+                            strncpy(sdesItem[k].value, str, 256);
+                            found = 1;
+                            break;
+                        }
                     }
                 }
                 /* new item */
