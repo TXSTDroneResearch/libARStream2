@@ -22,8 +22,6 @@
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
 
-#define ARSTREAM2_STREAM_RECEIVER_TIMEOUT_US (100 * 1000)
-
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT (200)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_NALU_COUNT (128)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT (60)
@@ -111,7 +109,6 @@ typedef struct ARSTREAM2_StreamReceiver_s
 
 static int ARSTREAM2_StreamReceiver_GenerateGrayIdrFrame(ARSTREAM2_StreamReceiver_t *streamReceiver, ARSTREAM2_H264_AccessUnit_t *nextAu);
 static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);
-static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr);
 static int ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);
 static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_t *streamReceiver);
 static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_t *streamReceiver);
@@ -819,62 +816,6 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
         if (ret < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264Filter_ProcessAu() failed (%d)", ret);
-        }
-    }
-
-    /* free the access unit */
-    ret = ARSTREAM2_H264_AuFifoUnrefBuffer(&streamReceiver->auFifo, auItem->au.buffer);
-    if (ret != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to unref buffer (%d)", ret);
-    }
-    ret = ARSTREAM2_H264_AuFifoPushFreeItem(&streamReceiver->auFifo, auItem);
-    if (ret != 0)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to push free item in the AU FIFO (%d)", ret);
-    }
-
-    return err;
-}
-
-
-static int ARSTREAM2_StreamReceiver_H264FilterAuCallback(ARSTREAM2_H264_AuFifoItem_t *auItem, void *userPtr)
-{
-    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)userPtr;
-    int err = 0, ret;
-
-    if ((!auItem) || (!userPtr))
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer");
-        return -1;
-    }
-
-    streamReceiver->lastAuNtpTimestamp = auItem->au.ntpTimestamp;
-    streamReceiver->lastAuNtpTimestampRaw = auItem->au.ntpTimestampRaw;
-
-    /* application output */
-    ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
-    int appOutputRunning = streamReceiver->appOutput.running;
-    ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
-    if (appOutputRunning)
-    {
-        ret = ARSTREAM2_StreamReceiver_AppOutputAuEnqueue(streamReceiver, auItem);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_AppOutputAuEnqueue() failed (%d)", ret);
-        }
-    }
-
-    /* stream recording */
-    ARSAL_Mutex_Lock(&(streamReceiver->recorder.threadMutex));
-    int recorderRunning = streamReceiver->recorder.running;
-    ARSAL_Mutex_Unlock(&(streamReceiver->recorder.threadMutex));
-    if (recorderRunning)
-    {
-        ret = ARSTREAM2_StreamReceiver_RecorderAuEnqueue(streamReceiver, auItem);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_RecorderAuEnqueue() failed (%d)", ret);
         }
     }
 
