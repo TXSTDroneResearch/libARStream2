@@ -211,6 +211,54 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 
 
 /**
+ * @brief Get a RTCP Source Description item
+ *
+ * @param[in] sender The sender instance
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value Pointer to the SDES item value
+ * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
+ * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, char **value, uint32_t *sendInterval);
+
+
+/**
+ * @brief Set a RTCP Source Description item
+ *
+ * @param[in] sender The sender instance
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value SDES item value
+ * @param[in] sendInterval SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
+ * @return ARSTREAM2_ERROR_ALLOC if the max number of SDES items has been reached
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, const char *value, uint32_t sendInterval);
+
+
+/**
+ * @brief Get a peer RTCP Source Description item
+ *
+ * @param[in] sender The sender instance
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value Pointer to the SDES item value
+ * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
+ * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ */
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetPeerSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, char **value);
+
+
+/**
  * @brief Get the stream monitoring
  * The monitoring data is computed form the time startTime and back timeIntervalUs microseconds at most.
  * If startTime is 0 the start time is the current time.

@@ -1742,6 +1742,150 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, char **value, uint32_t *sendInterval)
+{
+    int k, found;
+
+    if ((sender == NULL) || (value == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((type == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (prefix == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    for (k = 0, found = 0; k < sender->rtcpSenderContext.sdesItemCount; k++)
+    {
+        if (type == sender->rtcpSenderContext.sdesItem[k].type)
+        {
+            if (type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+            {
+                if (!strncmp(prefix, sender->rtcpSenderContext.sdesItem[k].prefix, 256))
+                {
+                    *value = sender->rtcpSenderContext.sdesItem[k].value;
+                    if (sendInterval) *sendInterval = sender->rtcpSenderContext.sdesItem[k].sendTimeInterval;
+                    found = 1;
+                    break;
+                }
+            }
+            else
+            {
+                *value = sender->rtcpSenderContext.sdesItem[k].value;
+                if (sendInterval) *sendInterval = sender->rtcpSenderContext.sdesItem[k].sendTimeInterval;
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    return (found) ? ARSTREAM2_OK : ARSTREAM2_ERROR_NOT_FOUND;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, const char *value, uint32_t sendInterval)
+{
+    int k, found;
+
+    if ((sender == NULL) || (value == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((type == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (prefix == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    for (k = 0, found = 0; k < sender->rtcpSenderContext.sdesItemCount; k++)
+    {
+        if (type == sender->rtcpSenderContext.sdesItem[k].type)
+        {
+            if (type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+            {
+                if (!strncmp(prefix, sender->rtcpSenderContext.sdesItem[k].prefix, 256))
+                {
+                    strncpy(sender->rtcpSenderContext.sdesItem[k].value, value, 256);
+                    sender->rtcpSenderContext.sdesItem[k].sendTimeInterval = sendInterval;
+                    sender->rtcpSenderContext.sdesItem[k].lastSendTime = 0;
+                    found = 1;
+                    break;
+                }
+            }
+            else
+            {
+                strncpy(sender->rtcpSenderContext.sdesItem[k].value, value, 256);
+                sender->rtcpSenderContext.sdesItem[k].sendTimeInterval = sendInterval;
+                sender->rtcpSenderContext.sdesItem[k].lastSendTime = 0;
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    if (!found)
+    {
+        if (sender->rtcpSenderContext.sdesItemCount >= ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT)
+        {
+            return ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            k = sender->rtcpSenderContext.sdesItemCount;
+            sender->rtcpSenderContext.sdesItem[k].type = type;
+            strncpy(sender->rtcpSenderContext.sdesItem[k].value, value, 256);
+            if (type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+            {
+                strncpy(sender->rtcpSenderContext.sdesItem[k].prefix, prefix, 256);
+            }
+            sender->rtcpSenderContext.sdesItem[k].sendTimeInterval = sendInterval;
+            sender->rtcpSenderContext.sdesItem[k].lastSendTime = 0;
+            sender->rtcpSenderContext.sdesItemCount++;
+        }
+    }
+
+    return ARSTREAM2_OK;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetPeerSdesItem(ARSTREAM2_RtpSender_t *sender, uint8_t type, const char *prefix, char **value)
+{
+    int k, found;
+
+    if ((sender == NULL) || (value == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((type == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (prefix == NULL))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    for (k = 0, found = 0; k < sender->rtcpSenderContext.peerSdesItemCount; k++)
+    {
+        if (type == sender->rtcpSenderContext.peerSdesItem[k].type)
+        {
+            if (type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+            {
+                if (!strncmp(prefix, sender->rtcpSenderContext.peerSdesItem[k].prefix, 256))
+                {
+                    *value = sender->rtcpSenderContext.peerSdesItem[k].value;
+                    found = 1;
+                    break;
+                }
+            }
+            else
+            {
+                *value = sender->rtcpSenderContext.peerSdesItem[k].value;
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    return (found) ? ARSTREAM2_OK : ARSTREAM2_ERROR_NOT_FOUND;
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetMonitoring(ARSTREAM2_RtpSender_t *sender, uint64_t startTime, uint32_t timeIntervalUs,
                                                    ARSTREAM2_StreamSender_MonitoringData_t *monitoringData)
 {

@@ -49,6 +49,19 @@ extern "C" {
 
 
 /**
+ * @brief RTCP Source Description item types
+ */
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_CNAME_ITEM 1
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_NAME_ITEM 2
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_EMAIL_ITEM 3
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_PHONE_ITEM 4
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_LOC_ITEM 5
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_TOOL_ITEM 6
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_NOTE_ITEM 7
+#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_PRIV_ITEM 8
+
+
+/**
  * @brief ARSTREAM2 StreamReceiver instance handle.
  */
 typedef void* ARSTREAM2_StreamReceiver_Handle;
@@ -526,6 +539,57 @@ void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle);
  * @return ARSTREAM2_ERROR_WAITING_FOR_SYNC if SPS/PPS are not available (no sync).
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle, uint8_t *spsBuffer, int *spsSize, uint8_t *ppsBuffer, int *ppsSize);
+
+
+/**
+ * @brief Get a RTCP Source Description item
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value Pointer to the SDES item value
+ * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
+ * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                      uint8_t type, const char *prefix, char **value, uint32_t *sendInterval);
+
+
+/**
+ * @brief Set a RTCP Source Description item
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value SDES item value
+ * @param[in] sendInterval SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
+ * @return ARSTREAM2_ERROR_ALLOC if the max number of SDES items has been reached
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                      uint8_t type, const char *prefix, const char *value, uint32_t sendInterval);
+
+
+/**
+ * @brief Get a peer RTCP Source Description item
+ *
+ * @param streamReceiverHandle Instance handle.
+ * @param[in] type SDES item type
+ * @param[in] prefix SDES item prefix (only for private extension type)
+ * @param[in] value Pointer to the SDES item value
+ * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
+ * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                          uint8_t type, const char *prefix, char **value);
 
 
 #ifdef __cplusplus

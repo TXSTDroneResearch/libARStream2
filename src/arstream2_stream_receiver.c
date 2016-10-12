@@ -1663,6 +1663,51 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                      uint8_t type, const char *prefix, char **value, uint32_t *sendInterval)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, type, prefix, value, sendInterval);
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                      uint8_t type, const char *prefix, const char *value, uint32_t sendInterval)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, type, prefix, value, sendInterval);
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                          uint8_t type, const char *prefix, char **value)
+{
+    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+
+    if (!streamReceiverHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, type, prefix, value);
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
                                                         ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
                                                         const ARSTREAM2_StreamReceiver_ResenderConfig_t *config)

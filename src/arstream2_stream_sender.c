@@ -348,6 +348,51 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                      uint8_t type, const char *prefix, char **value, uint32_t *sendInterval)
+{
+    ARSTREAM2_StreamSender_t* streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+
+    if (!streamSenderHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpSender_GetSdesItem(streamSender->sender, type, prefix, value, sendInterval);
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                      uint8_t type, const char *prefix, const char *value, uint32_t sendInterval)
+{
+    ARSTREAM2_StreamSender_t* streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+
+    if (!streamSenderHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpSender_SetSdesItem(streamSender->sender, type, prefix, value, sendInterval);
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetPeerSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                          uint8_t type, const char *prefix, char **value)
+{
+    ARSTREAM2_StreamSender_t* streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+
+    if (!streamSenderHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    return ARSTREAM2_RtpSender_GetPeerSdesItem(streamSender->sender, type, prefix, value);
+}
+
+
 eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetMonitoring(ARSTREAM2_StreamSender_Handle streamSenderHandle,
                                                       uint64_t startTime, uint32_t timeIntervalUs,
                                                       ARSTREAM2_StreamSender_MonitoringData_t *monitoringData)
