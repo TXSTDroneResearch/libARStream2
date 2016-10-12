@@ -471,9 +471,7 @@ static int ARSTREAM2_StreamReceiver_AppOutputAuEnqueue(ARSTREAM2_StreamReceiver_
     if ((ret == 0) && (appOutputAuItem))
     {
         /* enqueue the AU */
-        ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
         ret = ARSTREAM2_H264_AuFifoEnqueueItem(&streamReceiver->appOutput.auFifoQueue, appOutputAuItem);
-        ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
         if (ret < 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoEnqueueItem() failed (%d)", ret);
@@ -1082,9 +1080,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
         /* dequeue an access unit */
-        ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
         auItem = ARSTREAM2_H264_AuFifoDequeueItem(&streamReceiver->appOutput.auFifoQueue);
-        ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
 
         while (auItem != NULL)
         {
@@ -1352,9 +1348,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
             }
 
             /* dequeue the next access unit */
-            ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
             auItem = ARSTREAM2_H264_AuFifoDequeueItem(&streamReceiver->appOutput.auFifoQueue);
-            ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
         }
 
         ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
@@ -1421,14 +1415,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartAppOutput(ARSTREAM2_StreamReceive
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
-    ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
     int auFifoRet = ARSTREAM2_H264_AuFifoAddQueue(&streamReceiver->auFifo, &streamReceiver->appOutput.auFifoQueue);
     if (auFifoRet != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoAddQueue() failed (%d)", auFifoRet);
         ret = ARSTREAM2_ERROR_ALLOC;
     }
-    ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
 
     ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
     while (streamReceiver->appOutput.callbackInProgress)
@@ -1482,14 +1474,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopAppOutput(ARSTREAM2_StreamReceiver
     streamReceiver->appOutput.auReadyCallbackUserPtr = NULL;
     ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
-    ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
     int auFifoRet = ARSTREAM2_H264_AuFifoRemoveQueue(&streamReceiver->auFifo, &streamReceiver->appOutput.auFifoQueue);
     if (auFifoRet != 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_H264_AuFifoRemoveQueue() failed (%d)", auFifoRet);
         ret = ARSTREAM2_ERROR_ALLOC;
     }
-    ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.threadMutex));
 
     ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_RECEIVER_TAG, "App output is stopped");
 
