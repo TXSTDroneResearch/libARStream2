@@ -15,6 +15,7 @@ extern "C" {
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
 #include <libARStream2/arstream2_stream_sender.h>
+#include "arstream2_rtcp.h"
 
 
 /**

@@ -39,19 +39,6 @@ extern "C" {
 
 
 /**
- * @brief RTCP Source Description item types
- */
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_CNAME_ITEM 1
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_NAME_ITEM 2
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_EMAIL_ITEM 3
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_PHONE_ITEM 4
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_LOC_ITEM 5
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_TOOL_ITEM 6
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_NOTE_ITEM 7
-#define ARSTREAM2_STREAM_RECEIVER_RTCP_SDES_PRIV_ITEM 8
-
-
-/**
  * @brief ARSTREAM2 StreamReceiver instance handle.
  */
 typedef void* ARSTREAM2_StreamReceiver_Handle;
@@ -272,9 +259,9 @@ typedef struct
  */
 typedef struct
 {
-    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
-    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
-    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
+    const char *canonicalName;                      /**< Untimed metadata: unique identifier (such as device serial number) */
+    const char *friendlyName;                       /**< Untimed metadata: friendly name (such as maker + model) (optional, can be NULL) */
+    const char *applicationName;                    /**< Untimed metadata: application name (such as software name and version) (optional, can be NULL) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
     int generateReceiverReports;                    /**< if true, generate RTCP receiver reports */
     int waitForSync;                                /**< if true, wait for SPS/PPS sync before outputting access anits */
@@ -284,6 +271,7 @@ typedef struct
     int replaceStartCodesWithNaluSize;              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                     /**< if true, generate skipped P slices to replace missing slices for pre-decoder error concealment */
     int generateFirstGrayIFrame;                    /**< if true, generate a first gray IDR frame to initialize the decoding (waitForSync must be enabled) */
+    uint32_t untimedMetadataSendInterval;           /**< Time interval in microseconds for sending untimed metadata (0 means default value) */
     const char *debugPath;                          /**< Optional path for writing debug files (optional, can be NULL) */
 
 } ARSTREAM2_StreamReceiver_Config_t;
@@ -294,9 +282,9 @@ typedef struct
  */
 typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
 {
-    const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
-    const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
-    const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
+    const char *canonicalName;                      /**< Untimed metadata: unique identifier (such as device serial number) */
+    const char *friendlyName;                       /**< Untimed metadata: friendly name (such as maker + model) (optional, can be NULL) */
+    const char *applicationName;                    /**< Untimed metadata: application name (such as software name and version) (optional, can be NULL) */
     const char *clientAddr;                         /**< Client address */
     const char *mcastAddr;                          /**< Multicast send address (optional, NULL for no multicast) */
     const char *mcastIfaceAddr;                     /**< Multicast output interface address (required if mcastAddr is not NULL) */
@@ -309,8 +297,28 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
+    uint32_t untimedMetadataSendInterval;           /**< Time interval in microseconds for sending untimed metadata (0 means default value) */
 
 } ARSTREAM2_StreamReceiver_ResenderConfig_t;
+
+
+/**
+ * @brief ARSTREAM2 StreamReceiver untimed metadata.
+ */
+typedef struct ARSTREAM2_StreamReceiver_UntimedMetadata_t
+{
+    char *canonicalName;                            /**< Unique identifier (such as device serial number) */
+    char *friendlyName;                             /**< Friendly name (such as maker + model) */
+    char *applicationName;                          /**< Application name (such as software name and version) */
+    char *runDate;                                  /**< Run date and time */
+    char *runUuid;                                  /**< Run UUID */
+    double takeoffLatitude;                         /**< Takeoff latitude */
+    double takeoffLongitude;                        /**< Takeoff longitude */
+    float takeoffAltitude;                          /**< Takeoff altitude */
+    float pictureHFov;                              /**< Camera horizontal field of view */
+    float pictureVFov;                              /**< Camera vertical field of view */
+
+} ARSTREAM2_StreamReceiver_UntimedMetadata_t;
 
 
 /**
@@ -534,54 +542,45 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 
 
 /**
- * @brief Get a RTCP Source Description item
+ * @brief Get the untimed metadata
  *
  * @param streamReceiverHandle Instance handle.
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value Pointer to the SDES item value
- * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ * @param[out] metadata Current untimed metadata structure
+ * @param[out] sendInterval Pointer to the minimum send interval in microseconds (optional, can be NULL)
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or metadata pointer are invalid
  * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                      uint8_t type, const char *prefix, char **value, uint32_t *sendInterval);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                             ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata, uint32_t *sendInterval);
 
 
 /**
- * @brief Set a RTCP Source Description item
+ * @brief Set the untimed metadata
  *
  * @param streamReceiverHandle Instance handle.
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value SDES item value
- * @param[in] sendInterval SDES item minimum send interval in microseconds
+ * @param[in] metadata Current untimed metadata structure
+ * @param[in] sendInterval Minimum send interval in microseconds (0 means default)
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
- * @return ARSTREAM2_ERROR_ALLOC if the max number of SDES items has been reached
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or metadata pointer are invalid
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                      uint8_t type, const char *prefix, const char *value, uint32_t sendInterval);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                             const ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata, uint32_t sendInterval);
 
 
 /**
- * @brief Get a peer RTCP Source Description item
+ * @brief Get the peer untimed metadata
  *
  * @param streamReceiverHandle Instance handle.
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value Pointer to the SDES item value
- * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ * @param[out] metadata Current peer untimed metadata structure
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or value pointer are invalid
- * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamReceiverHandle or metadata pointer are invalid
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                          uint8_t type, const char *prefix, char **value);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                                 ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata);
 
 
 #ifdef __cplusplus

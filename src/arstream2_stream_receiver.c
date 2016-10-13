@@ -35,6 +35,7 @@
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_AUTOREC_OUTPUT_FILEEXT "mp4"
 
 #define ARSTREAM2_STREAM_RECEIVER_VIDEO_STATS_RTCP_SEND_INTERVAL (1000000)
+#define ARSTREAM2_STREAM_RECEIVER_UNTIMED_METADATA_DEFAULT_SEND_INTERVAL (5000000)
 
 
 typedef struct ARSTREAM2_StreamReceiver_s
@@ -1591,48 +1592,420 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSpsPps(ARSTREAM2_StreamReceiver_Han
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                      uint8_t type, const char *prefix, char **value, uint32_t *sendInterval)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                             ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata, uint32_t *sendInterval)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK, _ret;
+    uint32_t _sendInterval = 0, minSendInterval = (uint32_t)(-1);
+    char *ptr;
 
     if (!streamReceiverHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
+    if (!metadata)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid metadata");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
 
-    return ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, type, prefix, value, sendInterval);
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_CNAME_ITEM, NULL, &metadata->canonicalName, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+    }
+    else
+    {
+        metadata->canonicalName = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_NAME_ITEM, NULL, &metadata->friendlyName, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+    }
+    else
+    {
+        metadata->friendlyName = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_TOOL_ITEM, NULL, &metadata->applicationName, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+    }
+    else
+    {
+        metadata->applicationName = NULL;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_LOC_ITEM, NULL, &ptr, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+        if (ptr)
+        {
+            if (sscanf(ptr, "%lf,%lf,%f", &metadata->takeoffLatitude, &metadata->takeoffLongitude, &metadata->takeoffAltitude) != 3)
+            {
+                metadata->takeoffLatitude = 500.;
+                metadata->takeoffLongitude = 500.;
+                metadata->takeoffAltitude = 0.;
+            }
+        }
+    }
+    else
+    {
+        metadata->takeoffLatitude = 500.;
+        metadata->takeoffLongitude = 500.;
+        metadata->takeoffAltitude = 0.;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_hfov", &ptr, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+        if (ptr)
+        {
+            if (sscanf(ptr, "%f", &metadata->pictureHFov) != 1)
+            {
+                metadata->pictureHFov = 0.;
+            }
+        }
+    }
+    else
+    {
+        metadata->pictureHFov = 0.;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_vfov", &ptr, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+        if (ptr)
+        {
+            if (sscanf(ptr, "%f", &metadata->pictureVFov) != 1)
+            {
+                metadata->pictureVFov = 0.;
+            }
+        }
+    }
+    else
+    {
+        metadata->pictureVFov = 0.;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_date", &metadata->runDate, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+    }
+    else
+    {
+        metadata->runDate = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_uuid", &metadata->runUuid, &_sendInterval);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (_sendInterval < minSendInterval)
+        {
+            minSendInterval = _sendInterval;
+        }
+    }
+    else
+    {
+        metadata->runUuid = NULL;
+    }
+
+    if (sendInterval)
+    {
+        *sendInterval = minSendInterval;
+    }
+
+    return ret;
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                      uint8_t type, const char *prefix, const char *value, uint32_t sendInterval)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_SetUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                             const ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata, uint32_t sendInterval)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK, _ret;
+    char *ptr;
 
     if (!streamReceiverHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
+    if (!metadata)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid metadata");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
 
-    return ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, type, prefix, value, sendInterval);
+    if (sendInterval == 0)
+    {
+        sendInterval = ARSTREAM2_STREAM_RECEIVER_UNTIMED_METADATA_DEFAULT_SEND_INTERVAL;
+    }
+
+    if ((metadata->canonicalName) && (strlen(metadata->canonicalName)))
+    {
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_CNAME_ITEM, NULL, &ptr, NULL);
+        if ((_ret != ARSTREAM2_OK) || (strncmp(ptr, metadata->canonicalName, 256)))
+        {
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_CNAME_ITEM, NULL, metadata->canonicalName, sendInterval);
+        }
+    }
+
+    if ((metadata->friendlyName) && (strlen(metadata->friendlyName)))
+    {
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_NAME_ITEM, NULL, &ptr, NULL);
+        if ((_ret != ARSTREAM2_OK) || (strncmp(ptr, metadata->friendlyName, 256)))
+        {
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_NAME_ITEM, NULL, metadata->friendlyName, sendInterval);
+        }
+    }
+
+    if ((metadata->applicationName) && (strlen(metadata->applicationName)))
+    {
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_TOOL_ITEM, NULL, &ptr, NULL);
+        if ((_ret != ARSTREAM2_OK) || (strncmp(ptr, metadata->applicationName, 256)))
+        {
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_TOOL_ITEM, NULL, metadata->applicationName, sendInterval);
+        }
+    }
+
+    if ((metadata->takeoffLatitude != 500.) && (metadata->takeoffLongitude != 500.))
+    {
+        double takeoffLatitude = 500.;
+        double takeoffLongitude = 500.;
+        float takeoffAltitude = 0.;
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_LOC_ITEM, NULL, &ptr, NULL);
+        if (_ret == ARSTREAM2_OK)
+        {
+            if (ptr)
+            {
+                if (sscanf(ptr, "%lf,%lf,%f", &takeoffLatitude, &takeoffLongitude, &takeoffAltitude) != 3)
+                {
+                    takeoffLatitude = 500.;
+                    takeoffLongitude = 500.;
+                    takeoffAltitude = 0.;
+                }
+            }
+        }
+        if ((takeoffLatitude != metadata->takeoffLatitude) || (takeoffLongitude != metadata->takeoffLongitude) || (takeoffAltitude != metadata->takeoffAltitude))
+        {
+            char str[100];
+            snprintf(str, sizeof(str), "%.8f,%.8f,%.8f", metadata->takeoffLatitude, metadata->takeoffLongitude, metadata->takeoffAltitude);
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_LOC_ITEM, NULL, str, sendInterval);
+        }
+    }
+
+    if (metadata->pictureHFov != 0.)
+    {
+        float pictureHFov = 0.;
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_hfov", &ptr, NULL);
+        if (_ret == ARSTREAM2_OK)
+        {
+            if (ptr)
+            {
+                if (sscanf(ptr, "%f", &pictureHFov) != 1)
+                {
+                    pictureHFov = 0.;
+                }
+            }
+        }
+        if (pictureHFov != metadata->pictureHFov)
+        {
+            char str[100];
+            snprintf(str, sizeof(str), "%.2f", metadata->pictureHFov);
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_hfov", str, sendInterval);
+        }
+    }
+
+    if (metadata->pictureVFov != 0.)
+    {
+        float pictureVFov = 0.;
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_vfov", &ptr, NULL);
+        if (_ret == ARSTREAM2_OK)
+        {
+            if (ptr)
+            {
+                if (sscanf(ptr, "%f", &pictureVFov) != 1)
+                {
+                    pictureVFov = 0.;
+                }
+            }
+        }
+        if (pictureVFov != metadata->pictureVFov)
+        {
+            char str[100];
+            snprintf(str, sizeof(str), "%.2f", metadata->pictureVFov);
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_vfov", str, sendInterval);
+        }
+    }
+
+    if ((metadata->runDate) && (strlen(metadata->runDate)))
+    {
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_date", &ptr, NULL);
+        if ((_ret != ARSTREAM2_OK) || (strncmp(ptr, metadata->runDate, 256)))
+        {
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_date", metadata->runDate, sendInterval);
+        }
+    }
+
+    if ((metadata->runUuid) && (strlen(metadata->runUuid)))
+    {
+        ptr = NULL;
+        _ret = ARSTREAM2_RtpReceiver_GetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_uuid", &ptr, NULL);
+        if ((_ret != ARSTREAM2_OK) || (strncmp(ptr, metadata->runUuid, 256)))
+        {
+            ARSTREAM2_RtpReceiver_SetSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_uuid", metadata->runUuid, sendInterval);
+        }
+    }
+
+    return ret;
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerSdesItem(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                          uint8_t type, const char *prefix, char **value)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                                 ARSTREAM2_StreamReceiver_UntimedMetadata_t *metadata)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK, _ret;
+    char *ptr;
 
     if (!streamReceiverHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
+    if (!metadata)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid metadata");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
 
-    return ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, type, prefix, value);
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_CNAME_ITEM, NULL, &metadata->canonicalName);
+    if (_ret != ARSTREAM2_OK)
+    {
+        metadata->canonicalName = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_NAME_ITEM, NULL, &metadata->friendlyName);
+    if (_ret != ARSTREAM2_OK)
+    {
+        metadata->friendlyName = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_TOOL_ITEM, NULL, &metadata->applicationName);
+    if (_ret != ARSTREAM2_OK)
+    {
+        metadata->applicationName = NULL;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_LOC_ITEM, NULL, &ptr);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (ptr)
+        {
+            if (sscanf(ptr, "%lf,%lf,%f", &metadata->takeoffLatitude, &metadata->takeoffLongitude, &metadata->takeoffAltitude) != 3)
+            {
+                metadata->takeoffLatitude = 500.;
+                metadata->takeoffLongitude = 500.;
+                metadata->takeoffAltitude = 0.;
+            }
+        }
+    }
+    else
+    {
+        metadata->takeoffLatitude = 500.;
+        metadata->takeoffLongitude = 500.;
+        metadata->takeoffAltitude = 0.;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_hfov", &ptr);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (ptr)
+        {
+            if (sscanf(ptr, "%f", &metadata->pictureHFov) != 1)
+            {
+                metadata->pictureHFov = -1.;
+            }
+        }
+    }
+    else
+    {
+        metadata->pictureHFov = -1.;
+    }
+
+    ptr = NULL;
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "picture_vfov", &ptr);
+    if (_ret == ARSTREAM2_OK)
+    {
+        if (ptr)
+        {
+            if (sscanf(ptr, "%f", &metadata->pictureVFov) != 1)
+            {
+                metadata->pictureVFov = -1.;
+            }
+        }
+    }
+    else
+    {
+        metadata->pictureVFov = -1.;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_date", &metadata->runDate);
+    if (_ret != ARSTREAM2_OK)
+    {
+        metadata->runDate = NULL;
+    }
+
+    _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_uuid", &metadata->runUuid);
+    if (_ret != ARSTREAM2_OK)
+    {
+        metadata->runUuid = NULL;
+    }
+
+    return ret;
 }
 
 

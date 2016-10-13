@@ -245,6 +245,25 @@ typedef struct ARSTREAM2_StreamSender_H264NaluDesc_t
 
 
 /**
+ * @brief ARSTREAM2 StreamSender untimed metadata.
+ */
+typedef struct ARSTREAM2_StreamSender_UntimedMetadata_t
+{
+    char *canonicalName;                            /**< Unique identifier (such as device serial number) */
+    char *friendlyName;                             /**< Friendly name (such as maker + model) */
+    char *applicationName;                          /**< Application name (such as software name and version) */
+    char *runDate;                                  /**< Run date and time */
+    char *runUuid;                                  /**< Run UUID */
+    double takeoffLatitude;                         /**< Takeoff latitude */
+    double takeoffLongitude;                        /**< Takeoff longitude */
+    float takeoffAltitude;                          /**< Takeoff altitude */
+    float pictureHFov;                              /**< Camera horizontal field of view */
+    float pictureVFov;                              /**< Camera vertical field of view */
+
+} ARSTREAM2_StreamSender_UntimedMetadata_t;
+
+
+/**
  * @brief Creates a new StreamSender
  * @warning This function allocates memory. The sender must be deleted by a call to ARSTREAM2_StreamSender_Delete()
  *
@@ -369,54 +388,45 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
 
 
 /**
- * @brief Get a RTCP Source Description item
+ * @brief Get the untimed metadata
  *
- * @param[in] sender The sender instance
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value Pointer to the SDES item value
- * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ * @param streamSenderHandle Instance handle.
+ * @param[out] metadata Current untimed metadata structure
+ * @param[out] sendInterval Pointer to the minimum send interval in microseconds (optional, can be NULL)
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamSenderHandle or metadata pointer are invalid
  * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
-                                                    uint8_t type, const char *prefix, char **value, uint32_t *sendInterval);
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetUntimedMetadata(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                           ARSTREAM2_StreamSender_UntimedMetadata_t *metadata, uint32_t *sendInterval);
 
 
 /**
- * @brief Set a RTCP Source Description item
+ * @brief Set the untimed metadata
  *
- * @param[in] sender The sender instance
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value SDES item value
- * @param[in] sendInterval SDES item minimum send interval in microseconds
+ * @param streamSenderHandle Instance handle.
+ * @param[in] metadata Current untimed metadata structure
+ * @param[in] sendInterval Minimum send interval in microseconds (0 means default)
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
- * @return ARSTREAM2_ERROR_ALLOC if the max number of SDES items has been reached
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamSenderHandle or metadata pointer are invalid
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
-                                                    uint8_t type, const char *prefix, const char *value, uint32_t sendInterval);
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetUntimedMetadata(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                           const ARSTREAM2_StreamSender_UntimedMetadata_t *metadata, uint32_t sendInterval);
 
 
 /**
- * @brief Get a peer RTCP Source Description item
+ * @brief Get the peer untimed metadata
  *
- * @param[in] sender The sender instance
- * @param[in] type SDES item type
- * @param[in] prefix SDES item prefix (only for private extension type)
- * @param[in] value Pointer to the SDES item value
- * @param[in] sendInterval Pointer to the SDES item minimum send interval in microseconds
+ * @param streamSenderHandle Instance handle.
+ * @param[out] metadata Current peer untimed metadata structure
  *
  * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender or value pointers are invalid
- * @return ARSTREAM2_ERROR_NOT_FOUND it the item has not been found
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamSenderHandle or metadata pointer are invalid
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetPeerSdesItem(ARSTREAM2_StreamSender_Handle streamSenderHandle,
-                                                        uint8_t type, const char *prefix, char **value);
+eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetPeerUntimedMetadata(ARSTREAM2_StreamSender_Handle streamSenderHandle,
+                                                               ARSTREAM2_StreamSender_UntimedMetadata_t *metadata);
 
 
 /**
