@@ -41,8 +41,7 @@
 #define ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL 100000
 #define ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL 100000
 
-#define ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT (6)
-#define ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT (5)
+#define ARSTREAM2_RTCP_VIDEOSTATS_VERSION (1)
 
 #define ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT 10
 
@@ -134,6 +133,10 @@ typedef struct {
  * @brief Application defined video stats data
  */
 typedef struct {
+    uint8_t version;
+    int8_t rssi;
+    uint8_t reserved1;
+    uint8_t reserved2;
     uint32_t timestampH;
     uint32_t timestampL;
     uint32_t totalFrameCount;
@@ -141,9 +144,6 @@ typedef struct {
     uint32_t erroredOutputFrameCount;
     uint32_t missedFrameCount;
     uint32_t discardedFrameCount;
-    uint32_t erroredSecondCount;
-    uint32_t erroredSecondCountByZone[ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT];
-    uint32_t macroblockStatus[ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT][ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT];
     uint32_t timestampDeltaIntegralH;
     uint32_t timestampDeltaIntegralL;
     uint32_t timestampDeltaIntegralSqH;
@@ -156,10 +156,11 @@ typedef struct {
     uint32_t estimatedLatencyIntegralL;
     uint32_t estimatedLatencyIntegralSqH;
     uint32_t estimatedLatencyIntegralSqL;
-    int8_t rssi;
-    uint8_t reserved1;
-    uint8_t reserved2;
-    uint8_t reserved3;
+    uint32_t erroredSecondCount;
+    uint32_t mbStatusClassCount;
+    uint32_t mbStatusZoneCount;
+    //uint32_t erroredSecondCountByZone[mbStatusZoneCount];
+    //uint32_t macroblockStatus[mbStatusClassCount][mbStatusZoneCount];
 } __attribute__ ((packed)) ARSTREAM2_RTCP_VideoStats_t;
 
 
@@ -196,15 +197,19 @@ typedef struct ARSTREAM2_RTCP_VideoStatsContext_s {
     uint32_t erroredOutputFrameCount;
     uint32_t missedFrameCount;
     uint32_t discardedFrameCount;
-    uint32_t erroredSecondCount;
-    uint32_t erroredSecondCountByZone[ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT];
-    uint32_t macroblockStatus[ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT][ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT];
     uint64_t timestampDeltaIntegral;
     uint64_t timestampDeltaIntegralSq;
     uint64_t timingErrorIntegral;
     uint64_t timingErrorIntegralSq;
     uint64_t estimatedLatencyIntegral;
     uint64_t estimatedLatencyIntegralSq;
+    uint32_t erroredSecondCount;
+    uint32_t mbStatusClassCount;
+    uint32_t mbStatusZoneCount;
+    uint32_t currentMbStatusClassCount;
+    uint32_t currentMbStatusZoneCount;
+    uint32_t *erroredSecondCountByZone;
+    uint32_t *macroblockStatus;
     uint64_t lastReceivedTime;
     uint64_t lastSendTime;
     uint32_t sendTimeInterval;
@@ -327,8 +332,8 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
                                                 ARSTREAM2_RTCP_ClockDeltaContext_t *context);
 
 int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_VideoStats_t *videoStats,
-                                                 uint64_t sendTimestamp, uint32_t ssrc,
-                                                 ARSTREAM2_RTCP_VideoStatsContext_t *context);
+                                                 unsigned int maxSize, uint64_t sendTimestamp,
+                                                 uint32_t ssrc, ARSTREAM2_RTCP_VideoStatsContext_t *context, unsigned int *size);
 
 int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application_t *app,
                                                 const ARSTREAM2_RTCP_VideoStats_t *videoStats,

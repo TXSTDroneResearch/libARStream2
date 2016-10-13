@@ -7,6 +7,7 @@
 
 #include "arstream2_rtcp.h"
 
+#include <stdlib.h>
 #include <netinet/in.h>
 #include <libARSAL/ARSAL_Print.h>
 
@@ -762,23 +763,53 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application
 
 
 int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_VideoStats_t *videoStats,
-                                                 uint64_t sendTimestamp, uint32_t ssrc,
-                                                 ARSTREAM2_RTCP_VideoStatsContext_t *context)
+                                                 unsigned int maxSize, uint64_t sendTimestamp,
+                                                 uint32_t ssrc, ARSTREAM2_RTCP_VideoStatsContext_t *context, unsigned int *size)
 {
-    int i, j;
+    uint32_t i, j;
 
     if ((!app) || (!videoStats) || (!context))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
         return -1;
     }
+    if (!context->mbStatusClassCount)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid class count");
+        return -1;
+    }
+    if (!context->mbStatusZoneCount)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid zone count");
+        return -1;
+    }
+    if (!context->erroredSecondCountByZone)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid errored second count by zone pointer");
+        return -1;
+    }
+    if (!context->macroblockStatus)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid macroblock status pointer");
+        return -1;
+    }
+
+    unsigned int _size = sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t) + (context->mbStatusClassCount * context->mbStatusZoneCount + context->mbStatusZoneCount) * 4;
+    if (_size > maxSize)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Buffer is too small for video stats");
+        return -1;
+    }
 
     app->flags = (2 << 6) | (ARSTREAM2_RTCP_APP_PACKET_VIDEOSTATS_SUBTYPE & 0x1F);
     app->packetType = ARSTREAM2_RTCP_APP_PACKET_TYPE;
-    app->length = htons((sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t)) / 4 - 1);
+    app->length = htons(_size / 4 - 1);
     app->ssrc = htonl(ssrc);
     app->name = htonl(ARSTREAM2_RTCP_APP_PACKET_NAME);
 
+    videoStats->version = ARSTREAM2_RTCP_VIDEOSTATS_VERSION;
+    videoStats->rssi = context->rssi;
+    videoStats->reserved1 = videoStats->reserved2 = 0;
     videoStats->timestampH = htonl((uint32_t)(context->timestamp >> 32));
     videoStats->timestampL = htonl((uint32_t)(context->timestamp & 0xFFFFFFFF));
     videoStats->totalFrameCount = htonl(context->totalFrameCount);
@@ -786,18 +817,6 @@ int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *a
     videoStats->erroredOutputFrameCount = htonl(context->erroredOutputFrameCount);
     videoStats->missedFrameCount = htonl(context->missedFrameCount);
     videoStats->discardedFrameCount = htonl(context->discardedFrameCount);
-    videoStats->erroredSecondCount = htonl(context->erroredSecondCount);
-    for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
-    {
-        videoStats->erroredSecondCountByZone[i] = htonl(context->erroredSecondCountByZone[i]);
-    }
-    for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
-    {
-        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
-        {
-            videoStats->macroblockStatus[j][i] = htonl(context->macroblockStatus[j][i]);
-        }
-    }
     videoStats->timestampDeltaIntegralH = htonl((uint32_t)(context->timestampDeltaIntegral >> 32));
     videoStats->timestampDeltaIntegralL = htonl((uint32_t)(context->timestampDeltaIntegral & 0xFFFFFFFF));
     videoStats->timestampDeltaIntegralSqH = htonl((uint32_t)(context->timestampDeltaIntegralSq >> 32));
@@ -810,8 +829,24 @@ int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *a
     videoStats->estimatedLatencyIntegralL = htonl((uint32_t)(context->estimatedLatencyIntegral & 0xFFFFFFFF));
     videoStats->estimatedLatencyIntegralSqH = htonl((uint32_t)(context->estimatedLatencyIntegralSq >> 32));
     videoStats->estimatedLatencyIntegralSqL = htonl((uint32_t)(context->estimatedLatencyIntegralSq & 0xFFFFFFFF));
-    videoStats->rssi = context->rssi;
-    videoStats->reserved1 = videoStats->reserved2 = videoStats->reserved3 = 0;
+    videoStats->erroredSecondCount = htonl(context->erroredSecondCount);
+    videoStats->mbStatusClassCount = htonl(context->mbStatusClassCount);
+    videoStats->mbStatusZoneCount = htonl(context->mbStatusZoneCount);
+    uint32_t *videoStatsArr = (uint32_t*)&videoStats->mbStatusZoneCount + 1;
+    for (i = 0; i < context->mbStatusZoneCount; i++)
+    {
+        *videoStatsArr++ = htonl(context->erroredSecondCountByZone[i]);
+    }
+    for (j = 0; j < context->mbStatusClassCount; j++)
+    {
+        for (i = 0; i < context->mbStatusZoneCount; i++)
+        {
+            *videoStatsArr++ = htonl(context->macroblockStatus[j * context->mbStatusZoneCount + i]);
+        }
+    }
+
+    if (size)
+        *size = _size;
 
     return 0;
 }
@@ -822,7 +857,7 @@ int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application
                                                 uint64_t receptionTimestamp, uint32_t peerSsrc,
                                                 ARSTREAM2_RTCP_VideoStatsContext_t *context)
 {
-    int i, j;
+    uint32_t i, j;
 
     if ((!app) || (!videoStats) || (!context))
     {
@@ -864,38 +899,83 @@ int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application
         return -1;
     }
 
+    if (videoStats->version != ARSTREAM2_RTCP_VIDEOSTATS_VERSION)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_RTCP_TAG, "Unexpected video stats version");
+        return 0;
+    }
+
     uint16_t length = ntohs(app->length);
-    if (length != (sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t)) / 4 - 1)
+    if (length < (sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t)) / 4 - 1)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet length (%d)", length);
         return -1;
     }
 
+    context->rssi = videoStats->rssi;
     context->timestamp = ((uint64_t)ntohl(videoStats->timestampH) << 32) + (uint64_t)ntohl(videoStats->timestampL);
     context->totalFrameCount = ntohl(videoStats->totalFrameCount);
     context->outputFrameCount = ntohl(videoStats->outputFrameCount);
     context->erroredOutputFrameCount = ntohl(videoStats->erroredOutputFrameCount);
     context->missedFrameCount = ntohl(videoStats->missedFrameCount);
     context->discardedFrameCount = ntohl(videoStats->discardedFrameCount);
-    context->erroredSecondCount = ntohl(videoStats->erroredSecondCount);
-    for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
-    {
-        context->erroredSecondCountByZone[i] = ntohl(videoStats->erroredSecondCountByZone[i]);
-    }
-    for (j = 0; j < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_CLASS_COUNT; j++)
-    {
-        for (i = 0; i < ARSTREAM2_RTCP_VIDEOSTATS_MB_STATUS_ZONE_COUNT; i++)
-        {
-            context->macroblockStatus[j][i] = ntohl(videoStats->macroblockStatus[j][i]);
-        }
-    }
     context->timestampDeltaIntegral = ((uint64_t)ntohl(videoStats->timestampDeltaIntegralH) << 32) + (uint64_t)ntohl(videoStats->timestampDeltaIntegralL);
     context->timestampDeltaIntegralSq = ((uint64_t)ntohl(videoStats->timestampDeltaIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->timestampDeltaIntegralSqL);
     context->timingErrorIntegral = ((uint64_t)ntohl(videoStats->timingErrorIntegralH) << 32) + (uint64_t)ntohl(videoStats->timingErrorIntegralL);
     context->timingErrorIntegralSq = ((uint64_t)ntohl(videoStats->timingErrorIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->timingErrorIntegralSqL);
     context->estimatedLatencyIntegral = ((uint64_t)ntohl(videoStats->estimatedLatencyIntegralH) << 32) + (uint64_t)ntohl(videoStats->estimatedLatencyIntegralL);
     context->estimatedLatencyIntegralSq = ((uint64_t)ntohl(videoStats->estimatedLatencyIntegralSqH) << 32) + (uint64_t)ntohl(videoStats->estimatedLatencyIntegralSqL);
-    context->rssi = videoStats->rssi;
+    context->erroredSecondCount = ntohl(videoStats->erroredSecondCount);
+    context->mbStatusClassCount = ntohl(videoStats->mbStatusClassCount);
+    context->mbStatusZoneCount = ntohl(videoStats->mbStatusZoneCount);
+
+    if (length < (sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t) + (context->mbStatusClassCount * context->mbStatusZoneCount + context->mbStatusZoneCount) * 4) / 4 - 1)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid application packet length (%d)", length);
+        return -1;
+    }
+
+    uint32_t *videoStatsArr = (uint32_t*)&videoStats->mbStatusZoneCount + 1;
+    if (context->mbStatusZoneCount)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "mbStatusZoneCount=%d, currentMbStatusZoneCount=%d", context->mbStatusZoneCount, context->currentMbStatusZoneCount);
+        if (context->mbStatusZoneCount > context->currentMbStatusZoneCount)
+        {
+            context->erroredSecondCountByZone = realloc(context->erroredSecondCountByZone, context->mbStatusZoneCount * sizeof(uint32_t));
+            if (!context->erroredSecondCountByZone)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Allocation failed");
+                return -1;
+            }
+            context->currentMbStatusZoneCount = context->mbStatusZoneCount;
+        }
+        for (i = 0; i < context->mbStatusZoneCount; i++)
+        {
+            context->erroredSecondCountByZone[i] = ntohl(*videoStatsArr++);
+        }
+
+        if (context->mbStatusClassCount)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "mbStatusClassCount=%d, currentMbStatusClassCount=%d", context->mbStatusClassCount, context->currentMbStatusClassCount);
+            if (context->mbStatusClassCount > context->currentMbStatusClassCount)
+            {
+                context->macroblockStatus = realloc(context->macroblockStatus, context->mbStatusClassCount * context->mbStatusZoneCount * sizeof(uint32_t));
+                if (!context->macroblockStatus)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Allocation failed");
+                    return -1;
+                }
+                context->currentMbStatusClassCount = context->mbStatusClassCount;
+            }
+            for (j = 0; j < context->mbStatusClassCount; j++)
+            {
+                for (i = 0; i < context->mbStatusZoneCount; i++)
+                {
+                    context->macroblockStatus[j * context->mbStatusZoneCount + i] = ntohl(*videoStatsArr++);
+                }
+            }
+        }
+    }
 
     context->lastReceivedTime = receptionTimestamp;
     context->updatedSinceLastTime = 1;
@@ -1046,19 +1126,20 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
         }
     }
 
-    if ((ret == 0) && (generateApplicationVideoStats) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t) <= maxPacketSize))
+    if ((ret == 0) && (generateApplicationVideoStats))
     {
+        unsigned int videoStatsSize = 0;
         ret = ARSTREAM2_RTCP_GenerateApplicationVideoStats((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
                                                            (ARSTREAM2_RTCP_VideoStats_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                           sendTimestamp, context->receiverSsrc,
-                                                           &context->videoStats);
+                                                           maxPacketSize - totalSize, sendTimestamp, context->receiverSsrc,
+                                                           &context->videoStats, &videoStatsSize);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined video stats (%d)", ret);
         }
         else
         {
-            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_VideoStats_t);
+            totalSize += videoStatsSize;
         }
     }
 
