@@ -573,14 +573,14 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
                         {
                             if (!strncmp(prefix, sdesItem[k].prefix, 256))
                             {
-                                strncpy(sdesItem[k].value, str, 256);
+                                snprintf(sdesItem[k].value, 256, "%s", str);
                                 found = 1;
                                 break;
                             }
                         }
                         else
                         {
-                            strncpy(sdesItem[k].value, str, 256);
+                            snprintf(sdesItem[k].value, 256, "%s", str);
                             found = 1;
                             break;
                         }
@@ -591,10 +591,10 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
                 {
                     k = *sdesItemCount;
                     sdesItem[k].type = id;
-                    strncpy(sdesItem[k].value, str, 256);
+                    snprintf(sdesItem[k].value, 256, "%s", str);
                     if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
                     {
-                        strncpy(sdesItem[k].prefix, prefix, 256);
+                        snprintf(sdesItem[k].prefix, 256, "%s", prefix);
                     }
                     *sdesItemCount = k + 1;
                 }

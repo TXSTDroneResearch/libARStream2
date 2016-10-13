@@ -1077,7 +1077,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         if ((retReceiver->canonicalName) && (strlen(retReceiver->canonicalName)))
         {
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_CNAME_ITEM;
-            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->canonicalName, 256);
+            snprintf(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, 256, "%s", retReceiver->canonicalName);
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 0;
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
             retReceiver->rtcpReceiverContext.sdesItemCount++;
@@ -1085,7 +1085,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         if ((retReceiver->friendlyName) && (strlen(retReceiver->friendlyName)))
         {
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_NAME_ITEM;
-            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->friendlyName, 256);
+            snprintf(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, 256, "%s", retReceiver->friendlyName);
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 5000000;
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
             retReceiver->rtcpReceiverContext.sdesItemCount++;
@@ -1093,7 +1093,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         if ((retReceiver->applicationName) && (strlen(retReceiver->applicationName)))
         {
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].type = ARSTREAM2_RTCP_SDES_TOOL_ITEM;
-            strncpy(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, retReceiver->applicationName, 256);
+            snprintf(retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].value, 256, "%s", retReceiver->applicationName);
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].sendTimeInterval = 5000000;
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
             retReceiver->rtcpReceiverContext.sdesItemCount++;
@@ -2017,7 +2017,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_SetSdesItem(ARSTREAM2_RtpReceiver_t *rece
             {
                 if (!strncmp(prefix, receiver->rtcpReceiverContext.sdesItem[k].prefix, 256))
                 {
-                    strncpy(receiver->rtcpReceiverContext.sdesItem[k].value, value, 256);
+                    snprintf(receiver->rtcpReceiverContext.sdesItem[k].value, 256, "%s", value);
                     receiver->rtcpReceiverContext.sdesItem[k].sendTimeInterval = sendInterval;
                     receiver->rtcpReceiverContext.sdesItem[k].lastSendTime = 0;
                     found = 1;
@@ -2026,7 +2026,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_SetSdesItem(ARSTREAM2_RtpReceiver_t *rece
             }
             else
             {
-                strncpy(receiver->rtcpReceiverContext.sdesItem[k].value, value, 256);
+                snprintf(receiver->rtcpReceiverContext.sdesItem[k].value, 256, "%s", value);
                 receiver->rtcpReceiverContext.sdesItem[k].sendTimeInterval = sendInterval;
                 receiver->rtcpReceiverContext.sdesItem[k].lastSendTime = 0;
                 found = 1;
@@ -2045,10 +2045,10 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_SetSdesItem(ARSTREAM2_RtpReceiver_t *rece
         {
             k = receiver->rtcpReceiverContext.sdesItemCount;
             receiver->rtcpReceiverContext.sdesItem[k].type = type;
-            strncpy(receiver->rtcpReceiverContext.sdesItem[k].value, value, 256);
+            snprintf(receiver->rtcpReceiverContext.sdesItem[k].value, 256, "%s", value);
             if (type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
             {
-                strncpy(receiver->rtcpReceiverContext.sdesItem[k].prefix, prefix, 256);
+                snprintf(receiver->rtcpReceiverContext.sdesItem[k].prefix, 256, "%s", prefix);
             }
             receiver->rtcpReceiverContext.sdesItem[k].sendTimeInterval = sendInterval;
             receiver->rtcpReceiverContext.sdesItem[k].lastSendTime = 0;
