@@ -537,6 +537,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
             uint8_t strLen = len;
             char prefix[256];
             uint8_t prefixLen = 0;
+            prefix[0] = '\0';
             if ((id == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (len > 2))
             {
                 /* private extension item */
