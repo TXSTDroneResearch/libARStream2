@@ -938,7 +938,6 @@ int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application
     uint32_t *videoStatsArr = (uint32_t*)&videoStats->mbStatusZoneCount + 1;
     if (context->mbStatusZoneCount)
     {
-        ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "mbStatusZoneCount=%d, currentMbStatusZoneCount=%d", context->mbStatusZoneCount, context->currentMbStatusZoneCount);
         if (context->mbStatusZoneCount > context->currentMbStatusZoneCount)
         {
             context->erroredSecondCountByZone = realloc(context->erroredSecondCountByZone, context->mbStatusZoneCount * sizeof(uint32_t));
@@ -956,7 +955,6 @@ int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application
 
         if (context->mbStatusClassCount)
         {
-            ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "mbStatusClassCount=%d, currentMbStatusClassCount=%d", context->mbStatusClassCount, context->currentMbStatusClassCount);
             if (context->mbStatusClassCount > context->currentMbStatusClassCount)
             {
                 context->macroblockStatus = realloc(context->macroblockStatus, context->mbStatusClassCount * context->mbStatusZoneCount * sizeof(uint32_t));
