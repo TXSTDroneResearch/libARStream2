@@ -1927,7 +1927,7 @@ void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param)
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_UpdateVideoStats(ARSTREAM2_RtpReceiver_t *receiver, const ARSTREAM2_H264_VideoStats_t *videoStats)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-    int i, j;
+    uint32_t i, j;
 
     if ((receiver == NULL) || (videoStats == 0))
     {
@@ -1948,15 +1948,27 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_UpdateVideoStats(ARSTREAM2_RtpReceiver_t 
     receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegral = videoStats->estimatedLatencyIntegral;
     receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegralSq = videoStats->estimatedLatencyIntegralSq;
     receiver->rtcpReceiverContext.videoStats.erroredSecondCount = videoStats->erroredSecondCount;
-    for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+    if (receiver->rtcpReceiverContext.videoStats.mbStatusZoneCount == videoStats->mbStatusZoneCount)
     {
-        receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone[i] = videoStats->erroredSecondCountByZone[i];
-    }
-    for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
-    {
-        for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+        if (receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone)
         {
-            receiver->rtcpReceiverContext.videoStats.macroblockStatus[j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT + i] = videoStats->macroblockStatus[j][i];
+            for (i = 0; i < videoStats->mbStatusZoneCount; i++)
+            {
+                receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone[i] = videoStats->erroredSecondCountByZone[i];
+            }
+        }
+        if (receiver->rtcpReceiverContext.videoStats.mbStatusClassCount == videoStats->mbStatusClassCount)
+        {
+            if (receiver->rtcpReceiverContext.videoStats.macroblockStatus)
+            {
+                for (j = 0; j < videoStats->mbStatusClassCount; j++)
+                {
+                    for (i = 0; i < videoStats->mbStatusZoneCount; i++)
+                    {
+                        receiver->rtcpReceiverContext.videoStats.macroblockStatus[j * videoStats->mbStatusZoneCount + i] = videoStats->macroblockStatus[j][i];
+                    }
+                }
+            }
         }
     }
 

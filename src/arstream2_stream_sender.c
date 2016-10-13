@@ -32,6 +32,7 @@ typedef struct ARSTREAM2_StreamSender_s
     char *dateAndTime;
     char *debugPath;
     ARSTREAM2_StreamStats_VideoStats_t videoStats;
+    int videoStatsInitPending;
 
 } ARSTREAM2_StreamSender_t;
 
@@ -88,7 +89,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
         strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
         streamSender->dateAndTime = strndup(szDate, 200);
-        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamSender->videoStats, streamSender->debugPath, streamSender->friendlyName, streamSender->dateAndTime);
+        streamSender->videoStatsInitPending = 1;
     }
 
     if (ret == ARSTREAM2_OK)
@@ -427,8 +428,14 @@ static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_Stream
     {
         /* Map the video stats */
         ARSTREAM2_H264_VideoStats_t vs;
-        int i, j;
+        uint32_t i, j;
         memset(&vs, 0, sizeof(ARSTREAM2_H264_VideoStats_t));
+        if (streamSender->videoStatsInitPending)
+        {
+            ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamSender->videoStats, streamSender->debugPath, streamSender->friendlyName,
+                                                     streamSender->dateAndTime, report->videoStats->mbStatusZoneCount, report->videoStats->mbStatusClassCount);
+            streamSender->videoStatsInitPending = 0;
+        }
         vs.timestamp = report->videoStats->timestamp;
         vs.rssi = report->videoStats->rssi;
         vs.totalFrameCount = report->videoStats->totalFrameCount;
@@ -443,19 +450,21 @@ static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_Stream
         vs.estimatedLatencyIntegral = report->videoStats->estimatedLatencyIntegral;
         vs.estimatedLatencyIntegralSq = report->videoStats->estimatedLatencyIntegralSq;
         vs.erroredSecondCount = report->videoStats->erroredSecondCount;
-        if (report->videoStats->mbStatusZoneCount == ARSTREAM2_H264_MB_STATUS_ZONE_COUNT)
+        if (report->videoStats->mbStatusZoneCount <= ARSTREAM2_H264_MB_STATUS_ZONE_MAX_COUNT)
         {
-            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+            vs.mbStatusZoneCount = report->videoStats->mbStatusZoneCount;
+            for (i = 0; i < vs.mbStatusZoneCount; i++)
             {
                 vs.erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
             }
-            if (report->videoStats->mbStatusClassCount == ARSTREAM2_H264_MB_STATUS_CLASS_COUNT)
+            if (report->videoStats->mbStatusClassCount <= ARSTREAM2_H264_MB_STATUS_CLASS_MAX_COUNT)
             {
-                for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
+                vs.mbStatusClassCount = report->videoStats->mbStatusClassCount;
+                for (j = 0; j < vs.mbStatusClassCount; j++)
                 {
-                    for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                    for (i = 0; i < vs.mbStatusZoneCount; i++)
                     {
-                        vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT + i];
+                        vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j * vs.mbStatusZoneCount + i];
                     }
                 }
             }

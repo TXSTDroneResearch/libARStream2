@@ -200,7 +200,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
         streamReceiver->dateAndTime = strndup(szDate, 200);
         ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
-        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamReceiver->videoStats, streamReceiver->debugPath, streamReceiver->friendlyName, streamReceiver->dateAndTime);
+        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamReceiver->videoStats, streamReceiver->debugPath, streamReceiver->friendlyName,
+                                                 streamReceiver->dateAndTime, ARSTREAM2_H264_MB_STATUS_ZONE_COUNT, ARSTREAM2_H264_MB_STATUS_CLASS_COUNT);
     }
 
     if (ret == ARSTREAM2_OK)
@@ -1284,7 +1285,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         /* Map the video stats */
                         ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)au->buffer->videoStatsBuffer;
                         ARSTREAM2_StreamReceiver_VideoStats_t *vsOut = &streamReceiver->appOutput.videoStats;
-                        int i, j;
+                        uint32_t i, j;
                         vsOut->timestamp = vs->timestamp;
                         vsOut->rssi = vs->rssi;
                         vsOut->totalFrameCount = vs->totalFrameCount;
@@ -1299,22 +1300,28 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         vsOut->estimatedLatencyIntegral = vs->estimatedLatencyIntegral;
                         vsOut->estimatedLatencyIntegralSq = vs->estimatedLatencyIntegralSq;
                         vsOut->erroredSecondCount = vs->erroredSecondCount;
-                        vsOut->mbStatusZoneCount = ARSTREAM2_H264_MB_STATUS_ZONE_COUNT;
-                        vsOut->mbStatusClassCount = ARSTREAM2_H264_MB_STATUS_CLASS_COUNT;
-                        if (vsOut->erroredSecondCountByZone)
+                        vsOut->mbStatusZoneCount = vs->mbStatusZoneCount;
+                        vsOut->mbStatusClassCount = vs->mbStatusClassCount;
+                        if (vs->mbStatusZoneCount == ARSTREAM2_H264_MB_STATUS_ZONE_COUNT)
                         {
-                            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                            if (vsOut->erroredSecondCountByZone)
                             {
-                                vsOut->erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
-                            }
-                        }
-                        if (vsOut->macroblockStatus)
-                        {
-                            for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
-                            {
-                                for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                                for (i = 0; i < vs->mbStatusZoneCount; i++)
                                 {
-                                    vsOut->macroblockStatus[j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT + i] = vs->macroblockStatus[j][i];
+                                    vsOut->erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
+                                }
+                            }
+                            if (vs->mbStatusClassCount == ARSTREAM2_H264_MB_STATUS_CLASS_COUNT)
+                            {
+                                if (vsOut->macroblockStatus)
+                                {
+                                    for (j = 0; j < vs->mbStatusClassCount; j++)
+                                    {
+                                        for (i = 0; i < vs->mbStatusZoneCount; i++)
+                                        {
+                                            vsOut->macroblockStatus[j * vs->mbStatusZoneCount + i] = vs->macroblockStatus[j][i];
+                                        }
+                                    }
                                 }
                             }
                         }

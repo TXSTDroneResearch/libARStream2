@@ -555,7 +555,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             {
                 for (i = 0; i < filter->mbWidth; i++, k++)
                 {
-                    int zone = j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT / filter->mbHeight;
+                    int zone = j * filter->stats.mbStatusZoneCount / filter->mbHeight;
                     filter->stats.macroblockStatus[filter->currentAuMacroblockStatus[k]][zone]++;
                     if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE)
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE))
@@ -730,6 +730,8 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
         filter->generateSkippedPSlices = (config->generateSkippedPSlices > 0) ? 1 : 0;
         filter->spsPpsCallback = config->spsPpsCallback;
         filter->spsPpsCallbackUserPtr = config->spsPpsCallbackUserPtr;
+        filter->stats.mbStatusZoneCount = ARSTREAM2_H264_MB_STATUS_ZONE_COUNT;
+        filter->stats.mbStatusClassCount = ARSTREAM2_H264_MB_STATUS_CLASS_COUNT;
     }
 
     if (ret == ARSTREAM2_OK)

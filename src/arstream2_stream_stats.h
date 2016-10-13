@@ -19,7 +19,8 @@ typedef struct ARSTREAM2_StreamStats_VideoStats_s
 } ARSTREAM2_StreamStats_VideoStats_t;
 
 
-void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t *context, const char *debugPath, const char *friendlyName, const char *dateAndTime);
+void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t *context, const char *debugPath, const char *friendlyName,
+                                              const char *dateAndTime, uint32_t mbStatusZoneCount, uint32_t mbStatusClassCount);
 void ARSTREAM2_StreamStats_VideoStatsFileClose(ARSTREAM2_StreamStats_VideoStats_t *context);
 void ARSTREAM2_StreamStats_VideoStatsFileWrite(ARSTREAM2_StreamStats_VideoStats_t *context, const ARSTREAM2_H264_VideoStats_t *videoStats);
 

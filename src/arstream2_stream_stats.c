@@ -22,7 +22,8 @@
 #define ARSTREAM2_STREAM_STATS_VIDEO_STATS_OUTPUT_INTERVAL (1000000)
 
 
-void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t *context, const char *debugPath, const char *friendlyName, const char *dateAndTime)
+void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t *context, const char *debugPath, const char *friendlyName,
+                                              const char *dateAndTime, uint32_t mbStatusZoneCount, uint32_t mbStatusClassCount)
 {
     char szOutputFileName[500];
     szOutputFileName[0] = '\0';
@@ -76,20 +77,20 @@ void ARSTREAM2_StreamStats_VideoStatsFileOpen(ARSTREAM2_StreamStats_VideoStats_t
         titleLen += snprintf(szTitle + titleLen, 200 - titleLen, "%s", dateAndTime);
         ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_STREAM_STATS_TAG, "Video stats output file title: '%s'", szTitle);
         fprintf(context->outputFile, "# %s\n", szTitle);
-        fprintf(context->outputFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount erroredSecondCount");
-        int i, j;
-        for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+        fprintf(context->outputFile, "timestamp rssi totalFrameCount outputFrameCount erroredOutputFrameCount discardedFrameCount missedFrameCount");
+        fprintf(context->outputFile, " timestampDeltaIntegral timestampDeltaIntegralSq timingErrorIntegral timingErrorIntegralSq estimatedLatencyIntegral estimatedLatencyIntegralSq erroredSecondCount");
+        uint32_t i, j;
+        for (i = 0; i < mbStatusZoneCount; i++)
         {
             fprintf(context->outputFile, " erroredSecondCountByZone[%d]", i);
         }
-        for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
+        for (j = 0; j < mbStatusClassCount; j++)
         {
-            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+            for (i = 0; i < mbStatusZoneCount; i++)
             {
                 fprintf(context->outputFile, " macroblockStatus[%d][%d]", j, i);
             }
         }
-        fprintf(context->outputFile, " timestampDeltaIntegral timestampDeltaIntegralSq timingErrorIntegral timingErrorIntegralSq estimatedLatencyIntegral estimatedLatencyIntegralSq");
         fprintf(context->outputFile, "\n");
         context->fileOutputTimestamp = 0;
     }
@@ -127,26 +128,27 @@ void ARSTREAM2_StreamStats_VideoStatsFileWrite(ARSTREAM2_StreamStats_VideoStats_
     {
         if (context->outputFile)
         {
-            fprintf(context->outputFile, "%llu %i %lu %lu %lu %lu %lu %lu", (long long unsigned int)videoStats->timestamp, videoStats->rssi,
+            fprintf(context->outputFile, "%llu %i %lu %lu %lu %lu %lu", (long long unsigned int)videoStats->timestamp, videoStats->rssi,
                     (long unsigned int)videoStats->totalFrameCount, (long unsigned int)videoStats->outputFrameCount,
                     (long unsigned int)videoStats->erroredOutputFrameCount, (long unsigned int)videoStats->discardedFrameCount,
-                    (long unsigned int)videoStats->missedFrameCount, (long unsigned int)videoStats->erroredSecondCount);
-            int i, j;
-            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                    (long unsigned int)videoStats->missedFrameCount);
+            fprintf(context->outputFile, " %llu %llu %llu %llu %llu %llu %lu",
+                    (long long unsigned int)videoStats->timestampDeltaIntegral, (long long unsigned int)videoStats->timestampDeltaIntegralSq,
+                    (long long unsigned int)videoStats->timingErrorIntegral,(long long unsigned int)videoStats->timingErrorIntegralSq,
+                    (long long unsigned int)videoStats->estimatedLatencyIntegral, (long long unsigned int)videoStats->estimatedLatencyIntegralSq,
+                    (long unsigned int)videoStats->erroredSecondCount);
+            uint32_t i, j;
+            for (i = 0; i < videoStats->mbStatusZoneCount; i++)
             {
                 fprintf(context->outputFile, " %lu", (long unsigned int)videoStats->erroredSecondCountByZone[i]);
             }
-            for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
+            for (j = 0; j < videoStats->mbStatusClassCount; j++)
             {
-                for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                for (i = 0; i < videoStats->mbStatusZoneCount; i++)
                 {
                     fprintf(context->outputFile, " %lu", (long unsigned int)videoStats->macroblockStatus[j][i]);
                 }
             }
-            fprintf(context->outputFile, " %llu %llu %llu %llu %llu %llu",
-                    (long long unsigned int)videoStats->timestampDeltaIntegral, (long long unsigned int)videoStats->timestampDeltaIntegralSq,
-                    (long long unsigned int)videoStats->timingErrorIntegral,(long long unsigned int)videoStats->timingErrorIntegralSq,
-                    (long long unsigned int)videoStats->estimatedLatencyIntegral, (long long unsigned int)videoStats->estimatedLatencyIntegralSq);
             fprintf(context->outputFile, "\n");
         }
         context->fileOutputTimestamp = videoStats->timestamp;
