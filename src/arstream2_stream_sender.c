@@ -436,30 +436,28 @@ static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_Stream
         vs.erroredOutputFrameCount = report->videoStats->erroredOutputFrameCount;
         vs.missedFrameCount = report->videoStats->missedFrameCount;
         vs.discardedFrameCount = report->videoStats->discardedFrameCount;
-        vs.erroredSecondCount = report->videoStats->erroredSecondCount;
         vs.timestampDeltaIntegral = report->videoStats->timestampDeltaIntegral;
         vs.timestampDeltaIntegralSq = report->videoStats->timestampDeltaIntegralSq;
         vs.timingErrorIntegral = report->videoStats->timingErrorIntegral;
         vs.timingErrorIntegralSq = report->videoStats->timingErrorIntegralSq;
         vs.estimatedLatencyIntegral = report->videoStats->estimatedLatencyIntegral;
         vs.estimatedLatencyIntegralSq = report->videoStats->estimatedLatencyIntegralSq;
-
-#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
-    #error "MB_STATUS_ZONE_COUNT mismatch!"
-#endif
-#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
-    #error "MB_STATUS_CLASS_COUNT mismatch!"
-#endif
-
-        for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+        vs.erroredSecondCount = report->videoStats->erroredSecondCount;
+        if (report->videoStats->mbStatusZoneCount == ARSTREAM2_H264_MB_STATUS_ZONE_COUNT)
         {
-            vs.erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
-        }
-        for (j = 0; j < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT; j++)
-        {
-            for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
             {
-                vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j][i];
+                vs.erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
+            }
+            if (report->videoStats->mbStatusClassCount == ARSTREAM2_H264_MB_STATUS_CLASS_COUNT)
+            {
+                for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
+                {
+                    for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                    {
+                        vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT + i];
+                    }
+                }
             }
         }
 

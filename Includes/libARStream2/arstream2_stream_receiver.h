@@ -37,16 +37,6 @@ extern "C" {
  */
 #define ARSTREAM2_STREAM_RECEIVER_RESENDER_DEFAULT_SERVER_CONTROL_PORT  (5005)
 
-/**
- * @brief Picture zone count for video stats (vertical division of the frame)
- */
-#define ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT                  (5)
-
-/**
- * @brief Macroblock status class count (@see eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS)
- */
-#define ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT (6)
-
 
 /**
  * @brief RTCP Source Description item types
@@ -133,15 +123,17 @@ typedef struct
     uint32_t erroredOutputFrameCount;                               /**< Errored output frame counter (included in outputFrameCount) */
     uint32_t missedFrameCount;                                      /**< Missed frame counter */
     uint32_t discardedFrameCount;                                   /**< Discarded frame counter (included in missedFrameCount) */
-    uint32_t erroredSecondCount;                                    /**< Errored second counter */
-    uint32_t erroredSecondCountByZone[ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT]; /**< Errored second counters for each picture zone */
-    uint32_t macroblockStatus[ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT][ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT]; /**< Macroblock status counters for each picture zone */
     uint64_t timestampDeltaIntegral;                                /**< Frame timestamp delta integral value */
     uint64_t timestampDeltaIntegralSq;                              /**< Frame timestamp delta squared integral value */
     uint64_t timingErrorIntegral;                                   /**< Frame timing error integral value */
     uint64_t timingErrorIntegralSq;                                 /**< Frame timing error squared integral value */
     uint64_t estimatedLatencyIntegral;                              /**< Frame estimated latency integral value */
     uint64_t estimatedLatencyIntegralSq;                            /**< Frame estimated latency squared integral value */
+    uint32_t erroredSecondCount;                                    /**< Errored second counter */
+    uint32_t mbStatusClassCount;                                    /**< Number of macroblock status classes */
+    uint32_t mbStatusZoneCount;                                     /**< Number of picture zones (vertical divisions of the frame) */
+    uint32_t *erroredSecondCountByZone;                             /**< Errored second counters for each picture zone - erroredSecondCountByZone[mbStatusZoneCount] array */
+    uint32_t *macroblockStatus;                                     /**< Macroblock status counters for each picture zone - macroblockStatus[mbStatusClassCount][mbStatusZoneCount] array */
 
 } ARSTREAM2_StreamReceiver_VideoStats_t;
 

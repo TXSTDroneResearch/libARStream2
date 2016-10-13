@@ -81,6 +81,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
         void *auReadyCallbackUserPtr;
         int mbWidth;
         int mbHeight;
+        ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
 
     } appOutput;
 
@@ -175,6 +176,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         else if ((config->canonicalName) && (strlen(config->canonicalName)))
         {
             streamReceiver->friendlyName = strndup(config->canonicalName, 40);
+        }
+        streamReceiver->appOutput.videoStats.mbStatusClassCount = ARSTREAM2_H264_MB_STATUS_CLASS_COUNT;
+        streamReceiver->appOutput.videoStats.mbStatusZoneCount = ARSTREAM2_H264_MB_STATUS_ZONE_COUNT;
+        streamReceiver->appOutput.videoStats.erroredSecondCountByZone = malloc(ARSTREAM2_H264_MB_STATUS_ZONE_COUNT * sizeof(uint32_t));
+        if (!streamReceiver->appOutput.videoStats.erroredSecondCountByZone)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed");
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        streamReceiver->appOutput.videoStats.macroblockStatus = malloc(ARSTREAM2_H264_MB_STATUS_ZONE_COUNT * ARSTREAM2_H264_MB_STATUS_CLASS_COUNT * sizeof(uint32_t));
+        if (!streamReceiver->appOutput.videoStats.macroblockStatus)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed");
+            ret = ARSTREAM2_ERROR_ALLOC;
         }
         char szDate[200];
         time_t rawtime;
@@ -373,6 +388,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             free(streamReceiver->debugPath);
             free(streamReceiver->friendlyName);
             free(streamReceiver->dateAndTime);
+            free(streamReceiver->appOutput.videoStats.erroredSecondCountByZone);
+            free(streamReceiver->appOutput.videoStats.macroblockStatus);
             free(streamReceiver);
         }
         *streamReceiverHandle = NULL;
@@ -433,6 +450,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     free(streamReceiver->debugPath);
     free(streamReceiver->friendlyName);
     free(streamReceiver->dateAndTime);
+    free(streamReceiver->appOutput.videoStats.erroredSecondCountByZone);
+    free(streamReceiver->appOutput.videoStats.macroblockStatus);
 
     free(streamReceiver);
     *streamReceiverHandle = NULL;
@@ -1124,7 +1143,6 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                 void *auBufferUserPtr = NULL;
                 ARSTREAM2_StreamReceiver_AuReadyCallbackTimestamps_t auTimestamps;
                 ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t auMetadata;
-                ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
 
                 ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
                 streamReceiver->appOutput.callbackInProgress = 1;
@@ -1265,42 +1283,42 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     {
                         /* Map the video stats */
                         ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)au->buffer->videoStatsBuffer;
+                        ARSTREAM2_StreamReceiver_VideoStats_t *vsOut = &streamReceiver->appOutput.videoStats;
                         int i, j;
-                        memset(&videoStats, 0, sizeof(videoStats));
-                        videoStats.timestamp = vs->timestamp;
-                        videoStats.rssi = vs->rssi;
-                        videoStats.totalFrameCount = vs->totalFrameCount;
-                        videoStats.outputFrameCount = vs->outputFrameCount;
-                        videoStats.erroredOutputFrameCount = vs->erroredOutputFrameCount;
-                        videoStats.missedFrameCount = vs->missedFrameCount;
-                        videoStats.discardedFrameCount = vs->discardedFrameCount;
-                        videoStats.erroredSecondCount = vs->erroredSecondCount;
-                        videoStats.timestampDeltaIntegral = vs->timestampDeltaIntegral;
-                        videoStats.timestampDeltaIntegralSq = vs->timestampDeltaIntegralSq;
-                        videoStats.timingErrorIntegral = vs->timingErrorIntegral;
-                        videoStats.timingErrorIntegralSq = vs->timingErrorIntegralSq;
-                        videoStats.estimatedLatencyIntegral = vs->estimatedLatencyIntegral;
-                        videoStats.estimatedLatencyIntegralSq = vs->estimatedLatencyIntegralSq;
-
-#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT != ARSTREAM2_H264_MB_STATUS_ZONE_COUNT
-    #error "MB_STATUS_ZONE_COUNT mismatch!"
-#endif
-#if ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT != ARSTREAM2_H264_MB_STATUS_CLASS_COUNT
-    #error "MB_STATUS_CLASS_COUNT mismatch!"
-#endif
-
-                        for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+                        vsOut->timestamp = vs->timestamp;
+                        vsOut->rssi = vs->rssi;
+                        vsOut->totalFrameCount = vs->totalFrameCount;
+                        vsOut->outputFrameCount = vs->outputFrameCount;
+                        vsOut->erroredOutputFrameCount = vs->erroredOutputFrameCount;
+                        vsOut->missedFrameCount = vs->missedFrameCount;
+                        vsOut->discardedFrameCount = vs->discardedFrameCount;
+                        vsOut->timestampDeltaIntegral = vs->timestampDeltaIntegral;
+                        vsOut->timestampDeltaIntegralSq = vs->timestampDeltaIntegralSq;
+                        vsOut->timingErrorIntegral = vs->timingErrorIntegral;
+                        vsOut->timingErrorIntegralSq = vs->timingErrorIntegralSq;
+                        vsOut->estimatedLatencyIntegral = vs->estimatedLatencyIntegral;
+                        vsOut->estimatedLatencyIntegralSq = vs->estimatedLatencyIntegralSq;
+                        vsOut->erroredSecondCount = vs->erroredSecondCount;
+                        vsOut->mbStatusZoneCount = ARSTREAM2_H264_MB_STATUS_ZONE_COUNT;
+                        vsOut->mbStatusClassCount = ARSTREAM2_H264_MB_STATUS_CLASS_COUNT;
+                        if (vsOut->erroredSecondCountByZone)
                         {
-                            videoStats.erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
-                        }
-                        for (j = 0; j < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT; j++)
-                        {
-                            for (i = 0; i < ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT; i++)
+                            for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
                             {
-                                videoStats.macroblockStatus[j][i] = vs->macroblockStatus[j][i];
+                                vsOut->erroredSecondCountByZone[i] = vs->erroredSecondCountByZone[i];
                             }
                         }
-                        auMetadata.videoStats = &videoStats;
+                        if (vsOut->macroblockStatus)
+                        {
+                            for (j = 0; j < ARSTREAM2_H264_MB_STATUS_CLASS_COUNT; j++)
+                            {
+                                for (i = 0; i < ARSTREAM2_H264_MB_STATUS_ZONE_COUNT; i++)
+                                {
+                                    vsOut->macroblockStatus[j * ARSTREAM2_H264_MB_STATUS_ZONE_COUNT + i] = vs->macroblockStatus[j][i];
+                                }
+                            }
+                        }
+                        auMetadata.videoStats = vsOut;
                     }
                     else
                     {

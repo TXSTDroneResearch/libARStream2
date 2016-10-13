@@ -161,7 +161,8 @@ struct ARSTREAM2_RtpSender_t {
     struct mmsghdr *msgVec;
     unsigned int msgVecCount;
 
-    /* Monitoring */
+    /* Monitoring & debug */
+    ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
     char *dateAndTime;
     char *debugPath;
     ARSAL_Mutex_t monitoringMutex;
@@ -1040,6 +1041,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             free((*sender)->dateAndTime);
             free((*sender)->rtcpSenderContext.videoStats.erroredSecondCountByZone);
             free((*sender)->rtcpSenderContext.videoStats.macroblockStatus);
+            free((*sender)->videoStats.erroredSecondCountByZone);
+            free((*sender)->videoStats.macroblockStatus);
             if ((*sender)->fMonitorOut)
             {
                 fclose((*sender)->fMonitorOut);
@@ -1347,7 +1350,6 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 if ((gotReceptionReport) && (sender->receiverReportCallback != NULL))
                 {
                     ARSTREAM2_StreamSender_ReceiverReportData_t report;
-                    ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
 
                     memset(&report, 0, sizeof(ARSTREAM2_StreamSender_ReceiverReportData_t));
                     report.lastReceiverReportReceptionTimestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
@@ -1365,43 +1367,67 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                     report.videoStats = NULL;
                     if (sender->rtcpSenderContext.videoStats.updatedSinceLastTime)
                     {
+                        ARSTREAM2_StreamReceiver_VideoStats_t *vsOut = &sender->videoStats;
                         uint32_t i, j;
-                        memset(&videoStats, 0, sizeof(ARSTREAM2_StreamReceiver_VideoStats_t));
 
-                        videoStats.timestamp = sender->rtcpSenderContext.videoStats.timestamp;
-                        videoStats.rssi = sender->rtcpSenderContext.videoStats.rssi;
-                        videoStats.totalFrameCount = sender->rtcpSenderContext.videoStats.totalFrameCount;
-                        videoStats.outputFrameCount = sender->rtcpSenderContext.videoStats.outputFrameCount;
-                        videoStats.erroredOutputFrameCount = sender->rtcpSenderContext.videoStats.erroredOutputFrameCount;
-                        videoStats.missedFrameCount = sender->rtcpSenderContext.videoStats.missedFrameCount;
-                        videoStats.discardedFrameCount = sender->rtcpSenderContext.videoStats.discardedFrameCount;
-                        videoStats.timestampDeltaIntegral = sender->rtcpSenderContext.videoStats.timestampDeltaIntegral;
-                        videoStats.timestampDeltaIntegralSq = sender->rtcpSenderContext.videoStats.timestampDeltaIntegralSq;
-                        videoStats.timingErrorIntegral = sender->rtcpSenderContext.videoStats.timingErrorIntegral;
-                        videoStats.timingErrorIntegralSq = sender->rtcpSenderContext.videoStats.timingErrorIntegralSq;
-                        videoStats.estimatedLatencyIntegral = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegral;
-                        videoStats.estimatedLatencyIntegralSq = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegralSq;
-                        videoStats.erroredSecondCount = sender->rtcpSenderContext.videoStats.erroredSecondCount;
-                        if (sender->rtcpSenderContext.videoStats.mbStatusZoneCount == ARSTREAM2_STREAM_RECEIVER_MB_STATUS_ZONE_COUNT)
+                        vsOut->timestamp = sender->rtcpSenderContext.videoStats.timestamp;
+                        vsOut->rssi = sender->rtcpSenderContext.videoStats.rssi;
+                        vsOut->totalFrameCount = sender->rtcpSenderContext.videoStats.totalFrameCount;
+                        vsOut->outputFrameCount = sender->rtcpSenderContext.videoStats.outputFrameCount;
+                        vsOut->erroredOutputFrameCount = sender->rtcpSenderContext.videoStats.erroredOutputFrameCount;
+                        vsOut->missedFrameCount = sender->rtcpSenderContext.videoStats.missedFrameCount;
+                        vsOut->discardedFrameCount = sender->rtcpSenderContext.videoStats.discardedFrameCount;
+                        vsOut->timestampDeltaIntegral = sender->rtcpSenderContext.videoStats.timestampDeltaIntegral;
+                        vsOut->timestampDeltaIntegralSq = sender->rtcpSenderContext.videoStats.timestampDeltaIntegralSq;
+                        vsOut->timingErrorIntegral = sender->rtcpSenderContext.videoStats.timingErrorIntegral;
+                        vsOut->timingErrorIntegralSq = sender->rtcpSenderContext.videoStats.timingErrorIntegralSq;
+                        vsOut->estimatedLatencyIntegral = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegral;
+                        vsOut->estimatedLatencyIntegralSq = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegralSq;
+                        vsOut->erroredSecondCount = sender->rtcpSenderContext.videoStats.erroredSecondCount;
+                        if (sender->rtcpSenderContext.videoStats.mbStatusZoneCount)
                         {
-                            for (i = 0; i < sender->rtcpSenderContext.videoStats.mbStatusZoneCount; i++)
+                            if ((!vsOut->erroredSecondCountByZone) || (sender->rtcpSenderContext.videoStats.mbStatusZoneCount > vsOut->mbStatusZoneCount))
                             {
-                                videoStats.erroredSecondCountByZone[i] = sender->rtcpSenderContext.videoStats.erroredSecondCountByZone[i];
+                                vsOut->erroredSecondCountByZone = realloc(vsOut->erroredSecondCountByZone, sender->rtcpSenderContext.videoStats.mbStatusZoneCount * sizeof(uint32_t));
+                                if (!vsOut->erroredSecondCountByZone)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Allocation failed");
+                                }
+                                vsOut->mbStatusZoneCount = sender->rtcpSenderContext.videoStats.mbStatusZoneCount;
+                            }
+                            if (vsOut->erroredSecondCountByZone)
+                            {
+                                for (i = 0; i < vsOut->mbStatusZoneCount; i++)
+                                {
+                                    vsOut->erroredSecondCountByZone[i] = sender->rtcpSenderContext.videoStats.erroredSecondCountByZone[i];
+                                }
                             }
 
-                            if (sender->rtcpSenderContext.videoStats.mbStatusClassCount == ARSTREAM2_STREAM_RECEIVER_MB_STATUS_CLASS_COUNT)
+                            if (sender->rtcpSenderContext.videoStats.mbStatusClassCount)
                             {
-                                for (j = 0; j < sender->rtcpSenderContext.videoStats.mbStatusClassCount; j++)
+                                if ((!vsOut->macroblockStatus) || (sender->rtcpSenderContext.videoStats.mbStatusClassCount > vsOut->mbStatusClassCount))
                                 {
-                                    for (i = 0; i < sender->rtcpSenderContext.videoStats.mbStatusZoneCount; i++)
+                                    vsOut->macroblockStatus = realloc(vsOut->macroblockStatus, sender->rtcpSenderContext.videoStats.mbStatusClassCount * vsOut->mbStatusZoneCount * sizeof(uint32_t));
+                                    if (!vsOut->macroblockStatus)
                                     {
-                                        videoStats.macroblockStatus[j][i] = sender->rtcpSenderContext.videoStats.macroblockStatus[j * sender->rtcpSenderContext.videoStats.mbStatusZoneCount + i];
+                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Allocation failed");
+                                    }
+                                    vsOut->mbStatusClassCount = sender->rtcpSenderContext.videoStats.mbStatusClassCount;
+                                }
+                                if (vsOut->macroblockStatus)
+                                {
+                                    for (j = 0; j < vsOut->mbStatusClassCount; j++)
+                                    {
+                                        for (i = 0; i < vsOut->mbStatusZoneCount; i++)
+                                        {
+                                            vsOut->macroblockStatus[j * vsOut->mbStatusZoneCount + i] = sender->rtcpSenderContext.videoStats.macroblockStatus[j * vsOut->mbStatusZoneCount + i];
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        report.videoStats = &videoStats;
+                        report.videoStats = vsOut;
                         sender->rtcpSenderContext.videoStats.updatedSinceLastTime = 0;
                     }
 
