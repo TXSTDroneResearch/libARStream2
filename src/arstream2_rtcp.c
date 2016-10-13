@@ -393,12 +393,12 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsign
     /* SDES items list */
     for (i = 0; i < sdesItemCount; i++)
     {
-        if ((sdesItem[i].value) && (strlen(sdesItem[i].value)))
+        if (strlen(sdesItem[i].value))
         {
             if (sdesItem[i].type == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
             {
                 /* private extension item */
-                if ((sdesItem[i].prefix) && (strlen(sdesItem[i].prefix)))
+                if (strlen(sdesItem[i].prefix))
                 {
                     if (_size + 2 + 1 + strlen(sdesItem[i].prefix) + strlen(sdesItem[i].value) + 1 > maxSize)
                     {
