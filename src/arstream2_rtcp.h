@@ -294,10 +294,9 @@ typedef struct ARSTREAM2_RTCP_ReceiverContext_s {
 
 int ARSTREAM2_RTCP_GetPacketType(const uint8_t *buffer, unsigned int bufferSize, int *receptionReportCount, unsigned int *size);
 
-int ARSTREAM2_RTCP_GetApplicationPacketSubtype(const ARSTREAM2_RTCP_Application_t *app);
+int ARSTREAM2_RTCP_GetApplicationPacketSubtype(const uint8_t *buffer, unsigned int bufferSize);
 
-int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const ARSTREAM2_RTCP_ReceiverReport_t *receiverReport,
-                                                const ARSTREAM2_RTCP_ReceptionReportBlock_t *receptionReport,
+int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const uint8_t *buffer, unsigned int bufferSize,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_SenderContext_t *context,
                                                 int *gotReceptionReport);
@@ -306,7 +305,7 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
                                                uint64_t sendTimestamp, uint32_t packetCount, uint32_t byteCount,
                                                ARSTREAM2_RTCP_SenderContext_t *context);
 
-int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const ARSTREAM2_RTCP_SenderReport_t *senderReport,
+int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const uint8_t *buffer, unsigned int bufferSize,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_ReceiverContext_t *context);
 
@@ -326,8 +325,7 @@ int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *a
                                                  uint64_t sendTimestamp, uint32_t ssrc,
                                                  ARSTREAM2_RTCP_ClockDeltaContext_t *context);
 
-int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const ARSTREAM2_RTCP_Application_t *app,
-                                                const ARSTREAM2_RTCP_ClockDelta_t *clockDelta,
+int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const uint8_t *buffer, unsigned int bufferSize,
                                                 uint64_t receptionTimestamp, uint32_t peerSsrc,
                                                 ARSTREAM2_RTCP_ClockDeltaContext_t *context);
 
@@ -335,8 +333,7 @@ int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *a
                                                  unsigned int maxSize, uint64_t sendTimestamp,
                                                  uint32_t ssrc, ARSTREAM2_RTCP_VideoStatsContext_t *context, unsigned int *size);
 
-int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const ARSTREAM2_RTCP_Application_t *app,
-                                                const ARSTREAM2_RTCP_VideoStats_t *videoStats,
+int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const uint8_t *buffer, unsigned int bufferSize,
                                                 uint64_t receptionTimestamp, uint32_t peerSsrc,
                                                 ARSTREAM2_RTCP_VideoStatsContext_t *context);
 
