@@ -518,13 +518,13 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
         "PRIV",
     };*/
 
-    const uint8_t *ptr = (uint8_t*)sdes + 4;
+    const uint8_t *ptr = (const uint8_t*)sdes + 4;
     uint32_t ssrc;
     int remLength = length * 4, i;
     for (i = 0; i < sc; i++)
     {
         /* read the SSRC */
-        ssrc = ntohl(*((uint32_t*)ptr));
+        ssrc = ntohl(*((const uint32_t*)ptr));
         ptr += 4;
         remLength -= 4;
         /* read the SDES items */
@@ -1173,8 +1173,8 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
             case ARSTREAM2_RTCP_RECEIVER_REPORT_PACKET_TYPE:
                 if (receptionReportCount > 0)
                 {
-                    ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((ARSTREAM2_RTCP_ReceiverReport_t*)packet,
-                                                                      (ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
+                    ret = ARSTREAM2_RTCP_Sender_ProcessReceiverReport((const ARSTREAM2_RTCP_ReceiverReport_t*)packet,
+                                                                      (const ARSTREAM2_RTCP_ReceptionReportBlock_t*)(packet + sizeof(ARSTREAM2_RTCP_ReceiverReport_t)),
                                                                       receptionTimestamp,
                                                                       context, gotReceptionReport);
                     if (ret != 0)
@@ -1191,7 +1191,7 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((const ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
                                                               ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
@@ -1199,12 +1199,12 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 break;
             case ARSTREAM2_RTCP_APP_PACKET_TYPE:
-                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((ARSTREAM2_RTCP_Application_t*)packet);
+                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((const ARSTREAM2_RTCP_Application_t*)packet);
                 switch (subType)
                 {
                     case ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE:
-                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
-                                                                          (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((const ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (const ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
                                                                           receptionTimestamp, context->receiverSsrc,
                                                                           &context->clockDelta);
                         if (ret != 0)
@@ -1218,8 +1218,8 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                         }
                         break;
                     case ARSTREAM2_RTCP_APP_PACKET_VIDEOSTATS_SUBTYPE:
-                        ret = ARSTREAM2_RTCP_ProcessApplicationVideoStats((ARSTREAM2_RTCP_Application_t*)packet,
-                                                                          (ARSTREAM2_RTCP_VideoStats_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                        ret = ARSTREAM2_RTCP_ProcessApplicationVideoStats((const ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (const ARSTREAM2_RTCP_VideoStats_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
                                                                           receptionTimestamp, context->receiverSsrc,
                                                                           &context->videoStats);
                         if (ret != 0)
@@ -1270,7 +1270,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
         switch (type)
         {
             case ARSTREAM2_RTCP_SENDER_REPORT_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((ARSTREAM2_RTCP_SenderReport_t*)packet,
+                ret = ARSTREAM2_RTCP_Receiver_ProcessSenderReport((const ARSTREAM2_RTCP_SenderReport_t*)packet,
                                                                   receptionTimestamp, context);
                 if (ret != 0)
                 {
@@ -1284,7 +1284,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription((const ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
                                                               ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
@@ -1296,8 +1296,8 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 switch (subType)
                 {
                     case ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE:
-                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)packet,
-                                                                          (ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
+                        ret = ARSTREAM2_RTCP_ProcessApplicationClockDelta((const ARSTREAM2_RTCP_Application_t*)packet,
+                                                                          (const ARSTREAM2_RTCP_ClockDelta_t*)(packet + sizeof(ARSTREAM2_RTCP_Application_t)),
                                                                           receptionTimestamp, context->senderSsrc,
                                                                           &context->clockDelta);
                         if (ret != 0)
