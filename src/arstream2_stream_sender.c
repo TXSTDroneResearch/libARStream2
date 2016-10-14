@@ -35,6 +35,7 @@ typedef struct ARSTREAM2_StreamSender_s
     char *debugPath;
     ARSTREAM2_StreamStats_VideoStats_t videoStats;
     int videoStatsInitPending;
+    ARSTREAM2_H264_VideoStats_t videoStatsForFile;
 
 } ARSTREAM2_StreamSender_t;
 
@@ -801,50 +802,50 @@ static void ARSTREAM2_StreamSender_ReceiverReportCallback(const ARSTREAM2_Stream
     if ((report) && (report->videoStats))
     {
         /* Map the video stats */
-        ARSTREAM2_H264_VideoStats_t vs;
+        ARSTREAM2_H264_VideoStats_t *vs = &streamSender->videoStatsForFile;
         uint32_t i, j;
-        memset(&vs, 0, sizeof(ARSTREAM2_H264_VideoStats_t));
+        memset(vs, 0, sizeof(ARSTREAM2_H264_VideoStats_t));
         if (streamSender->videoStatsInitPending)
         {
             ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamSender->videoStats, streamSender->debugPath, streamSender->friendlyName,
                                                      streamSender->dateAndTime, report->videoStats->mbStatusZoneCount, report->videoStats->mbStatusClassCount);
             streamSender->videoStatsInitPending = 0;
         }
-        vs.timestamp = report->videoStats->timestamp;
-        vs.rssi = report->videoStats->rssi;
-        vs.totalFrameCount = report->videoStats->totalFrameCount;
-        vs.outputFrameCount = report->videoStats->outputFrameCount;
-        vs.erroredOutputFrameCount = report->videoStats->erroredOutputFrameCount;
-        vs.missedFrameCount = report->videoStats->missedFrameCount;
-        vs.discardedFrameCount = report->videoStats->discardedFrameCount;
-        vs.timestampDeltaIntegral = report->videoStats->timestampDeltaIntegral;
-        vs.timestampDeltaIntegralSq = report->videoStats->timestampDeltaIntegralSq;
-        vs.timingErrorIntegral = report->videoStats->timingErrorIntegral;
-        vs.timingErrorIntegralSq = report->videoStats->timingErrorIntegralSq;
-        vs.estimatedLatencyIntegral = report->videoStats->estimatedLatencyIntegral;
-        vs.estimatedLatencyIntegralSq = report->videoStats->estimatedLatencyIntegralSq;
-        vs.erroredSecondCount = report->videoStats->erroredSecondCount;
+        vs->timestamp = report->videoStats->timestamp;
+        vs->rssi = report->videoStats->rssi;
+        vs->totalFrameCount = report->videoStats->totalFrameCount;
+        vs->outputFrameCount = report->videoStats->outputFrameCount;
+        vs->erroredOutputFrameCount = report->videoStats->erroredOutputFrameCount;
+        vs->missedFrameCount = report->videoStats->missedFrameCount;
+        vs->discardedFrameCount = report->videoStats->discardedFrameCount;
+        vs->timestampDeltaIntegral = report->videoStats->timestampDeltaIntegral;
+        vs->timestampDeltaIntegralSq = report->videoStats->timestampDeltaIntegralSq;
+        vs->timingErrorIntegral = report->videoStats->timingErrorIntegral;
+        vs->timingErrorIntegralSq = report->videoStats->timingErrorIntegralSq;
+        vs->estimatedLatencyIntegral = report->videoStats->estimatedLatencyIntegral;
+        vs->estimatedLatencyIntegralSq = report->videoStats->estimatedLatencyIntegralSq;
+        vs->erroredSecondCount = report->videoStats->erroredSecondCount;
         if (report->videoStats->mbStatusZoneCount <= ARSTREAM2_H264_MB_STATUS_ZONE_MAX_COUNT)
         {
-            vs.mbStatusZoneCount = report->videoStats->mbStatusZoneCount;
-            for (i = 0; i < vs.mbStatusZoneCount; i++)
+            vs->mbStatusZoneCount = report->videoStats->mbStatusZoneCount;
+            for (i = 0; i < vs->mbStatusZoneCount; i++)
             {
-                vs.erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
+                vs->erroredSecondCountByZone[i] = report->videoStats->erroredSecondCountByZone[i];
             }
             if (report->videoStats->mbStatusClassCount <= ARSTREAM2_H264_MB_STATUS_CLASS_MAX_COUNT)
             {
-                vs.mbStatusClassCount = report->videoStats->mbStatusClassCount;
-                for (j = 0; j < vs.mbStatusClassCount; j++)
+                vs->mbStatusClassCount = report->videoStats->mbStatusClassCount;
+                for (j = 0; j < vs->mbStatusClassCount; j++)
                 {
-                    for (i = 0; i < vs.mbStatusZoneCount; i++)
+                    for (i = 0; i < vs->mbStatusZoneCount; i++)
                     {
-                        vs.macroblockStatus[j][i] = report->videoStats->macroblockStatus[j * vs.mbStatusZoneCount + i];
+                        vs->macroblockStatus[j][i] = report->videoStats->macroblockStatus[j * vs->mbStatusZoneCount + i];
                     }
                 }
             }
         }
 
-        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamSender->videoStats, &vs);
+        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamSender->videoStats, vs);
     }
 
     if (streamSender->receiverReportCallback)
