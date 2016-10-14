@@ -535,27 +535,35 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
             ptr += 2;
             remLength -= 2;
             char str[256];
-            uint8_t strLen = len;
+            str[0] = '\0';
             char prefix[256];
-            uint8_t prefixLen = 0;
             prefix[0] = '\0';
             if ((id == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (len > 2))
             {
                 /* private extension item */
-                prefixLen = *ptr;
-                strLen = strLen - prefixLen - 1;
-                memcpy(prefix, ptr + 1, prefixLen);
-                prefix[prefixLen] = '\0';
-                memcpy(str, ptr + 1 + prefixLen, strLen);
-                str[strLen] = '\0';
+                uint8_t prefixLen = *ptr;
+                uint8_t strLen = len - prefixLen - 1;
+                if (remLength >= 3 + prefixLen)
+                {
+                    memcpy(prefix, ptr + 1, prefixLen);
+                    prefix[prefixLen] = '\0';
+                }
+                if (remLength >= 3 + prefixLen + strLen)
+                {
+                    memcpy(str, ptr + 1 + prefixLen, strLen);
+                    str[strLen] = '\0';
+                }
             }
             else
             {
-                strLen = len;
-                memcpy(str, ptr, strLen);
-                str[strLen] = '\0';
+                uint8_t strLen = len;
+                if (remLength >= 2 + strLen)
+                {
+                    memcpy(str, ptr, strLen);
+                    str[strLen] = '\0';
+                }
             }
-            if (id <= 9)
+            if (id <= 8)
             {
                 /*if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
                 {
@@ -1292,7 +1300,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 break;
             case ARSTREAM2_RTCP_APP_PACKET_TYPE:
-                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((ARSTREAM2_RTCP_Application_t*)packet);
+                subType = ARSTREAM2_RTCP_GetApplicationPacketSubtype((const ARSTREAM2_RTCP_Application_t*)packet);
                 switch (subType)
                 {
                     case ARSTREAM2_RTCP_APP_PACKET_CLOCKDELTA_SUBTYPE:
