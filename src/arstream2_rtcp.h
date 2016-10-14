@@ -319,7 +319,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateReceiverReport(ARSTREAM2_RTCP_ReceiverReport
 int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsigned int maxSize, uint32_t ssrc, uint64_t sendTimestamp,
                                              ARSTREAM2_RTCP_SdesItem_t *sdesItem, int sdesItemCount, unsigned int *size);
 
-int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
+int ARSTREAM2_RTCP_ProcessSourceDescription(const uint8_t *buffer, unsigned int bufferSize, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
                                             int sdesItemMaxCount, int *sdesItemCount);
 
 int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *app, ARSTREAM2_RTCP_ClockDelta_t *clockDelta,

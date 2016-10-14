@@ -463,13 +463,19 @@ int ARSTREAM2_RTCP_GenerateSourceDescription(ARSTREAM2_RTCP_Sdes_t *sdes, unsign
 }
 
 
-int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
+int ARSTREAM2_RTCP_ProcessSourceDescription(const uint8_t *buffer, unsigned int bufferSize, ARSTREAM2_RTCP_SdesItem_t *sdesItem,
                                             int sdesItemMaxCount, int *sdesItemCount)
 {
+    const ARSTREAM2_RTCP_Sdes_t *sdes = (const ARSTREAM2_RTCP_Sdes_t*)buffer;
 
-    if ((!sdes) || (!sdesItem) || (!sdesItemCount))
+    if ((!buffer) || (!sdesItem) || (!sdesItemCount))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid pointer");
+        return -1;
+    }
+    if (bufferSize < 4)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid buffer size");
         return -1;
     }
     if (sdesItemMaxCount <= 0)
@@ -499,34 +505,22 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
     uint8_t sc = sdes->flags & 0x1F;
     uint16_t length = ntohs(sdes->length);
 
-    if (length < sc)
+    if ((unsigned int)length * 4 + 4 > bufferSize)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid length (%d) for %d source count", length, sc);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Invalid length (%d -> %d bytes) for %d bytes buffer size", length, length * 4 + 4, bufferSize);
         return -1;
     }
 
-    /*static const char *ARSTREAM2_RTCP_SdesItemName[] =
-    {
-        "NULL",
-        "CNAME",
-        "NAME",
-        "EMAIL",
-        "PHONE",
-        "LOC",
-        "TOOL",
-        "NOTE",
-        "PRIV",
-    };*/
-
-    const uint8_t *ptr = (const uint8_t*)sdes + 4;
+    const uint8_t *ptr = buffer + 4;
     uint32_t ssrc;
     int remLength = length * 4, i;
-    for (i = 0; i < sc; i++)
+    for (i = 0; (i < sc) && (remLength >= 4); i++)
     {
         /* read the SSRC */
         ssrc = ntohl(*((const uint32_t*)ptr));
         ptr += 4;
         remLength -= 4;
+
         /* read the SDES items */
         while ((*ptr != 0) && (remLength >= 3))
         {
@@ -538,34 +532,45 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
             str[0] = '\0';
             char prefix[256];
             prefix[0] = '\0';
+
             if ((id == ARSTREAM2_RTCP_SDES_PRIV_ITEM) && (len > 2))
             {
                 /* private extension item */
                 uint8_t prefixLen = *ptr;
                 uint8_t strLen = len - prefixLen - 1;
-                if (remLength >= 3 + prefixLen)
+                if (remLength < 3 + prefixLen)
                 {
-                    memcpy(prefix, ptr + 1, prefixLen);
-                    prefix[prefixLen] = '\0';
+                    break;
                 }
-                if (remLength >= 3 + prefixLen + strLen)
+                memcpy(prefix, ptr + 1, prefixLen);
+                prefix[prefixLen] = '\0';
+                if (remLength < 3 + prefixLen + strLen)
                 {
-                    memcpy(str, ptr + 1 + prefixLen, strLen);
-                    str[strLen] = '\0';
+                    break;
                 }
+                memcpy(str, ptr + 1 + prefixLen, strLen);
+                str[strLen] = '\0';
             }
             else
             {
                 uint8_t strLen = len;
-                if (remLength >= 2 + strLen)
+                if (remLength < 2 + strLen)
                 {
-                    memcpy(str, ptr, strLen);
-                    str[strLen] = '\0';
+                    break;
                 }
+                memcpy(str, ptr, strLen);
+                str[strLen] = '\0';
             }
-            if (id <= 8)
+
+            /* add the item if it is valid */
+            if ((id <= 8) && (strlen(str)) && ((id != ARSTREAM2_RTCP_SDES_PRIV_ITEM) || (strlen(prefix))))
             {
-                /*if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
+                /* uncomment to print values for debug */
+                /*static const char *ARSTREAM2_RTCP_SdesItemName[] =
+                {
+                    "NULL", "CNAME", "NAME", "EMAIL", "PHONE", "LOC", "TOOL", "NOTE", "PRIV",
+                };
+                if (id == ARSTREAM2_RTCP_SDES_PRIV_ITEM)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s prefix='%s' value='%s'", ssrc, ARSTREAM2_RTCP_SdesItemName[id], prefix, str);
                 }
@@ -573,6 +578,7 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
                 {
                     ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTCP_TAG, "SDES SSRC=0x%08X %s value='%s'", ssrc, ARSTREAM2_RTCP_SdesItemName[id], str);
                 }*/
+
                 int k, found;
                 /* existing item */
                 for (k = 0, found = 0; k < *sdesItemCount; k++)
@@ -609,9 +615,11 @@ int ARSTREAM2_RTCP_ProcessSourceDescription(const ARSTREAM2_RTCP_Sdes_t *sdes, A
                     *sdesItemCount = k + 1;
                 }
             }
+
             ptr += len;
             remLength -= len;
         }
+
         /* align to multiple of 4 bytes */
         if ((*ptr == 0) && (remLength))
         {
@@ -1199,7 +1207,7 @@ int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned 
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((const ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription(packet, packetSize - readSize, context->peerSdesItem,
                                                               ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
@@ -1292,7 +1300,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigne
                 }
                 break;
             case ARSTREAM2_RTCP_SDES_PACKET_TYPE:
-                ret = ARSTREAM2_RTCP_ProcessSourceDescription((const ARSTREAM2_RTCP_Sdes_t*)packet, context->peerSdesItem,
+                ret = ARSTREAM2_RTCP_ProcessSourceDescription(packet, packetSize - readSize, context->peerSdesItem,
                                                               ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT, &context->peerSdesItemCount);
                 if (ret != 0)
                 {
