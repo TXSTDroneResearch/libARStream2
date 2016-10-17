@@ -1099,21 +1099,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->rtcpReceiverContext.sdesItem[retReceiver->rtcpReceiverContext.sdesItemCount].lastSendTime = 0;
             retReceiver->rtcpReceiverContext.sdesItemCount++;
         }
-        retReceiver->rtcpReceiverContext.videoStats.sendTimeInterval = config->videoStatsSendTimeInterval;
-        retReceiver->rtcpReceiverContext.videoStats.mbStatusClassCount = ARSTREAM2_H264_MB_STATUS_CLASS_COUNT;
-        retReceiver->rtcpReceiverContext.videoStats.mbStatusZoneCount = ARSTREAM2_H264_MB_STATUS_ZONE_COUNT;
-        retReceiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone = malloc(ARSTREAM2_H264_MB_STATUS_ZONE_COUNT * sizeof(uint32_t));
-        if (!retReceiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Allocation failed");
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        retReceiver->rtcpReceiverContext.videoStats.macroblockStatus = malloc(ARSTREAM2_H264_MB_STATUS_ZONE_COUNT * ARSTREAM2_H264_MB_STATUS_CLASS_COUNT * sizeof(uint32_t));
-        if (!retReceiver->rtcpReceiverContext.videoStats.macroblockStatus)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Allocation failed");
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
+        retReceiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval = config->videoStatsSendTimeInterval;
 
         if (retReceiver->rtpReceiverContext.maxPacketSize < sizeof(ARSTREAM2_RTCP_ReceiverReport_t) + sizeof(ARSTREAM2_RTCP_ReceptionReportBlock_t))
         {
@@ -1369,8 +1355,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         free(retReceiver->net.serverAddr);
         free(retReceiver->net.mcastAddr);
         free(retReceiver->net.mcastIfaceAddr);
-        free(retReceiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone);
-        free(retReceiver->rtcpReceiverContext.videoStats.macroblockStatus);
 
 #if BUILD_LIBMUX
         if ((retReceiver) && (retReceiver->mux.mux))
@@ -1476,8 +1460,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             free((*receiver)->net.serverAddr);
             free((*receiver)->net.mcastAddr);
             free((*receiver)->net.mcastIfaceAddr);
-            free((*receiver)->rtcpReceiverContext.videoStats.erroredSecondCountByZone);
-            free((*receiver)->rtcpReceiverContext.videoStats.macroblockStatus);
 
 #if BUILD_LIBMUX
             if ((*receiver)->mux.mux)
@@ -1620,14 +1602,14 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                 unsigned int size = 0;
                 int generateVideoStats = 0;
 
-                if ((receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime)
-                        && (receiver->rtcpReceiverContext.videoStats.sendTimeInterval > 0)
-                        && ((receiver->rtcpReceiverContext.videoStats.lastSendTime == 0)
-                            || (curTime >= receiver->rtcpReceiverContext.videoStats.lastSendTime + receiver->rtcpReceiverContext.videoStats.sendTimeInterval)))
+                if ((receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime)
+                        && (receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval > 0)
+                        && ((receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime == 0)
+                            || (curTime >= receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime + receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval)))
                 {
                     generateVideoStats = 1;
-                    receiver->rtcpReceiverContext.videoStats.lastSendTime = curTime;
-                    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 0;
+                    receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime = curTime;
+                    receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 0;
                 }
 
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
@@ -1827,14 +1809,14 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
                 unsigned int size = 0;
                 int generateVideoStats = 0;
 
-                if ((receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime)
-                        && (receiver->rtcpReceiverContext.videoStats.sendTimeInterval > 0)
-                        && ((receiver->rtcpReceiverContext.videoStats.lastSendTime == 0)
-                            || (curTime >= receiver->rtcpReceiverContext.videoStats.lastSendTime + receiver->rtcpReceiverContext.videoStats.sendTimeInterval)))
+                if ((receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime)
+                        && (receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval > 0)
+                        && ((receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime == 0)
+                            || (curTime >= receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime + receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval)))
                 {
                     generateVideoStats = 1;
-                    receiver->rtcpReceiverContext.videoStats.lastSendTime = curTime;
-                    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 0;
+                    receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime = curTime;
+                    receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 0;
                 }
 
                 ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
@@ -1927,52 +1909,14 @@ void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param)
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_UpdateVideoStats(ARSTREAM2_RtpReceiver_t *receiver, const ARSTREAM2_H264_VideoStats_t *videoStats)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-    uint32_t i, j;
 
     if ((receiver == NULL) || (videoStats == 0))
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    receiver->rtcpReceiverContext.videoStats.timestamp = videoStats->timestamp;
-    receiver->rtcpReceiverContext.videoStats.rssi = videoStats->rssi;
-    receiver->rtcpReceiverContext.videoStats.totalFrameCount = videoStats->totalFrameCount;
-    receiver->rtcpReceiverContext.videoStats.outputFrameCount = videoStats->outputFrameCount;
-    receiver->rtcpReceiverContext.videoStats.erroredOutputFrameCount = videoStats->erroredOutputFrameCount;
-    receiver->rtcpReceiverContext.videoStats.missedFrameCount = videoStats->missedFrameCount;
-    receiver->rtcpReceiverContext.videoStats.discardedFrameCount = videoStats->discardedFrameCount;
-    receiver->rtcpReceiverContext.videoStats.timestampDeltaIntegral = videoStats->timestampDeltaIntegral;
-    receiver->rtcpReceiverContext.videoStats.timestampDeltaIntegralSq = videoStats->timestampDeltaIntegralSq;
-    receiver->rtcpReceiverContext.videoStats.timingErrorIntegral = videoStats->timingErrorIntegral;
-    receiver->rtcpReceiverContext.videoStats.timingErrorIntegralSq = videoStats->timingErrorIntegralSq;
-    receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegral = videoStats->estimatedLatencyIntegral;
-    receiver->rtcpReceiverContext.videoStats.estimatedLatencyIntegralSq = videoStats->estimatedLatencyIntegralSq;
-    receiver->rtcpReceiverContext.videoStats.erroredSecondCount = videoStats->erroredSecondCount;
-    if (receiver->rtcpReceiverContext.videoStats.mbStatusZoneCount == videoStats->mbStatusZoneCount)
-    {
-        if (receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone)
-        {
-            for (i = 0; i < videoStats->mbStatusZoneCount; i++)
-            {
-                receiver->rtcpReceiverContext.videoStats.erroredSecondCountByZone[i] = videoStats->erroredSecondCountByZone[i];
-            }
-        }
-        if (receiver->rtcpReceiverContext.videoStats.mbStatusClassCount == videoStats->mbStatusClassCount)
-        {
-            if (receiver->rtcpReceiverContext.videoStats.macroblockStatus)
-            {
-                for (j = 0; j < videoStats->mbStatusClassCount; j++)
-                {
-                    for (i = 0; i < videoStats->mbStatusZoneCount; i++)
-                    {
-                        receiver->rtcpReceiverContext.videoStats.macroblockStatus[j * videoStats->mbStatusZoneCount + i] = videoStats->macroblockStatus[j][i];
-                    }
-                }
-            }
-        }
-    }
-
-    receiver->rtcpReceiverContext.videoStats.updatedSinceLastTime = 1;
+    memcpy(&receiver->rtcpReceiverContext.videoStatsCtx.videoStats, videoStats, sizeof(ARSTREAM2_H264_VideoStats_t));
+    receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 1;
 
     return ret;
 }

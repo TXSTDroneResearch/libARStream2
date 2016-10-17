@@ -15,7 +15,9 @@ extern "C" {
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
 #include <libARStream2/arstream2_stream_sender.h>
+#include "arstream2_rtp.h"
 #include "arstream2_rtcp.h"
+#include "arstream2_h264.h"
 
 
 /**
@@ -34,6 +36,26 @@ extern "C" {
  * @brief Default H.264 NAL unit FIFO size
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE         (1024)
+
+
+/**
+ * @brief Callback function for RTP stats
+ * This callback function is called when an RTCP receiver report has been received.
+ *
+ * @param[in] rtpStats Pointer to RTP stats data
+ * @param[in] userPtr Global callback user pointer
+ */
+typedef void (*ARSTREAM2_RtpSender_RtpStatsCallback_t) (const ARSTREAM2_RTP_RtpStats_t *rtpStats, void *userPtr);
+
+
+/**
+ * @brief Callback function for video stats
+ * This callback function is called when video stats has been received though RTCP.
+ *
+ * @param[in] videoStats Pointer to video stats data
+ * @param[in] userPtr Global callback user pointer
+ */
+typedef void (*ARSTREAM2_RtpSender_VideoStatsCallback_t) (const ARSTREAM2_H264_VideoStats_t *videoStats, void *userPtr);
 
 
 /**
@@ -57,8 +79,10 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
-    ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;   /**< NAL unit callback function (optional, can be NULL) */
-    void *receiverReportCallbackUserPtr;            /**< NAL unit callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_RtpSender_RtpStatsCallback_t rtpStatsCallback;   /**< RTP stats callback function (optional, can be NULL) */
+    void *rtpStatsCallbackUserPtr;                  /**< RTP stats callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_RtpSender_VideoStatsCallback_t videoStatsCallback;   /**< Video stats callback function (optional, can be NULL) */
+    void *videoStatsCallbackUserPtr;                /**< Video stats callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;     /**< Disconnection callback function (optional, can be NULL) */
     void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */

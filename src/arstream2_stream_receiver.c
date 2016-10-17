@@ -17,7 +17,7 @@
 #include "arstream2_rtp_receiver.h"
 #include "arstream2_h264_filter.h"
 #include "arstream2_h264.h"
-#include "arstream2_stream_stats.h"
+#include "arstream2_stream_stats_internal.h"
 
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
@@ -82,7 +82,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
         void *auReadyCallbackUserPtr;
         int mbWidth;
         int mbHeight;
-        ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
+        ARSTREAM2_StreamStats_VideoStats_t videoStats;
 
     } appOutput;
 
@@ -104,7 +104,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
     char *friendlyName;
     char *dateAndTime;
     char *debugPath;
-    ARSTREAM2_StreamStats_VideoStats_t videoStats;
+    ARSTREAM2_StreamStats_VideoStatsContext_t videoStatsCtx;
 
 } ARSTREAM2_StreamReceiver_t;
 
@@ -201,7 +201,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
         streamReceiver->dateAndTime = strndup(szDate, 200);
         ARSTREAM2_StreamReceiver_AutoStartRecorder(streamReceiver);
-        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamReceiver->videoStats, streamReceiver->debugPath, streamReceiver->friendlyName,
+        ARSTREAM2_StreamStats_VideoStatsFileOpen(&streamReceiver->videoStatsCtx, streamReceiver->debugPath, streamReceiver->friendlyName,
                                                  streamReceiver->dateAndTime, ARSTREAM2_H264_MB_STATUS_ZONE_COUNT, ARSTREAM2_H264_MB_STATUS_CLASS_COUNT);
     }
 
@@ -386,7 +386,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
             if (appOutputCallbackCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.callbackCond));
             if (recorderThreadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->recorder.threadMutex));
             if (recorderThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->recorder.threadCond));
-            ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStats);
+            ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStatsCtx);
             free(streamReceiver->debugPath);
             free(streamReceiver->friendlyName);
             free(streamReceiver->dateAndTime);
@@ -448,7 +448,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     free(streamReceiver->recorder.fileName);
     free(streamReceiver->pSps);
     free(streamReceiver->pPps);
-    ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStats);
+    ARSTREAM2_StreamStats_VideoStatsFileClose(&streamReceiver->videoStatsCtx);
     free(streamReceiver->debugPath);
     free(streamReceiver->friendlyName);
     free(streamReceiver->dateAndTime);
@@ -814,7 +814,7 @@ static int ARSTREAM2_StreamReceiver_RtpReceiverAuCallback(ARSTREAM2_H264_AuFifoI
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_UpdateVideoStats() failed (%d)", recvErr);
             }
-            ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStats, vs);
+            ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStatsCtx, vs);
         }
 
         /* stream recording */
@@ -1262,7 +1262,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                         {
                             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_UpdateVideoStats() failed (%d)", recvErr);
                         }
-                        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStats, vs);
+                        ARSTREAM2_StreamStats_VideoStatsFileWrite(&streamReceiver->videoStatsCtx, vs);
                     }
 
                     /* timestamps and metadata */
@@ -1285,7 +1285,7 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
                     {
                         /* Map the video stats */
                         ARSTREAM2_H264_VideoStats_t *vs = (ARSTREAM2_H264_VideoStats_t*)au->buffer->videoStatsBuffer;
-                        ARSTREAM2_StreamReceiver_VideoStats_t *vsOut = &streamReceiver->appOutput.videoStats;
+                        ARSTREAM2_StreamStats_VideoStats_t *vsOut = &streamReceiver->appOutput.videoStats;
                         uint32_t i, j;
                         vsOut->timestamp = vs->timestamp;
                         vsOut->rssi = vs->rssi;

@@ -14,6 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
+#include <libARStream2/arstream2_stream_stats.h>
 #include <libARSAL/ARSAL_Socket.h>
 
 
@@ -65,22 +66,6 @@ typedef enum
 
 
 /**
- * @brief Macroblock status.
- */
-typedef enum
-{
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_UNKNOWN = 0,        /**< The macroblock status is unknown */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_ISLICE,       /**< The macroblock is valid and contained in an I-slice */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_VALID_PSLICE,       /**< The macroblock is valid and contained in a P-slice */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING_CONCEALED,  /**< The macroblock is missing and concealed */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MISSING,            /**< The macroblock is missing and not concealed */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_ERROR_PROPAGATION,  /**< The macroblock is valid but within an error propagation */
-    ARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS_MAX,
-
-} eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS;
-
-
-/**
  * @brief ARSTREAM2 StreamReceiver AuReadyCallback function timestamps.
  */
 typedef struct
@@ -99,33 +84,6 @@ typedef struct
 
 
 /**
- * @brief ARSTREAM2 StreamReceiver video stats.
- */
-typedef struct
-{
-    uint64_t timestamp;                                             /**< Timestamp associated with the stats */
-    int8_t rssi;                                                    /**< RSSI */
-    uint32_t totalFrameCount;                                       /**< Total frame counter */
-    uint32_t outputFrameCount;                                      /**< Output frame counter */
-    uint32_t erroredOutputFrameCount;                               /**< Errored output frame counter (included in outputFrameCount) */
-    uint32_t missedFrameCount;                                      /**< Missed frame counter */
-    uint32_t discardedFrameCount;                                   /**< Discarded frame counter (included in missedFrameCount) */
-    uint64_t timestampDeltaIntegral;                                /**< Frame timestamp delta integral value */
-    uint64_t timestampDeltaIntegralSq;                              /**< Frame timestamp delta squared integral value */
-    uint64_t timingErrorIntegral;                                   /**< Frame timing error integral value */
-    uint64_t timingErrorIntegralSq;                                 /**< Frame timing error squared integral value */
-    uint64_t estimatedLatencyIntegral;                              /**< Frame estimated latency integral value */
-    uint64_t estimatedLatencyIntegralSq;                            /**< Frame estimated latency squared integral value */
-    uint32_t erroredSecondCount;                                    /**< Errored second counter */
-    uint32_t mbStatusClassCount;                                    /**< Number of macroblock status classes */
-    uint32_t mbStatusZoneCount;                                     /**< Number of picture zones (vertical divisions of the frame) */
-    uint32_t *erroredSecondCountByZone;                             /**< Errored second counters for each picture zone - erroredSecondCountByZone[mbStatusZoneCount] array */
-    uint32_t *macroblockStatus;                                     /**< Macroblock status counters for each picture zone - macroblockStatus[mbStatusClassCount][mbStatusZoneCount] array */
-
-} ARSTREAM2_StreamReceiver_VideoStats_t;
-
-
-/**
  * @brief ARSTREAM2 StreamReceiver AuReadyCallback function metadata.
  */
 typedef struct
@@ -139,8 +97,8 @@ typedef struct
     int auUserDataSize;                                             /**< H.264 user data SEI size */
     int mbWidth;                                                    /**< H.264 frame macroblock width */
     int mbHeight;                                                   /**< H.264 frame macroblock height */
-    uint8_t *mbStatus;                                              /**< H.264 frame macroblock status (@see eARSTREAM2_STREAM_RECEIVER_MACROBLOCK_STATUS) */
-    ARSTREAM2_StreamReceiver_VideoStats_t *videoStats;              /**< Video stats */
+    uint8_t *mbStatus;                                              /**< H.264 frame macroblock status (@see eARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS) */
+    ARSTREAM2_StreamStats_VideoStats_t *videoStats;                 /**< Video stats */
     char *debugString;                                              /**< Debug string */
 
 } ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t;

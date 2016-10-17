@@ -14,7 +14,7 @@ extern "C" {
 
 #include <inttypes.h>
 #include <libARStream2/arstream2_error.h>
-#include <libARStream2/arstream2_stream_receiver.h>
+#include <libARStream2/arstream2_stream_stats.h>
 #include <libARSAL/ARSAL_Socket.h>
 
 
@@ -46,19 +46,6 @@ extern "C" {
  * @brief Maximum number of NAL units priority levels
  */
 #define ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS            (5)
-
-
-/**
- * @brief RTCP Source Description item types
- */
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_CNAME_ITEM 1
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_NAME_ITEM 2
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_EMAIL_ITEM 3
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_PHONE_ITEM 4
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_LOC_ITEM 5
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_TOOL_ITEM 6
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_NOTE_ITEM 7
-#define ARSTREAM2_STREAM_SENDER_RTCP_SDES_PRIV_ITEM 8
 
 
 /**
@@ -107,27 +94,6 @@ typedef struct ARSTREAM2_StreamSender_MonitoringData_t
 
 
 /**
- * @brief RTCP receiver report data
- */
-typedef struct ARSTREAM2_StreamSender_ReceiverReportData_t
-{
-    uint64_t lastReceiverReportReceptionTimestamp;  /**< Last receiver report reception timestamp */
-    uint32_t roundTripDelay;                        /**< Round-trip delay in microseconds */
-    uint32_t interarrivalJitter;                    /**< Interarrival jitter in microseconds */
-    uint32_t receiverLostCount;                     /**< Cumulated lost packets count on the receiver side */
-    uint32_t receiverFractionLost;                  /**< Fraction of packets lost on the receiver side since the last report */
-    uint32_t receiverExtHighestSeqNum;              /**< Extended highest sequence number received on the receiver side */
-    uint32_t lastSenderReportInterval;              /**< Time interval between the last two sender reports in microseconds */
-    uint32_t senderReportIntervalPacketCount;       /**< Sent packets count over the last sender report interval */
-    uint32_t senderReportIntervalByteCount;         /**< Sent bytes count over the last sender report interval */
-    int64_t peerClockDelta;                         /**< Peer clock delta in microseconds */
-    uint32_t roundTripDelayFromClockDelta;          /**< Round-trip delay in microseconds (from the clock delta computation) */
-    ARSTREAM2_StreamReceiver_VideoStats_t *videoStats; /**< Receiver video stats */
-
-} ARSTREAM2_StreamSender_ReceiverReportData_t;
-
-
-/**
  * @brief Callback function for access units
  * This callback function is called when buffers associated with an access unit are no longer used by the sender.
  * This occurs when packets corresponding to an access unit have all been sent or dropped.
@@ -152,13 +118,23 @@ typedef void (*ARSTREAM2_StreamSender_NaluCallback_t) (eARSTREAM2_STREAM_SENDER_
 
 
 /**
- * @brief Callback function for receiver reports
+ * @brief Callback function for RTP stats
  * This callback function is called when an RTCP receiver report has been received.
  *
- * @param[in] report RTCP receiver report data
+ * @param[in] rtpStats Pointer to the RTP stats data
  * @param[in] userPtr Global receiver report callback user pointer
  */
-typedef void (*ARSTREAM2_StreamSender_ReceiverReportCallback_t) (const ARSTREAM2_StreamSender_ReceiverReportData_t *report, void *userPtr);
+typedef void (*ARSTREAM2_StreamSender_RtpStatsCallback_t) (const ARSTREAM2_StreamStats_RtpStats_t *rtpStats, void *userPtr);
+
+
+/**
+ * @brief Callback function for video stats
+ * This callback function is called when video stats have been received.
+ *
+ * @param[in] videoStats Pointer to the video stats data
+ * @param[in] userPtr Global receiver report callback user pointer
+ */
+typedef void (*ARSTREAM2_StreamSender_VideoStatsCallback_t) (const ARSTREAM2_StreamStats_VideoStats_t *videoStats, void *userPtr);
 
 
 /**
@@ -194,8 +170,10 @@ typedef struct ARSTREAM2_StreamSender_Config_t
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
     void *naluCallbackUserPtr;                      /**< NAL unit callback function user pointer (optional, can be NULL) */
-    ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;   /**< NAL unit callback function (optional, can be NULL) */
-    void *receiverReportCallbackUserPtr;            /**< NAL unit callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_StreamSender_RtpStatsCallback_t rtpStatsCallback;   /**< RTP stats reception callback function (optional, can be NULL) */
+    void *rtpStatsCallbackUserPtr;                  /**< RTP stats reception callback function user pointer (optional, can be NULL) */
+    ARSTREAM2_StreamSender_VideoStatsCallback_t videoStatsCallback;   /**< Video stats reception callback function (optional, can be NULL) */
+    void *videoStatsCallbackUserPtr;                /**< Video stats reception callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;   /**< Disconnection callback function (optional, can be NULL) */
     void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
     int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_STREAM_SENDER_DEFAULT_NALU_FIFO_SIZE */

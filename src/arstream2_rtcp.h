@@ -9,6 +9,7 @@
 #define _ARSTREAM2_RTCP_H_
 
 #include <inttypes.h>
+#include "arstream2_h264.h"
 
 
 /*
@@ -163,7 +164,6 @@ typedef struct {
     //uint32_t macroblockStatus[mbStatusClassCount][mbStatusZoneCount];
 } __attribute__ ((packed)) ARSTREAM2_RTCP_VideoStats_t;
 
-
 /**
  * @brief Source description item
  */
@@ -190,27 +190,7 @@ typedef struct ARSTREAM2_RTCP_ClockDeltaContext_s {
  * @brief Application video stats context
  */
 typedef struct ARSTREAM2_RTCP_VideoStatsContext_s {
-    uint64_t timestamp;
-    int8_t rssi;
-    uint32_t totalFrameCount;
-    uint32_t outputFrameCount;
-    uint32_t erroredOutputFrameCount;
-    uint32_t missedFrameCount;
-    uint32_t discardedFrameCount;
-    uint64_t timestampDeltaIntegral;
-    uint64_t timestampDeltaIntegralSq;
-    uint64_t timingErrorIntegral;
-    uint64_t timingErrorIntegralSq;
-    uint64_t estimatedLatencyIntegral;
-    uint64_t estimatedLatencyIntegralSq;
-    uint32_t erroredSecondCount;
-    uint32_t mbStatusClassCount;
-    uint32_t mbStatusZoneCount;
-    uint32_t currentMbStatusClassCount;
-    uint32_t currentMbStatusZoneCount;
-    uint32_t *erroredSecondCountByZone;
-    uint32_t *macroblockStatus;
-    uint64_t lastReceivedTime;
+    ARSTREAM2_H264_VideoStats_t videoStats;
     uint64_t lastSendTime;
     uint32_t sendTimeInterval;
     int updatedSinceLastTime;
@@ -245,8 +225,8 @@ typedef struct ARSTREAM2_RTCP_SenderContext_s {
     uint32_t srIntervalPacketCount; // over the last SR interval
     uint32_t srIntervalByteCount; // over the last SR interval
 
-    ARSTREAM2_RTCP_ClockDeltaContext_t clockDelta;
-    ARSTREAM2_RTCP_VideoStatsContext_t videoStats;
+    ARSTREAM2_RTCP_ClockDeltaContext_t clockDeltaCtx;
+    ARSTREAM2_RTCP_VideoStatsContext_t videoStatsCtx;
 } ARSTREAM2_RTCP_SenderContext_t;
 
 /**
@@ -283,8 +263,8 @@ typedef struct ARSTREAM2_RTCP_ReceiverContext_s {
     uint64_t lastSrReceptionTimestamp;
     uint64_t lastRrTimestamp;
 
-    ARSTREAM2_RTCP_ClockDeltaContext_t clockDelta;
-    ARSTREAM2_RTCP_VideoStatsContext_t videoStats;
+    ARSTREAM2_RTCP_ClockDeltaContext_t clockDeltaCtx;
+    ARSTREAM2_RTCP_VideoStatsContext_t videoStatsCtx;
 } ARSTREAM2_RTCP_ReceiverContext_t;
 
 
@@ -302,7 +282,7 @@ int ARSTREAM2_RTCP_Sender_ProcessReceiverReport(const uint8_t *buffer, unsigned 
                                                 int *gotReceptionReport);
 
 int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *senderReport,
-                                               uint64_t sendTimestamp, uint32_t packetCount, uint32_t byteCount,
+                                               uint64_t sendTimestamp, uint32_t packetCount, uint64_t byteCount,
                                                ARSTREAM2_RTCP_SenderContext_t *context);
 
 int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const uint8_t *buffer, unsigned int bufferSize,
@@ -335,12 +315,12 @@ int ARSTREAM2_RTCP_GenerateApplicationVideoStats(ARSTREAM2_RTCP_Application_t *a
 
 int ARSTREAM2_RTCP_ProcessApplicationVideoStats(const uint8_t *buffer, unsigned int bufferSize,
                                                 uint64_t receptionTimestamp, uint32_t peerSsrc,
-                                                ARSTREAM2_RTCP_VideoStatsContext_t *context);
+                                                ARSTREAM2_RTCP_VideoStatsContext_t *context, int *gotVideoStats);
 
 int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int maxPacketSize,
                                                  uint64_t sendTimestamp, int generateSenderReport,
                                                  int generateSourceDescription, int generateApplicationClockDelta,
-                                                 uint32_t packetCount, uint32_t byteCount,
+                                                 uint32_t packetCount, uint64_t byteCount,
                                                  ARSTREAM2_RTCP_SenderContext_t *context,
                                                  unsigned int *size);
 
@@ -353,7 +333,7 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
 int ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
                                                 uint64_t receptionTimestamp,
                                                 ARSTREAM2_RTCP_SenderContext_t *context,
-                                                int *gotReceptionReport);
+                                                int *gotReceptionReport, int *gotVideoStats);
 
 int ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(const uint8_t *packet, unsigned int packetSize,
                                                   uint64_t receptionTimestamp,

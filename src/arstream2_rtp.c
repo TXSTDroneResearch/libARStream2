@@ -1160,7 +1160,7 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 item->packet.inputTimestamp = curTime;
                 item->packet.rtpTimestamp = ntohl(item->packet.header->timestamp);
                 item->packet.ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(rtcpContext, item->packet.rtpTimestamp);
-                item->packet.ntpTimestampLocal = ((rtcpContext->clockDelta.clockDeltaAvg != 0) && (item->packet.ntpTimestamp != 0)) ? (item->packet.ntpTimestamp - rtcpContext->clockDelta.clockDeltaAvg) : 0;
+                item->packet.ntpTimestampLocal = ((rtcpContext->clockDeltaCtx.clockDeltaAvg != 0) && (item->packet.ntpTimestamp != 0)) ? (item->packet.ntpTimestamp - rtcpContext->clockDeltaCtx.clockDeltaAvg) : 0;
                 item->packet.timeoutTimestamp = curTime + context->nominalDelay; //TODO: compute the expected arrival time
                 item->packet.seqNum = ntohs(item->packet.header->seqNum);
                 if (context->previousExtSeqNum != -1)

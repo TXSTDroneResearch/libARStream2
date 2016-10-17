@@ -48,7 +48,8 @@ LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_h264_sei.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_h264_writer.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_stream_sender.h:usr/include/libARStream2/ \
-	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/
+	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/ \
+	Includes/libARStream2/arstream2_stream_stats.h:usr/include/libARStream2/
 
 ifeq ("$(TARGET_OS)","linux")
 	ifneq ("$(TARGET_OS_FLAVOUR)","android")

@@ -20,7 +20,7 @@
 #include <libARStream2/arstream2_h264_parser.h>
 #include <libARStream2/arstream2_h264_writer.h>
 #include <libARStream2/arstream2_h264_sei.h>
-#include <libARStream2/arstream2_stream_receiver.h>
+#include <libARStream2/arstream2_stream_stats.h>
 
 #include "arstream2_h264.h"
 

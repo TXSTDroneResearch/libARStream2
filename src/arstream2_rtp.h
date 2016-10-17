@@ -56,6 +56,29 @@ typedef struct {
 
 
 /**
+ * @brief Source description item
+ */
+typedef struct ARSTREAM2_RTP_RtpStats_s
+{
+    uint64_t timestamp;
+    int8_t rssi;
+    uint32_t roundTripDelay;
+    uint32_t interarrivalJitter;
+    uint32_t receiverLostCount;
+    uint32_t receiverFractionLost;
+    uint32_t receiverExtHighestSeqNum;
+    uint32_t lastSenderReportInterval;
+    uint32_t senderReportIntervalPacketCount;
+    uint32_t senderReportIntervalByteCount;
+    uint32_t senderPacketCount;
+    uint64_t senderByteCount;
+    int64_t peerClockDelta;
+    uint32_t roundTripDelayFromClockDelta;
+
+} ARSTREAM2_RTP_RtpStats_t;
+
+
+/**
  * @brief Access unit FIFO buffer pool item
  */
 typedef struct ARSTREAM2_RTP_PacketFifoBuffer_s
@@ -165,7 +188,7 @@ typedef struct ARSTREAM2_RTP_SenderContext_s
     uint32_t targetPacketSize;
     uint16_t seqNum;
     uint32_t packetCount;
-    uint32_t byteCount;
+    uint64_t byteCount;
     int useRtpHeaderExtensions;
 
     uint64_t previousTimestamp;

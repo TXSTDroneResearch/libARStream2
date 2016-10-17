@@ -126,8 +126,10 @@ struct ARSTREAM2_RtpSender_t {
     int clientStreamPort;
     int clientControlPort;
     int classSelector;
-    ARSTREAM2_StreamSender_ReceiverReportCallback_t receiverReportCallback;
-    void *receiverReportCallbackUserPtr;
+    ARSTREAM2_RtpSender_RtpStatsCallback_t rtpStatsCallback;
+    void *rtpStatsCallbackUserPtr;
+    ARSTREAM2_RtpSender_VideoStatsCallback_t videoStatsCallback;
+    void *videoStatsCallbackUserPtr;
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;
     void *disconnectionCallbackUserPtr;
     int naluFifoSize;
@@ -162,7 +164,7 @@ struct ARSTREAM2_RtpSender_t {
     unsigned int msgVecCount;
 
     /* Monitoring & debug */
-    ARSTREAM2_StreamReceiver_VideoStats_t videoStats;
+    ARSTREAM2_H264_VideoStats_t videoStats;
     char *dateAndTime;
     char *debugPath;
     ARSAL_Mutex_t monitoringMutex;
@@ -644,8 +646,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->rtpSenderContext.naluCallbackUserPtr = config->naluCallbackUserPtr;
         retSender->rtpSenderContext.monitoringCallback = ARSTREAM2_RtpSender_UpdateMonitoring;
         retSender->rtpSenderContext.monitoringCallbackUserPtr = retSender;
-        retSender->receiverReportCallback = config->receiverReportCallback;
-        retSender->receiverReportCallbackUserPtr = config->receiverReportCallbackUserPtr;
+        retSender->rtpStatsCallback = config->rtpStatsCallback;
+        retSender->rtpStatsCallbackUserPtr = config->rtpStatsCallbackUserPtr;
+        retSender->videoStatsCallback = config->videoStatsCallback;
+        retSender->videoStatsCallbackUserPtr = config->videoStatsCallbackUserPtr;
         retSender->disconnectionCallback = config->disconnectionCallback;
         retSender->disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
         retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
@@ -1039,10 +1043,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             free((*sender)->mcastIfaceAddr);
             free((*sender)->debugPath);
             free((*sender)->dateAndTime);
-            free((*sender)->rtcpSenderContext.videoStats.erroredSecondCountByZone);
-            free((*sender)->rtcpSenderContext.videoStats.macroblockStatus);
-            free((*sender)->videoStats.erroredSecondCountByZone);
-            free((*sender)->videoStats.macroblockStatus);
             if ((*sender)->fMonitorOut)
             {
                 fclose((*sender)->fMonitorOut);
@@ -1338,101 +1338,43 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             while (bytes > 0)
             {
                 int gotReceptionReport = 0;
+                int gotVideoStats = 0;
 
                 ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(sender->rtcpMsgBuffer, (unsigned int)bytes,
                                                                   curTime, &sender->rtcpSenderContext,
-                                                                  &gotReceptionReport);
+                                                                  &gotReceptionReport, &gotVideoStats);
                 if ((ret != 0) && (bytes != 24)) /* workaround to avoid logging when it's an old clockSync packet with old FF or SC versions */
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
                 }
 
-                if ((gotReceptionReport) && (sender->receiverReportCallback != NULL))
+                if ((gotVideoStats) && (sender->videoStatsCallback != NULL))
                 {
-                    ARSTREAM2_StreamSender_ReceiverReportData_t report;
+                    /* Call the receiver report callback function */
+                    sender->videoStatsCallback(&sender->rtcpSenderContext.videoStatsCtx.videoStats, sender->videoStatsCallbackUserPtr);
+                }
 
-                    memset(&report, 0, sizeof(ARSTREAM2_StreamSender_ReceiverReportData_t));
-                    report.lastReceiverReportReceptionTimestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
-                    report.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
-                    report.interarrivalJitter = sender->rtcpSenderContext.interarrivalJitter;
-                    report.receiverLostCount = sender->rtcpSenderContext.receiverLostCount;
-                    report.receiverFractionLost = sender->rtcpSenderContext.receiverFractionLost;
-                    report.receiverExtHighestSeqNum = sender->rtcpSenderContext.receiverExtHighestSeqNum;
-                    report.lastSenderReportInterval = sender->rtcpSenderContext.lastSrInterval;
-                    report.senderReportIntervalPacketCount = sender->rtcpSenderContext.srIntervalPacketCount;
-                    report.senderReportIntervalByteCount = sender->rtcpSenderContext.srIntervalByteCount;
-                    report.peerClockDelta = sender->rtcpSenderContext.clockDelta.clockDeltaAvg;
-                    report.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDelta.rtDelay;
+                if ((gotReceptionReport) && (sender->rtpStatsCallback != NULL))
+                {
+                    ARSTREAM2_RTP_RtpStats_t rtpStats;
 
-                    report.videoStats = NULL;
-                    if (sender->rtcpSenderContext.videoStats.updatedSinceLastTime)
-                    {
-                        ARSTREAM2_StreamReceiver_VideoStats_t *vsOut = &sender->videoStats;
-                        uint32_t i, j;
-
-                        vsOut->timestamp = sender->rtcpSenderContext.videoStats.timestamp;
-                        vsOut->rssi = sender->rtcpSenderContext.videoStats.rssi;
-                        vsOut->totalFrameCount = sender->rtcpSenderContext.videoStats.totalFrameCount;
-                        vsOut->outputFrameCount = sender->rtcpSenderContext.videoStats.outputFrameCount;
-                        vsOut->erroredOutputFrameCount = sender->rtcpSenderContext.videoStats.erroredOutputFrameCount;
-                        vsOut->missedFrameCount = sender->rtcpSenderContext.videoStats.missedFrameCount;
-                        vsOut->discardedFrameCount = sender->rtcpSenderContext.videoStats.discardedFrameCount;
-                        vsOut->timestampDeltaIntegral = sender->rtcpSenderContext.videoStats.timestampDeltaIntegral;
-                        vsOut->timestampDeltaIntegralSq = sender->rtcpSenderContext.videoStats.timestampDeltaIntegralSq;
-                        vsOut->timingErrorIntegral = sender->rtcpSenderContext.videoStats.timingErrorIntegral;
-                        vsOut->timingErrorIntegralSq = sender->rtcpSenderContext.videoStats.timingErrorIntegralSq;
-                        vsOut->estimatedLatencyIntegral = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegral;
-                        vsOut->estimatedLatencyIntegralSq = sender->rtcpSenderContext.videoStats.estimatedLatencyIntegralSq;
-                        vsOut->erroredSecondCount = sender->rtcpSenderContext.videoStats.erroredSecondCount;
-                        if (sender->rtcpSenderContext.videoStats.mbStatusZoneCount)
-                        {
-                            if ((!vsOut->erroredSecondCountByZone) || (sender->rtcpSenderContext.videoStats.mbStatusZoneCount > vsOut->mbStatusZoneCount))
-                            {
-                                vsOut->erroredSecondCountByZone = realloc(vsOut->erroredSecondCountByZone, sender->rtcpSenderContext.videoStats.mbStatusZoneCount * sizeof(uint32_t));
-                                if (!vsOut->erroredSecondCountByZone)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Allocation failed");
-                                }
-                                vsOut->mbStatusZoneCount = sender->rtcpSenderContext.videoStats.mbStatusZoneCount;
-                            }
-                            if (vsOut->erroredSecondCountByZone)
-                            {
-                                for (i = 0; i < vsOut->mbStatusZoneCount; i++)
-                                {
-                                    vsOut->erroredSecondCountByZone[i] = sender->rtcpSenderContext.videoStats.erroredSecondCountByZone[i];
-                                }
-                            }
-
-                            if (sender->rtcpSenderContext.videoStats.mbStatusClassCount)
-                            {
-                                if ((!vsOut->macroblockStatus) || (sender->rtcpSenderContext.videoStats.mbStatusClassCount > vsOut->mbStatusClassCount))
-                                {
-                                    vsOut->macroblockStatus = realloc(vsOut->macroblockStatus, sender->rtcpSenderContext.videoStats.mbStatusClassCount * vsOut->mbStatusZoneCount * sizeof(uint32_t));
-                                    if (!vsOut->macroblockStatus)
-                                    {
-                                        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Allocation failed");
-                                    }
-                                    vsOut->mbStatusClassCount = sender->rtcpSenderContext.videoStats.mbStatusClassCount;
-                                }
-                                if (vsOut->macroblockStatus)
-                                {
-                                    for (j = 0; j < vsOut->mbStatusClassCount; j++)
-                                    {
-                                        for (i = 0; i < vsOut->mbStatusZoneCount; i++)
-                                        {
-                                            vsOut->macroblockStatus[j * vsOut->mbStatusZoneCount + i] = sender->rtcpSenderContext.videoStats.macroblockStatus[j * vsOut->mbStatusZoneCount + i];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        report.videoStats = vsOut;
-                        sender->rtcpSenderContext.videoStats.updatedSinceLastTime = 0;
-                    }
+                    memset(&rtpStats, 0, sizeof(ARSTREAM2_RTP_RtpStats_t));
+                    rtpStats.timestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
+                    rtpStats.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
+                    rtpStats.interarrivalJitter = sender->rtcpSenderContext.interarrivalJitter;
+                    rtpStats.receiverLostCount = sender->rtcpSenderContext.receiverLostCount;
+                    rtpStats.receiverFractionLost = sender->rtcpSenderContext.receiverFractionLost;
+                    rtpStats.receiverExtHighestSeqNum = sender->rtcpSenderContext.receiverExtHighestSeqNum;
+                    rtpStats.lastSenderReportInterval = sender->rtcpSenderContext.lastSrInterval;
+                    rtpStats.senderReportIntervalPacketCount = sender->rtcpSenderContext.srIntervalPacketCount;
+                    rtpStats.senderReportIntervalByteCount = sender->rtcpSenderContext.srIntervalByteCount;
+                    rtpStats.senderPacketCount = sender->rtpSenderContext.packetCount;
+                    rtpStats.senderByteCount = sender->rtpSenderContext.byteCount;
+                    rtpStats.peerClockDelta = sender->rtcpSenderContext.clockDeltaCtx.clockDeltaAvg;
+                    rtpStats.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDeltaCtx.rtDelay;
 
                     /* Call the receiver report callback function */
-                    sender->receiverReportCallback(&report, sender->receiverReportCallbackUserPtr);
+                    sender->rtpStatsCallback(&rtpStats, sender->rtpStatsCallbackUserPtr);
                 }
 
                 bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0);
