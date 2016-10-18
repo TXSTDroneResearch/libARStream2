@@ -313,6 +313,34 @@ void ARSTREAM2_H264Filter_ResetAu(ARSTREAM2_H264Filter_t *filter)
 }
 
 
+static void ARSTREAM2_H264Filter_FillSliceMbStatus(ARSTREAM2_H264Filter_t *filter, uint8_t sliceType, int sliceFirstMb, int sliceMbCount)
+{
+    int i, idx;
+    uint8_t status;
+    if (sliceFirstMb + sliceMbCount > filter->mbCount) sliceMbCount = filter->mbCount - sliceFirstMb;
+    for (i = 0, idx = sliceFirstMb; i < sliceMbCount; i++, idx++)
+    {
+        if (sliceType == ARSTREAM2_H264_SLICE_TYPE_I)
+        {
+            status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_ISLICE;
+        }
+        else
+        {
+            if ((!filter->currentAuRefMacroblockStatus)
+                    || ((filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_ISLICE) && (filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_PSLICE)))
+            {
+                status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_ERROR_PROPAGATION;
+            }
+            else
+            {
+                status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_PSLICE;
+            }
+        }
+        filter->currentAuMacroblockStatus[idx] = status;
+    }
+}
+
+
 static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_NalUnit_t *nalu)
 {
     int ret = 0;
@@ -320,54 +348,50 @@ static int ARSTREAM2_H264Filter_ProcessNalu(ARSTREAM2_H264Filter_t *filter, ARST
     if ((nalu->naluType == ARSTREAM2_H264_NALU_TYPE_SLICE_IDR) || (nalu->naluType == ARSTREAM2_H264_NALU_TYPE_SLICE))
     {
         int sliceMbCount = 0, sliceFirstMb = 0;
+        int previousSliceMbCount = 0, previousSliceFirstMb = 0;
         filter->currentAuSlicesReceived = 1;
-        if ((filter->currentAuStreamingInfoAvailable) && (filter->currentAuStreamingSliceCount <= ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT))
+        if (filter->currentAuStreamingInfoAvailable)
         {
-            // Update slice index and firstMb
-            if (filter->currentAuPreviousSliceIndex < 0)
+            if (filter->currentAuStreamingSliceCount <= ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT)
             {
-                filter->currentAuPreviousSliceFirstMb = 0;
-                filter->currentAuPreviousSliceIndex = 0;
+                // Update slice index and firstMb
+                if (filter->currentAuPreviousSliceIndex < 0)
+                {
+                    filter->currentAuPreviousSliceFirstMb = 0;
+                    filter->currentAuPreviousSliceIndex = 0;
+                }
+                while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingSliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
+                {
+                    filter->currentAuPreviousSliceFirstMb += filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
+                    filter->currentAuPreviousSliceIndex++;
+                }
+                sliceFirstMb = filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
+                sliceMbCount = filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
+                //ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
             }
-            while ((filter->currentAuPreviousSliceIndex < filter->currentAuStreamingSliceCount) && (filter->currentAuPreviousSliceFirstMb < filter->currentAuCurrentSliceFirstMb))
-            {
-                filter->currentAuPreviousSliceFirstMb += filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
-                filter->currentAuPreviousSliceIndex++;
-            }
-            sliceFirstMb = filter->currentAuPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
-            sliceMbCount = filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex];
-            //ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_H264_FILTER_TAG, "previousSliceIndex: %d - previousSliceFirstMb: %d", filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb); //TODO: debug
         }
         else if (filter->currentAuCurrentSliceFirstMb >= 0)
         {
+            previousSliceFirstMb = filter->currentAuInferredPreviousSliceFirstMb;
+            previousSliceMbCount = filter->currentAuCurrentSliceFirstMb - previousSliceFirstMb;
             sliceFirstMb = filter->currentAuInferredPreviousSliceFirstMb = filter->currentAuCurrentSliceFirstMb;
             sliceMbCount = (filter->currentAuInferredSliceMbCount > 0) ? filter->currentAuInferredSliceMbCount : 0;
         }
         if ((filter->sync) && (filter->currentAuMacroblockStatus) && (sliceFirstMb >= 0) && (sliceMbCount > 0))
         {
-            int i, idx;
-            uint8_t status;
-            if (sliceFirstMb + sliceMbCount > filter->mbCount) sliceMbCount = filter->mbCount - sliceFirstMb;
-            for (i = 0, idx = sliceFirstMb; i < sliceMbCount; i++, idx++)
-            {
-                if (nalu->sliceType == ARSTREAM2_H264_SLICE_TYPE_I)
-                {
-                    status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_ISLICE;
-                }
-                else
-                {
-                    if ((!filter->currentAuRefMacroblockStatus)
-                            || ((filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_ISLICE) && (filter->currentAuRefMacroblockStatus[idx] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_PSLICE)))
-                    {
-                        status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_ERROR_PROPAGATION;
-                    }
-                    else
-                    {
-                        status = ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_PSLICE;
-                    }
-                }
-                filter->currentAuMacroblockStatus[idx] = status;
-            }
+            ARSTREAM2_H264Filter_FillSliceMbStatus(filter, nalu->sliceType, sliceFirstMb, sliceMbCount);
+        }
+        else if ((filter->sync) && (filter->currentAuMacroblockStatus) && (!filter->currentAuStreamingInfoAvailable)
+                && (nalu->isLastInAu) && (sliceFirstMb >= 0))
+        {
+            // Fix the current slice MB status in case it is the last slice of the frame and no streaming info is available
+            ARSTREAM2_H264Filter_FillSliceMbStatus(filter, nalu->sliceType, sliceFirstMb, filter->mbCount - sliceFirstMb);
+        }
+        if ((filter->sync) && (filter->currentAuMacroblockStatus) && (!filter->currentAuStreamingInfoAvailable)
+                && (nalu->missingPacketsBefore == 0) && (previousSliceFirstMb >= 0) && (previousSliceMbCount > 0))
+        {
+            // Fix the previous slice MB status in case no streaming info is available
+            ARSTREAM2_H264Filter_FillSliceMbStatus(filter, filter->previousSliceType, previousSliceFirstMb, previousSliceMbCount);
         }
     }
 
@@ -406,8 +430,6 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
 
         if (err == 0)
         {
-            filter->previousSliceType = naluItem->nalu.sliceType;
-
             if (naluItem->nalu.missingPacketsBefore)
             {
                 /* error concealment: missing slices before the current slice */
@@ -423,7 +445,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             }
             else if (filter->sync)
             {
-                if (filter->currentAuPreviousSliceIndex < 0)
+                if ((filter->currentAuPreviousSliceIndex < 0) && (filter->currentAuInferredPreviousSliceFirstMb < 0))
                 {
                     if (filter->currentAuCurrentSliceFirstMb > 0)
                     {
@@ -431,7 +453,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                                     filter->currentAuCurrentSliceFirstMb);
                     }
                 }
-                else if (filter->currentAuStreamingInfoAvailable)
+                else if ((filter->currentAuPreviousSliceIndex >= 0) && (filter->currentAuStreamingInfoAvailable))
                 {
                     if (filter->currentAuCurrentSliceFirstMb != filter->currentAuPreviousSliceFirstMb + filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex])
                     {
@@ -446,6 +468,8 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_TAG, "ARSTREAM2_H264Filter_ProcessNalu() failed (%d)", err);
             }
+
+            filter->previousSliceType = naluItem->nalu.sliceType;
         }
 
         prevNaluItem = naluItem;
