@@ -79,6 +79,41 @@ static int ARSTREAM2_H264Filter_Sync(ARSTREAM2_H264Filter_t *filter)
 }
 
 
+static void ARSTREAM2_H264Filter_HandleGapsInFrameNum(ARSTREAM2_H264Filter_t *filter)
+{
+    if ((filter->currentAuIsRef) && (filter->previousAuFrameNum != -1) && (filter->currentAuFrameNum != (filter->previousAuFrameNum + 1) % filter->maxFrameNum))
+    {
+        /* count missed frames (missing non-ref frames are not counted as missing) */
+        int currentAuFrameNum = filter->currentAuFrameNum;
+        if (currentAuFrameNum < filter->previousAuFrameNum)
+        {
+            currentAuFrameNum += filter->maxFrameNum;
+        }
+        int missed = currentAuFrameNum - filter->previousAuFrameNum - 1;
+        filter->stats.totalFrameCount += missed;
+        filter->stats.missedFrameCount += missed;
+        if (filter->currentAuRefMacroblockStatus)
+        {
+            memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_MISSING, filter->mbCount);
+        }
+
+        /* update macroblock status */
+        int i, j, n;
+        for (n = 0; n < missed; n++)
+        {
+            for (j = 0; j < filter->mbHeight; j++)
+            {
+                for (i = 0; i < filter->mbWidth; i++)
+                {
+                    int zone = j * filter->stats.mbStatusZoneCount / filter->mbHeight;
+                    filter->stats.macroblockStatus[ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_MISSING][zone]++;
+                }
+            }
+        }
+    }
+}
+
+
 static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H264_AccessUnit_t *au, ARSTREAM2_H264_NalUnit_t *nalu)
 {
     int ret = 0;
@@ -140,16 +175,7 @@ static int ARSTREAM2_H264Filter_ParseNalu(ARSTREAM2_H264Filter_t *filter, ARSTRE
                         if ((filter->sync) && (filter->currentAuFrameNum == -1))
                         {
                             filter->currentAuFrameNum = sliceInfo.frame_num;
-                            if ((filter->currentAuIsRef) && (filter->previousAuFrameNum != -1) && (filter->currentAuFrameNum != (filter->previousAuFrameNum + 1) % filter->maxFrameNum))
-                            {
-                                /* count missed frames (missing non-ref frames are not counted as missing) */
-                                filter->stats.totalFrameCount++;
-                                filter->stats.missedFrameCount++;
-                                if (filter->currentAuRefMacroblockStatus)
-                                {
-                                    memset(filter->currentAuRefMacroblockStatus, ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_MISSING, filter->mbCount);
-                                }
-                            }
+                            ARSTREAM2_H264Filter_HandleGapsInFrameNum(filter);
                             _err = ARSTREAM2_H264Parser_GetSliceContext(filter->parser, (void**)&filter->savedSliceContext);
                             if (_err != ARSTREAM2_OK)
                             {
@@ -581,6 +607,7 @@ int ARSTREAM2_H264Filter_ProcessAu(ARSTREAM2_H264Filter_t *filter, ARSTREAM2_H26
                 {
                     int zone = j * filter->stats.mbStatusZoneCount / filter->mbHeight;
                     filter->stats.macroblockStatus[filter->currentAuMacroblockStatus[k]][zone]++;
+
                     if ((ret == 1) && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_ISLICE)
                             && (filter->currentAuMacroblockStatus[k] != ARSTREAM2_STREAM_STATS_MACROBLOCK_STATUS_VALID_PSLICE))
                     {
