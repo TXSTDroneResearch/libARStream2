@@ -29,9 +29,7 @@ typedef struct
     int arstream2MaxPacketSize;
     uint8_t *auBuffer;
     uint32_t auBufferSize;
-    
-    FILE *video_out;
-    
+
     ARSAL_Thread_t *readerThreads;
     READER_THREAD_DATA_t *readerThreadsData;
     int run;
@@ -65,6 +63,8 @@ eARSTREAM2_ERROR auReadyCallback(uint8_t *auBuffer, int auSize,
                                  ARSTREAM2_StreamReceiver_AuReadyCallbackMetadata_t *auMetadata,
                                  void *auBufferUserPtr, void *userPtr);
 
+int sendDateAndTime(BD_MANAGER_t *deviceManager);
+int sendAllStates(BD_MANAGER_t *deviceManager);
 int sendBeginStream(BD_MANAGER_t *deviceManager);
 
 eARNETWORK_MANAGER_CALLBACK_RETURN arnetworkCmdCallback(int buffer_id, uint8_t *data, void *custom, eARNETWORK_MANAGER_CALLBACK_STATUS cause);

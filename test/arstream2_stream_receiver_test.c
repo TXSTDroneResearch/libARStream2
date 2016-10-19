@@ -275,6 +275,20 @@ int main(int argc, char *argv[])
     {
         int cmdSend = 0;
 
+        cmdSend = sendDateAndTime(deviceManager);
+    }
+
+    if (!failed)
+    {
+        int cmdSend = 0;
+
+        cmdSend = sendAllStates(deviceManager);
+    }
+
+    if (!failed)
+    {
+        int cmdSend = 0;
+
         cmdSend = sendBeginStream(deviceManager);
     }
 
@@ -418,7 +432,7 @@ int startNetwork(BD_MANAGER_t *deviceManager)
     if (!failed)
     {
         // Initilize the ARNetworkALManager
-        netAlError = ARNETWORKAL_Manager_InitWifiNetwork(deviceManager->alManager, deviceManager->addr, BD_C2D_PORT, BD_D2C_PORT, 1);
+        netAlError = ARNETWORKAL_Manager_InitWifiNetwork(deviceManager->alManager, deviceManager->addr, deviceManager->c2dPort, BD_D2C_PORT, 1);
         if (netAlError != ARNETWORKAL_OK)
         {
             failed = 1;
@@ -510,6 +524,83 @@ void onDisconnectNetwork(ARNETWORK_Manager_t *manager, ARNETWORKAL_Manager_t *al
 }
 
 
+int sendDateAndTime(BD_MANAGER_t *deviceManager)
+{
+    int sentStatus = 1;
+    u_int8_t cmdBuffer[128];
+    int32_t cmdSize = 0;
+    eARCOMMANDS_GENERATOR_ERROR cmdError;
+    eARNETWORK_ERROR netError = ARNETWORK_ERROR;
+
+    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "- Send date and time");
+
+    char strDate[30];
+    char strTime[30];
+    time_t rawDate;
+    struct tm* tmDateTime;
+
+    time(&rawDate);
+    tmDateTime = localtime(&rawDate);
+    strftime(strDate, 30, "%F", tmDateTime);
+    strftime(strTime, 30, "T%H%M%S%z", tmDateTime);
+
+    // Send date command
+    cmdError = ARCOMMANDS_Generator_GenerateCommonCommonCurrentDate(cmdBuffer, sizeof(cmdBuffer), &cmdSize, strDate);
+    if (cmdError == ARCOMMANDS_GENERATOR_OK)
+    {
+        netError = ARNETWORK_Manager_SendData(deviceManager->netManager, BD_NET_CD_ACK_ID, cmdBuffer, cmdSize, NULL, &(arnetworkCmdCallback), 1);
+    }
+
+    if ((cmdError != ARCOMMANDS_GENERATOR_OK) || (netError != ARNETWORK_OK))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "Failed to send date command. cmdError:%d netError:%s", cmdError, ARNETWORK_Error_ToString(netError));
+        sentStatus = 0;
+    }
+
+    // Send time command
+    cmdError = ARCOMMANDS_Generator_GenerateCommonCommonCurrentTime(cmdBuffer, sizeof(cmdBuffer), &cmdSize, strTime);
+    if (cmdError == ARCOMMANDS_GENERATOR_OK)
+    {
+        netError = ARNETWORK_Manager_SendData(deviceManager->netManager, BD_NET_CD_ACK_ID, cmdBuffer, cmdSize, NULL, &(arnetworkCmdCallback), 1);
+    }
+
+    if ((cmdError != ARCOMMANDS_GENERATOR_OK) || (netError != ARNETWORK_OK))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "Failed to send time command. cmdError:%d netError:%s", cmdError, ARNETWORK_Error_ToString(netError));
+        sentStatus = 0;
+    }
+
+    return sentStatus;
+}
+
+
+int sendAllStates(BD_MANAGER_t *deviceManager)
+{
+    int sentStatus = 1;
+    u_int8_t cmdBuffer[128];
+    int32_t cmdSize = 0;
+    eARCOMMANDS_GENERATOR_ERROR cmdError;
+    eARNETWORK_ERROR netError = ARNETWORK_ERROR;
+
+    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "- Send All States");
+
+    // Send all states command
+    cmdError = ARCOMMANDS_Generator_GenerateCommonCommonAllStates(cmdBuffer, sizeof(cmdBuffer), &cmdSize);
+    if (cmdError == ARCOMMANDS_GENERATOR_OK)
+    {
+        netError = ARNETWORK_Manager_SendData(deviceManager->netManager, BD_NET_CD_ACK_ID, cmdBuffer, cmdSize, NULL, &(arnetworkCmdCallback), 1);
+    }
+
+    if ((cmdError != ARCOMMANDS_GENERATOR_OK) || (netError != ARNETWORK_OK))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, TAG, "Failed to send all states command. cmdError:%d netError:%s", cmdError, ARNETWORK_Error_ToString(netError));
+        sentStatus = 0;
+    }
+
+    return sentStatus;
+}
+
+
 int sendBeginStream(BD_MANAGER_t *deviceManager)
 {
     int sentStatus = 1;
@@ -570,6 +661,7 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverConfig.replaceStartCodesWithNaluSize = 0;
         streamReceiverConfig.generateSkippedPSlices = 1;
         streamReceiverConfig.generateFirstGrayIFrame = 1;
+        streamReceiverConfig.debugPath = "./streamdebug";
 
         err = ARSTREAM2_StreamReceiver_Init(&deviceManager->streamReceiver, &streamReceiverConfig, &streamReceiverNetConfig, NULL);
         if (err != ARSTREAM2_OK)
@@ -744,10 +836,11 @@ eARDISCOVERY_ERROR ARDISCOVERY_Connection_SendJsonCallback(uint8_t *dataTx, uint
 
     if ((dataTx != NULL) && (dataTxSize != NULL) && (deviceManager != NULL))
     {
-        *dataTxSize = sprintf((char*)dataTx, "{ \"%s\": %d,\n \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": %d,\n \"%s\": %d,\n \"%s\": %d }",
+        *dataTxSize = sprintf((char*)dataTx, "{ \"%s\": %d, \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": %d, \"%s\": %d, \"%s\": %d, \"%s\": %d }",
                               ARDISCOVERY_CONNECTION_JSON_D2CPORT_KEY, deviceManager->d2cPort,
-                              ARDISCOVERY_CONNECTION_JSON_CONTROLLER_NAME_KEY, "BebopDroneStartStream",
+                              ARDISCOVERY_CONNECTION_JSON_CONTROLLER_NAME_KEY, "ARStream2StreamReceiverTest",
                               ARDISCOVERY_CONNECTION_JSON_CONTROLLER_TYPE_KEY, "Unix",
+                              ARDISCOVERY_CONNECTION_JSON_QOS_MODE_KEY, 1,
                               ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_CLIENT_STREAM_PORT_KEY, deviceManager->arstream2ClientStreamPort,
                               ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_CLIENT_CONTROL_PORT_KEY, deviceManager->arstream2ClientControlPort,
                               ARDISCOVERY_CONNECTION_JSON_ARSTREAM2_SUPPORTED_METADATA_VERSION_KEY, 1) + 1;
