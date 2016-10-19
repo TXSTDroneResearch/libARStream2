@@ -330,7 +330,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_GetAuBufferCallback(uint8_t
         {
             *auBuffer = (*env)->GetDirectBufferAddress(env, byteBuffer);
             *auBufferSize = (*env)->GetDirectBufferCapacity(env, byteBuffer);
-            *auBufferUserPtr = (void *)bufferIdx;
+            *auBufferUserPtr = (void *)(intptr_t)bufferIdx;
             ret = 0;
             (*env)->DeleteLocalRef(env, byteBuffer);
         }
