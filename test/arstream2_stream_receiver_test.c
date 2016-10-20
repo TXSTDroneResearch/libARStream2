@@ -180,7 +180,7 @@ void *readerRun(void* data)
             {
                 // Forward data to the CommandsManager
                 eARCOMMANDS_DECODER_ERROR cmdError = ARCOMMANDS_DECODER_OK;
-                cmdError = ARCOMMANDS_Decoder_DecodeBuffer((uint8_t*)readData, length);
+                cmdError = ARCOMMANDS_Decoder_DecodeCommand(deviceManager->decoder, (uint8_t*)readData, length);
                 if ((cmdError != ARCOMMANDS_DECODER_OK) && (cmdError != ARCOMMANDS_DECODER_ERROR_NO_CALLBACK))
                 {
                     char msg[128];
@@ -295,6 +295,14 @@ int main(int argc, char *argv[])
 
     if (!failed)
     {
+        // create the decoder
+        deviceManager->decoder = ARCOMMANDS_Decoder_NewDecoder(NULL);
+        if (deviceManager->decoder == NULL)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Failed to create decoder");
+            failed = 1;
+        }
+
         // allocate reader thread array.
         deviceManager->readerThreads = calloc(numOfCommandBufferIds, sizeof(ARSAL_Thread_t));
         
@@ -372,6 +380,7 @@ int main(int argc, char *argv[])
             deviceManager->readerThreadsData = NULL;
         }
 
+        ARCOMMANDS_Decoder_DeleteDecoder(&deviceManager->decoder);
         stopVideo(deviceManager);
         stopNetwork(deviceManager);
         free(deviceManager->auBuffer);

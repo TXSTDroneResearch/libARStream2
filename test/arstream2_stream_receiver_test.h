@@ -14,6 +14,7 @@ typedef struct
 {
     ARNETWORKAL_Manager_t *alManager;
     ARNETWORK_Manager_t *netManager;
+    ARCOMMANDS_Decoder_t *decoder;
     ARSTREAM2_StreamReceiver_Handle streamReceiver;
     ARSAL_Thread_t rxThread;
     ARSAL_Thread_t txThread;
