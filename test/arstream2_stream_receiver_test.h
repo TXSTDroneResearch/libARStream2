@@ -20,7 +20,10 @@ typedef struct
     ARSAL_Thread_t txThread;
     ARSAL_Thread_t streamNetworkThread;
     ARSAL_Thread_t streamOutputThread;
-    char *addr;
+    char addr[16];
+    int arsdk;
+    int startStream;
+    int receiveStream;
     int d2cPort;
     int c2dPort;
     int qosMode;

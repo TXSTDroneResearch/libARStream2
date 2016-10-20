@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include <libARSAL/ARSAL.h>
 #include <libARSAL/ARSAL_Print.h>
@@ -39,6 +40,21 @@
 #define BD_CLIENT_CONTROL_PORT 55005
 
 #define BD_AU_BUFFER_SIZE (1920 * 1088 * 3 / 2)
+
+
+static const char short_options[] = "hk:K:i:s:c:";
+
+
+static const struct option
+long_options[] = {
+    { "help"            , no_argument        , NULL, 'h' },
+    { "arsdk"           , required_argument  , NULL, 'k' },
+    { "arsdk-start"     , required_argument  , NULL, 'K' },
+    { "ip"              , required_argument  , NULL, 'i' },
+    { "strmp"           , required_argument  , NULL, 's' },
+    { "ctrlp"           , required_argument  , NULL, 'c' },
+    { 0, 0, 0, 0 }
+};
 
 
 static ARNETWORK_IOBufferParam_t c2dParams[] = {
@@ -201,41 +217,45 @@ void *readerRun(void* data)
 }
 
 
+static void usage(int argc, char *argv[])
+{
+    printf("Usage: %s [options]\n"
+            "Options:\n"
+            "-h | --help                        Print this message\n"
+            "-k | --arsdk <ip_address>          ARSDK connection to drone with its IP address\n"
+            "-K | --arsdk-start <ip_address>    ARSDK connection to drone with its IP address (connect only, do not start stream)\n"
+            "-i | --ip <ip_address>[:<port>]    Direct RTP/AVP reception with an IP address and optional port\n"
+            "-s | --strmp <port>                Server stream port for direct RTP/AVP reception\n"
+            "-c | --ctrlp <port>                Server control port for direct RTP/AVP reception\n"
+            "\n",
+            argv[0]);
+}
+
+
 int main(int argc, char *argv[])
 {
     /* local declarations */
     int failed = 0;
-    BD_MANAGER_t *deviceManager = malloc(sizeof(BD_MANAGER_t));
+    int idx, c;
+    BD_MANAGER_t *deviceManager;
 
-    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "-- Bebop Drone Start Stream --");
-    
+    printf("ARStream2 Stream Receiver Test\n\n");
+
     if (argc < 2)
     {
-        ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "Usage: %s <ip_address>", argv[0]);
+        usage(argc, argv);
         exit(-1);
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "-- Starting --");
-
-    signal(SIGINT, sighandler);
-
+    deviceManager = malloc(sizeof(BD_MANAGER_t));
     if (deviceManager != NULL)
     {
         // initialize deviceManager
-        deviceManager->alManager = NULL;
-        deviceManager->netManager = NULL;
-        deviceManager->streamReceiver = NULL;
-        deviceManager->rxThread = NULL;
-        deviceManager->txThread = NULL;
-        deviceManager->addr = argv[1];
+        memset(deviceManager, 0, sizeof(BD_MANAGER_t));
         deviceManager->d2cPort = BD_D2C_PORT;
         deviceManager->c2dPort = BD_C2D_PORT; // Will be read from json
-        deviceManager->qosMode = 0;
-        deviceManager->arstream2ServerStreamPort = 0;
-        deviceManager->arstream2ServerControlPort = 0;
         deviceManager->arstream2ClientStreamPort = BD_CLIENT_STREAM_PORT;
         deviceManager->arstream2ClientControlPort = BD_CLIENT_CONTROL_PORT;
-        deviceManager->arstream2MaxPacketSize = 0;
         deviceManager->run = 1;
     }
     else
@@ -243,6 +263,70 @@ int main(int argc, char *argv[])
         failed = 1;
         ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "deviceManager alloc error!");
     }
+
+    while ((c = getopt_long(argc, argv, short_options, long_options, &idx)) != -1)
+    {
+        char *str;
+        switch (c)
+        {
+            case 0:
+                break;
+
+            case 'h':
+                usage(argc, argv);
+                exit(0);
+                break;
+
+            case 'k':
+                strncpy(deviceManager->addr, optarg, sizeof(deviceManager->addr));
+                deviceManager->arsdk = 1;
+                deviceManager->startStream = 1;
+                deviceManager->receiveStream = 1;
+                break;
+
+            case 'K':
+                strncpy(deviceManager->addr, optarg, sizeof(deviceManager->addr));
+                deviceManager->arsdk = 1;
+                deviceManager->startStream = 1;
+                break;
+
+            case 'i':
+                if ((str = strstr(optarg, ":")) != NULL)
+                {
+                    if (sscanf(str + 1, "%d", &deviceManager->arstream2ServerStreamPort) == 1)
+                    {
+                        deviceManager->arstream2ServerControlPort = deviceManager->arstream2ServerStreamPort + 1;
+                    }
+                    unsigned int sz = (unsigned int)(str - optarg);
+                    strncpy(deviceManager->addr, optarg, (sz < sizeof(deviceManager->addr)) ? sz : sizeof(deviceManager->addr));
+                    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "IP:%s streamPort:%d controlPort:%d", deviceManager->addr, deviceManager->arstream2ServerStreamPort, deviceManager->arstream2ServerControlPort);
+                }
+                else
+                {
+                    strncpy(deviceManager->addr, optarg, sizeof(deviceManager->addr));
+                }
+                deviceManager->receiveStream = 1;
+                break;
+
+            case 's':
+                sscanf(optarg, "%d", &deviceManager->arstream2ServerStreamPort);
+                break;
+
+            case 'c':
+                sscanf(optarg, "%d", &deviceManager->arstream2ServerControlPort);
+                break;
+
+            default:
+                usage(argc, argv);
+                exit(-1);
+                break;
+        }
+    }
+
+
+    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "-- Starting --");
+
+    signal(SIGINT, sighandler);
 
     if (!failed)
     {
@@ -255,45 +339,45 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk))
     {
         failed = ardiscoveryConnect(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk))
     {
         /* start */
         failed = startNetwork(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->receiveStream))
     {
         /* start */
         failed = startVideo(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk))
     {
         int cmdSend = 0;
 
         cmdSend = sendDateAndTime(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk))
     {
         int cmdSend = 0;
 
         cmdSend = sendAllStates(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk) && (deviceManager->startStream))
     {
         int cmdSend = 0;
 
         cmdSend = sendBeginStream(deviceManager);
     }
 
-    if (!failed)
+    if ((!failed) && (deviceManager->arsdk))
     {
         // create the decoder
         deviceManager->decoder = ARCOMMANDS_Decoder_NewDecoder(NULL);
@@ -311,34 +395,34 @@ int main(int argc, char *argv[])
             ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Allocation of reader threads failed");
             failed = 1;
         }
-    }
-    
-    if (!failed)
-    {
-        // allocate reader thread data array.
-        deviceManager->readerThreadsData = calloc(numOfCommandBufferIds, sizeof(READER_THREAD_DATA_t));
-        
-        if (deviceManager->readerThreadsData == NULL)
+
+        if (!failed)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Allocation of reader threads data failed");
-            failed = 1;
-        }
-    }
-    
-    if (!failed)
-    {
-        // Create and start reader threads.
-        size_t readerThreadIndex = 0;
-        for (readerThreadIndex = 0 ; readerThreadIndex < numOfCommandBufferIds ; readerThreadIndex++)
-        {
-            // initialize reader thread data
-            deviceManager->readerThreadsData[readerThreadIndex].deviceManager = deviceManager;
-            deviceManager->readerThreadsData[readerThreadIndex].readerBufferId = commandBufferIds[readerThreadIndex];
+            // allocate reader thread data array.
+            deviceManager->readerThreadsData = calloc(numOfCommandBufferIds, sizeof(READER_THREAD_DATA_t));
             
-            if (ARSAL_Thread_Create(&(deviceManager->readerThreads[readerThreadIndex]), readerRun, &(deviceManager->readerThreadsData[readerThreadIndex])) != 0)
+            if (deviceManager->readerThreadsData == NULL)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Creation of reader thread failed");
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Allocation of reader threads data failed");
                 failed = 1;
+            }
+        }
+
+        if (!failed)
+        {
+            // Create and start reader threads.
+            size_t readerThreadIndex = 0;
+            for (readerThreadIndex = 0 ; readerThreadIndex < numOfCommandBufferIds ; readerThreadIndex++)
+            {
+                // initialize reader thread data
+                deviceManager->readerThreadsData[readerThreadIndex].deviceManager = deviceManager;
+                deviceManager->readerThreadsData[readerThreadIndex].readerBufferId = commandBufferIds[readerThreadIndex];
+
+                if (ARSAL_Thread_Create(&(deviceManager->readerThreads[readerThreadIndex]), readerRun, &(deviceManager->readerThreadsData[readerThreadIndex])) != 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, TAG, "Creation of reader thread failed");
+                    failed = 1;
+                }
             }
         }
     }
