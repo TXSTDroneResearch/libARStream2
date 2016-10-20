@@ -22,6 +22,7 @@ typedef struct
     char *addr;
     int d2cPort;
     int c2dPort;
+    int qosMode;
     int arstream2ServerStreamPort;
     int arstream2ServerControlPort;
     int arstream2ClientStreamPort;

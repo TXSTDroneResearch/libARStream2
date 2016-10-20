@@ -230,6 +230,7 @@ int main(int argc, char *argv[])
         deviceManager->addr = argv[1];
         deviceManager->d2cPort = BD_D2C_PORT;
         deviceManager->c2dPort = BD_C2D_PORT; // Will be read from json
+        deviceManager->qosMode = 0;
         deviceManager->arstream2ServerStreamPort = 0;
         deviceManager->arstream2ServerControlPort = 0;
         deviceManager->arstream2ClientStreamPort = BD_CLIENT_STREAM_PORT;
@@ -436,6 +437,23 @@ int startNetwork(BD_MANAGER_t *deviceManager)
         if (netAlError != ARNETWORKAL_OK)
         {
             failed = 1;
+        }
+    }
+
+    if (!failed)
+    {
+        if (deviceManager->qosMode == 1)
+        {
+            netAlError = ARNETWORKAL_Manager_SetSendClassSelector(deviceManager->alManager, ARSAL_SOCKET_CLASS_SELECTOR_CS6);
+            if (netAlError != ARNETWORKAL_OK)
+            {
+                failed = 1;
+            }
+            netAlError = ARNETWORKAL_Manager_SetRecvClassSelector(deviceManager->alManager, ARSAL_SOCKET_CLASS_SELECTOR_CS6);
+            if (netAlError != ARNETWORKAL_OK)
+            {
+                failed = 1;
+            }
         }
     }
 
@@ -649,6 +667,7 @@ int startVideo(BD_MANAGER_t *deviceManager)
         streamReceiverNetConfig.serverControlPort = deviceManager->arstream2ServerControlPort;
         streamReceiverNetConfig.clientStreamPort = deviceManager->arstream2ClientStreamPort;
         streamReceiverNetConfig.clientControlPort = deviceManager->arstream2ClientControlPort;
+        streamReceiverNetConfig.classSelector = (deviceManager->qosMode == 1) ? ARSAL_SOCKET_CLASS_SELECTOR_CS4 : ARSAL_SOCKET_CLASS_SELECTOR_UNSPECIFIED;
         streamReceiverConfig.canonicalName = "StreamReceiverTest";
         streamReceiverConfig.friendlyName = "StreamReceiverTest";
         streamReceiverConfig.applicationName = "StreamReceiverTest";
@@ -894,6 +913,18 @@ eARDISCOVERY_ERROR ARDISCOVERY_Connection_ReceiveJsonCallback(uint8_t *dataRx, u
                 value = json_object_get_int(jsonObj_Item);
                 deviceManager->c2dPort = value;
                 ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - c2dPort = %d", deviceManager->c2dPort);
+            }
+        }
+
+        /* Find the QoS mode */
+        if (error == 0)
+        {
+            jsonObj_Item = json_object_object_get(jsonObj_All, ARDISCOVERY_CONNECTION_JSON_QOS_MODE_KEY);
+            if (jsonObj_Item != NULL)
+            {
+                value = json_object_get_int(jsonObj_Item);
+                deviceManager->qosMode = value;
+                ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "    - qosMode = %d", deviceManager->qosMode);
             }
         }
 
