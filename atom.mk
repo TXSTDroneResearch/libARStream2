@@ -51,10 +51,16 @@ LOCAL_INSTALL_HEADERS := \
 	Includes/libARStream2/arstream2_stream_receiver.h:usr/include/libARStream2/ \
 	Includes/libARStream2/arstream2_stream_stats.h:usr/include/libARStream2/
 
+
 ifeq ("$(TARGET_OS)","linux")
-	ifneq ("$(TARGET_OS_FLAVOUR)","android")
-		LOCAL_CFLAGS += -DHAS_MMSG
-	endif
+  ifeq ("$(TARGET_OS_FLAVOUR)","android")
+    ANDROID_API_HAS_MMSG = $(shell test $(TARGET_ANDROID_APILEVEL) -ge 21 && echo 1)
+    ifeq ("$(ANDROID_API_HAS_MMSG)","1")
+      LOCAL_CFLAGS += -DHAS_MMSG
+    endif
+  else
+    LOCAL_CFLAGS += -DHAS_MMSG
+  endif
 endif
 
 include $(BUILD_LIBRARY)
