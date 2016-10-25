@@ -196,7 +196,7 @@ int ARSTREAM2_RTCP_Sender_GenerateSenderReport(ARSTREAM2_RTCP_SenderReport_t *se
         return -1;
     }
 
-    uint64_t ntpTimestampL = (sendTimestamp << 32) / (uint64_t)1000000;
+    uint64_t ntpTimestampL = ((sendTimestamp % 1000000) << 32) / 1000000LL;
     uint32_t rtpTimestamp = context->rtpTimestampOffset + (uint32_t)((((sendTimestamp * context->rtpClockRate) + 500000) / 1000000) & 0xFFFFFFFF); /* microseconds to rtpClockRate */
 
     senderReport->flags = (2 << 6);
