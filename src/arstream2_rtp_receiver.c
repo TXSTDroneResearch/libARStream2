@@ -1616,10 +1616,35 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                                                                      curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
                 if ((ret == 0) && (size > 0))
                 {
+                    receiver->rtcpDropStatsTotalPackets++;
                     bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
                     if (bytes < 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                        if (errno == EAGAIN)
+                        {
+                            /* Log drops once in a while */
+                            receiver->rtcpDropCount++;
+                            if (receiver->rtcpDropLogStartTime)
+                            {
+                                if (curTime >= receiver->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL * 1000000)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
+                                                receiver->rtcpDropCount, receiver->rtcpDropStatsTotalPackets, (float)receiver->rtcpDropCount * 100. / (float)receiver->rtcpDropStatsTotalPackets,
+                                                (float)(curTime - receiver->rtcpDropLogStartTime) / 1000000.);
+                                    receiver->rtcpDropCount = 0;
+                                    receiver->rtcpDropStatsTotalPackets = 0;
+                                    receiver->rtcpDropLogStartTime = 0;
+                                }
+                            }
+                            else
+                            {
+                                receiver->rtcpDropLogStartTime = curTime;
+                            }
+                        }
+                        else
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                        }
                     }
                 }
 
@@ -1825,10 +1850,35 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
                                                                      curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
                 if ((ret == 0) && (size > 0))
                 {
+                    receiver->rtcpDropStatsTotalPackets++;
                     ssize_t bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
                     if (bytes < 0)
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                        if (errno == EAGAIN)
+                        {
+                            /* Log drops once in a while */
+                            receiver->rtcpDropCount++;
+                            if (receiver->rtcpDropLogStartTime)
+                            {
+                                if (curTime >= receiver->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL * 1000000)
+                                {
+                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
+                                                receiver->rtcpDropCount, receiver->rtcpDropStatsTotalPackets, (float)receiver->rtcpDropCount * 100. / (float)receiver->rtcpDropStatsTotalPackets,
+                                                (float)(curTime - receiver->rtcpDropLogStartTime) / 1000000.);
+                                    receiver->rtcpDropCount = 0;
+                                    receiver->rtcpDropStatsTotalPackets = 0;
+                                    receiver->rtcpDropLogStartTime = 0;
+                                }
+                            }
+                            else
+                            {
+                                receiver->rtcpDropLogStartTime = curTime;
+                            }
+                        }
+                        else
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                        }
                     }
                 }
 

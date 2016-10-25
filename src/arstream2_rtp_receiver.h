@@ -61,6 +61,8 @@
 
 #define ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS (2048)
 
+#define ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL (10)
+
 
 /**
  * @brief RtpReceiver net configuration parameters
@@ -255,6 +257,10 @@ struct ARSTREAM2_RtpReceiver_t {
     int monitoringCount;
     int monitoringIndex;
     ARSTREAM2_RtpReceiver_MonitoringPoint_t monitoringPoint[ARSTREAM2_RTP_RECEIVER_MONITORING_MAX_POINTS];
+
+    unsigned int rtcpDropCount;
+    unsigned int rtcpDropStatsTotalPackets;
+    uint64_t rtcpDropLogStartTime;
 
     /* RtpResenders */
     ARSTREAM2_RtpReceiver_RtpResender_t *resender[ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_COUNT];

@@ -68,6 +68,12 @@
 
 
 /**
+ * RTCP drops minimum log interval in seconds
+ */
+#define ARSTREAM2_RTP_SENDER_RTCP_DROP_LOG_INTERVAL (10)
+
+
+/**
  * Default minimum stream socket send buffer size: 50ms @ 5Mbit/s
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE (31250)
@@ -172,9 +178,13 @@ struct ARSTREAM2_RtpSender_t {
     int monitoringIndex;
     ARSTREAM2_RtpSender_MonitoringPoint_t monitoringPoint[ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS];
     FILE* fMonitorOut;
+
     unsigned int timeoutDropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     unsigned int timeoutDropStatsTotalPackets;
     uint64_t timeoutDropLogStartTime;
+    unsigned int rtcpDropCount;
+    unsigned int rtcpDropStatsTotalPackets;
+    uint64_t rtcpDropLogStartTime;
 };
 
 
@@ -1558,10 +1568,35 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
 
             if ((ret == 0) && (size > 0))
             {
+                sender->rtcpDropStatsTotalPackets++;
                 ssize_t bytes = send(sender->controlSocket, sender->rtcpMsgBuffer, size, 0);
                 if (bytes < 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - send error (%d): %s", errno, strerror(errno));
+                    if (errno == EAGAIN)
+                    {
+                        /* Log drops once in a while */
+                        sender->rtcpDropCount++;
+                        if (sender->rtcpDropLogStartTime)
+                        {
+                            if (curTime >= sender->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_RTCP_DROP_LOG_INTERVAL * 1000000)
+                            {
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
+                                            sender->rtcpDropCount, sender->rtcpDropStatsTotalPackets, (float)sender->rtcpDropCount * 100. / (float)sender->rtcpDropStatsTotalPackets,
+                                            (float)(curTime - sender->rtcpDropLogStartTime) / 1000000.);
+                                sender->rtcpDropCount = 0;
+                                sender->rtcpDropStatsTotalPackets = 0;
+                                sender->rtcpDropLogStartTime = 0;
+                            }
+                        }
+                        else
+                        {
+                            sender->rtcpDropLogStartTime = curTime;
+                        }
+                    }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - send error (%d): %s", errno, strerror(errno));
+                    }
                 }
             }
 
