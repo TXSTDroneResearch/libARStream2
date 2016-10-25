@@ -1596,7 +1596,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
         /* RTCP receiver reports */
         if (receiver->generateReceiverReports)
         {
-            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRrTimestamp);
+            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRtcpTimestamp);
             if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
@@ -1623,6 +1623,8 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                     }
                 }
 
+                receiver->rtcpReceiverContext.lastRtcpTimestamp = curTime;
+                rrDelay = 0;
                 nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
                 if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
             }
@@ -1803,7 +1805,7 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
         /* RTCP receiver reports */
         if (receiver->generateReceiverReports)
         {
-            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRrTimestamp);
+            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRtcpTimestamp);
             if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
             {
                 unsigned int size = 0;
@@ -1830,6 +1832,8 @@ static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Pa
                     }
                 }
 
+                receiver->rtcpReceiverContext.lastRtcpTimestamp = curTime;
+                rrDelay = 0;
                 nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
                 if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
             }

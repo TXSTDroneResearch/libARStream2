@@ -1547,7 +1547,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         }
 
         /* RTCP sender reports */
-        uint32_t srDelay = (uint32_t)(curTime - sender->rtcpSenderContext.lastSrTimestamp);
+        uint32_t srDelay = (uint32_t)(curTime - sender->rtcpSenderContext.lastRtcpTimestamp);
         if (srDelay >= nextSrDelay)
         {
             unsigned int size = 0;
@@ -1565,6 +1565,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
                 }
             }
 
+            sender->rtcpSenderContext.lastRtcpTimestamp = curTime;
             srDelay = 0;
             nextSrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / sender->rtcpSenderContext.rtcpByteRate;
             if (nextSrDelay < ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL) nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
