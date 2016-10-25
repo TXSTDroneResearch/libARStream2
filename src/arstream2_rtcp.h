@@ -44,6 +44,15 @@
 
 #define ARSTREAM2_RTCP_VIDEOSTATS_VERSION (1)
 
+#define ARSTREAM2_RTCP_CLOCKDELTA_MIN_TS_DELTA 1000
+#define ARSTREAM2_RTCP_CLOCKDELTA_TIMEOUT 1000000
+#define ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_SIZE 10
+#define ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_TIMEOUT 1000000
+#define ARSTREAM2_RTCP_CLOCKDELTA_MAX_RTDELAY 500000
+#define ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA 16
+#define ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG 64
+#define ARSTREAM2_RTCP_CLOCKDELTA_ONE_WAY_DELAY_DIFF_THRES 0.5
+
 #define ARSTREAM2_RTCP_SDES_ITEM_MAX_COUNT 10
 
 
@@ -179,11 +188,21 @@ typedef struct ARSTREAM2_RTCP_SdesItem_s {
  * @brief Application clock delta context
  */
 typedef struct ARSTREAM2_RTCP_ClockDeltaContext_s {
+    uint64_t expectedOriginateTimestamp;
     uint64_t nextPeerOriginateTimestamp;
     uint64_t nextReceiveTimestamp;
+    int64_t clockDeltaWindow[ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_SIZE];
+    int64_t rtDelayWindow[ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_SIZE];
+    int windowSize;
+    uint64_t windowStartTimestamp;
     int64_t clockDelta;
     int64_t clockDeltaAvg;
     int64_t rtDelay;
+    int64_t rtDelayAvg;
+    int64_t rtDelayMin;
+    int64_t rtDelayMinAvg;
+    int64_t p2mDelayAvg;
+    int64_t m2pDelayAvg;
 } ARSTREAM2_RTCP_ClockDeltaContext_t;
 
 /**

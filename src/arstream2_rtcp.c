@@ -767,6 +767,8 @@ int ARSTREAM2_RTCP_GenerateApplicationClockDelta(ARSTREAM2_RTCP_Application_t *a
     clockDelta->transmitTimestampH = htonl((uint32_t)(sendTimestamp >> 32));
     clockDelta->transmitTimestampL = htonl((uint32_t)(sendTimestamp & 0xFFFFFFFF));
 
+    context->expectedOriginateTimestamp = sendTimestamp;
+
     return 0;
 }
 
@@ -845,19 +847,131 @@ int ARSTREAM2_RTCP_ProcessApplicationClockDelta(const uint8_t *buffer, unsigned 
     uint32_t transmitTimestampL = ntohl(clockDelta->transmitTimestampL);
     uint64_t peerTransmitTimestamp = ((uint64_t)transmitTimestampH << 32) + ((uint64_t)transmitTimestampL & 0xFFFFFFFF);
 
-    if ((originateTimestamp != 0) && (peerReceiveTimestamp != 0) && (peerTransmitTimestamp != 0))
+    if ((receptionTimestamp != 0) && (originateTimestamp != 0) && (peerReceiveTimestamp != 0) && (peerTransmitTimestamp != 0)
+            && (peerTransmitTimestamp >= peerReceiveTimestamp + ARSTREAM2_RTCP_CLOCKDELTA_MIN_TS_DELTA)
+            && (receptionTimestamp >= originateTimestamp + ARSTREAM2_RTCP_CLOCKDELTA_MIN_TS_DELTA)
+            && (originateTimestamp == context->expectedOriginateTimestamp))
     {
-        context->clockDelta = (int64_t)(peerReceiveTimestamp + peerTransmitTimestamp) / 2 - (int64_t)(originateTimestamp + receptionTimestamp) / 2;
-        context->rtDelay = (receptionTimestamp - originateTimestamp) - (peerTransmitTimestamp - peerReceiveTimestamp);
-        if (context->clockDeltaAvg == 0)
+        int64_t rtDelay, clockDelta;
+        int64_t peer2meDelay, me2peerDelay, oneWayDelayDiff;
+        int ws = 0;
+        rtDelay = ((int64_t)receptionTimestamp - (int64_t)originateTimestamp) - ((int64_t)peerTransmitTimestamp - (int64_t)peerReceiveTimestamp);
+        clockDelta = ((int64_t)peerReceiveTimestamp + (int64_t)peerTransmitTimestamp - (int64_t)originateTimestamp - (int64_t)receptionTimestamp + 1) / 2;
+        peer2meDelay = originateTimestamp - peerReceiveTimestamp + context->clockDeltaAvg;
+        peer2meDelay = (peer2meDelay < 0) ? -peer2meDelay : peer2meDelay;
+        me2peerDelay = receptionTimestamp - peerTransmitTimestamp + context->clockDeltaAvg;
+        me2peerDelay = (me2peerDelay < 0) ? -me2peerDelay : me2peerDelay;
+        oneWayDelayDiff = peer2meDelay - me2peerDelay;
+        oneWayDelayDiff = (oneWayDelayDiff < 0) ? -oneWayDelayDiff : oneWayDelayDiff;
+
+        if (rtDelay > 0)
         {
-            context->clockDeltaAvg = context->clockDelta;
+            /* Average RTD */
+            if (context->rtDelayAvg == 0)
+            {
+                context->rtDelayAvg = rtDelay;
+            }
+            else
+            {
+                /* Sliding average, alpha = 1 / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG */
+                context->rtDelayAvg = context->rtDelayAvg + (rtDelay - context->rtDelayAvg + ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG / 2) / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG;
+            }
+            if (context->clockDeltaAvg != 0)
+            {
+                /* Average peer2me delay */
+                if (context->p2mDelayAvg == 0)
+                {
+                    context->p2mDelayAvg = peer2meDelay;
+                }
+                else
+                {
+                    /* Sliding average, alpha = 1 / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG */
+                    context->p2mDelayAvg = context->p2mDelayAvg + (peer2meDelay - context->p2mDelayAvg + ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG / 2) / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG;
+                }
+
+                /* Average me2peer delay */
+                if (context->m2pDelayAvg == 0)
+                {
+                    context->m2pDelayAvg = me2peerDelay;
+                }
+                else
+                {
+                    /* Sliding average, alpha = 1 / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG */
+                    context->m2pDelayAvg = context->m2pDelayAvg + (me2peerDelay - context->m2pDelayAvg + ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG / 2) / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA_LONG;
+                }
+            }
+
+            if ((context->clockDeltaAvg == 0) || ((float)oneWayDelayDiff <= (float)rtDelay * ARSTREAM2_RTCP_CLOCKDELTA_ONE_WAY_DELAY_DIFF_THRES))
+            {
+                /* Initialize the window */
+                if (context->windowSize == 0)
+                {
+                    context->windowStartTimestamp = receptionTimestamp;
+                }
+
+                /* Fill the window */
+                context->clockDeltaWindow[context->windowSize] = clockDelta;
+                context->rtDelayWindow[context->windowSize] = rtDelay;
+                context->windowSize++;
+
+                if ((context->windowSize >= ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_SIZE) || ((context->windowSize >= ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_SIZE / 2) && (receptionTimestamp >= context->windowStartTimestamp + ARSTREAM2_RTCP_CLOCKDELTA_WINDOW_TIMEOUT)))
+                {
+                    /* Window is full or half-full and on timeout */
+                    int i;
+                    int64_t minRtDelay = 10000000;
+                    ws = context->windowSize;
+
+                    /* Find the minimum round trip delay */
+                    for (i = 0; i < context->windowSize; i++)
+                    {
+                        if (context->rtDelayWindow[i] < minRtDelay)
+                        {
+                            minRtDelay = context->rtDelay = context->rtDelayWindow[i];
+                            context->clockDelta = context->clockDeltaWindow[i];
+                        }
+                    }
+
+                    if (minRtDelay < ARSTREAM2_RTCP_CLOCKDELTA_MAX_RTDELAY)
+                    {
+                        /* Min RTD is acceptable */
+
+                        /* Average min RTD */
+                        if (context->rtDelayMinAvg == 0)
+                        {
+                            context->rtDelayMinAvg = minRtDelay;
+                        }
+                        else
+                        {
+                            /* Sliding average, alpha = 1 / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA */
+                            context->rtDelayMinAvg = context->rtDelayMinAvg + (minRtDelay - context->rtDelayMinAvg + ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA / 2) / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA;
+                        }
+
+                        context->rtDelayMin = minRtDelay;
+
+                        if (minRtDelay <= context->rtDelayMinAvg * 2)
+                        {
+                            /* Min RTD is less than 200% of the average RTD */
+
+                            /* Average clock delta */
+                            if (context->clockDeltaAvg == 0)
+                            {
+                                context->clockDeltaAvg = context->clockDelta;
+                            }
+                            else
+                            {
+                                /* Sliding average, alpha = 1 / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA */
+                                context->clockDeltaAvg = context->clockDeltaAvg + (context->clockDelta - context->clockDeltaAvg + ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA / 2) / ARSTREAM2_RTCP_CLOCKDELTA_AVG_ALPHA;
+                            }
+                        }
+                    }
+
+                    /* Reset the window */
+                    context->windowSize = 0;
+                }
+            }
         }
-        else
-        {
-            // sliding average, alpha = 1/32
-            context->clockDeltaAvg = context->clockDeltaAvg + (context->clockDelta - context->clockDeltaAvg) / 32;
-        }
+
+        context->expectedOriginateTimestamp = 0;
     }
 
     context->nextPeerOriginateTimestamp = peerTransmitTimestamp;
@@ -1134,17 +1248,20 @@ int ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(uint8_t *packet, unsigned int m
 
     if ((ret == 0) && (generateApplicationClockDelta) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t) <= maxPacketSize))
     {
-        ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
-                                                           (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                           sendTimestamp, context->senderSsrc,
-                                                           &context->clockDeltaCtx);
-        if (ret != 0)
+        if ((context->clockDeltaCtx.expectedOriginateTimestamp == 0) || (sendTimestamp >= context->clockDeltaCtx.expectedOriginateTimestamp + ARSTREAM2_RTCP_CLOCKDELTA_TIMEOUT))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
-        }
-        else
-        {
-            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+            ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
+                                                               (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                               sendTimestamp, context->senderSsrc,
+                                                               &context->clockDeltaCtx);
+            if (ret != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
+            }
+            else
+            {
+                totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+            }
         }
     }
 
@@ -1208,17 +1325,20 @@ int ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(uint8_t *packet, unsigned int
 
     if ((ret == 0) && (generateApplicationClockDelta) && (totalSize + sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t) <= maxPacketSize))
     {
-        ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
-                                                           (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
-                                                           sendTimestamp, context->receiverSsrc,
-                                                           &context->clockDeltaCtx);
-        if (ret != 0)
+        if ((context->clockDeltaCtx.expectedOriginateTimestamp == 0) || (sendTimestamp >= context->clockDeltaCtx.expectedOriginateTimestamp + ARSTREAM2_RTCP_CLOCKDELTA_TIMEOUT))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
-        }
-        else
-        {
-            totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+            ret = ARSTREAM2_RTCP_GenerateApplicationClockDelta((ARSTREAM2_RTCP_Application_t*)(packet + totalSize),
+                                                               (ARSTREAM2_RTCP_ClockDelta_t*)(packet + totalSize + sizeof(ARSTREAM2_RTCP_Application_t)),
+                                                               sendTimestamp, context->receiverSsrc,
+                                                               &context->clockDeltaCtx);
+            if (ret != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTCP_TAG, "Failed to generate application defined clock delta (%d)", ret);
+            }
+            else
+            {
+                totalSize += sizeof(ARSTREAM2_RTCP_Application_t) + sizeof(ARSTREAM2_RTCP_ClockDelta_t);
+            }
         }
     }
 
