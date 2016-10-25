@@ -25,6 +25,35 @@
     } while (0)
 
 
+static int ARSTREAM2_RtpReceiver_SetSocketSendBufferSize(ARSTREAM2_RtpReceiver_t *receiver, int socket, int size)
+{
+    int ret = 0, err;
+    socklen_t size2 = sizeof(size2);
+
+    size /= 2;
+    err = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, sizeof(size));
+    if (err != 0)
+    {
+        ret = -1;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set socket send buffer size to 2*%d bytes: error=%d (%s)", size, errno, strerror(errno));
+    }
+
+    size = -1;
+    err = getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void*)&size, &size2);
+    if (err != 0)
+    {
+        ret = -1;
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to get socket send buffer size: error=%d (%s)", errno, strerror(errno));
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Socket send buffer size is %d bytes", size);
+    }
+
+    return ret;
+}
+
+
 static int ARSTREAM2_RtpReceiver_SetSocketReceiveBufferSize(ARSTREAM2_RtpReceiver_t *receiver, int socket, int size)
 {
     int ret = 0, err;
@@ -409,6 +438,17 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
         if (err != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on control socket connect to addr='%s' port=%d: error=%d (%s)", receiver->net.serverAddr, receiver->net.serverControlPort, errno, strerror(errno));
+            ret = -1;
+        }
+    }
+
+    if (ret == 0)
+    {
+        /* set the socket buffer size */
+        err = ARSTREAM2_RtpReceiver_SetSocketSendBufferSize(receiver, receiver->net.controlSocket, 4096);
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set the send socket buffer size");
             ret = -1;
         }
     }

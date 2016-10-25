@@ -477,6 +477,17 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 
+    if (ret == 0)
+    {
+        /* set the socket buffer size */
+        err = ARSTREAM2_RtpSender_SetSocketSendBufferSize(sender, sender->controlSocket, 4096);
+        if (err != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set the send socket buffer size");
+            ret = -1;
+        }
+    }
+
     if (ret != 0)
     {
         if (sender->controlSocket >= 0)
