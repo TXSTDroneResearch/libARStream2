@@ -1390,6 +1390,11 @@ eARSTREAM2_ERROR ARSTREAM2_H264Writer_RewriteNonRefPSliceNalu(ARSTREAM2_H264Writ
         return ARSTREAM2_ERROR_UNSUPPORTED;
     }
 
+    /* NB: changing nal_ref_idc to 0 means that dec_ref_pic_marking() will no more be present in the slice header.
+     * Therefore adaptive_ref_pic_marking_mode_flag will not be present and the original slice_data() syntax must
+     * be shifted left by 1 bit.
+     */
+
     writer->pNaluBuf = pbOutputBuf;
     writer->naluBufSize = outputBufSize;
     writer->naluSize = 0;
