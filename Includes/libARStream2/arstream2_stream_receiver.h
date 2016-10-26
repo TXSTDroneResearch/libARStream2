@@ -229,7 +229,6 @@ typedef struct
     int replaceStartCodesWithNaluSize;              /**< if true, replace the NAL units start code with the NALU size */
     int generateSkippedPSlices;                     /**< if true, generate skipped P slices to replace missing slices for pre-decoder error concealment */
     int generateFirstGrayIFrame;                    /**< if true, generate a first gray IDR frame to initialize the decoding (waitForSync must be enabled) */
-    uint32_t untimedMetadataSendInterval;           /**< Time interval in microseconds for sending untimed metadata (0 means default value) */
     const char *debugPath;                          /**< Optional path for writing debug files (optional, can be NULL) */
 
 } ARSTREAM2_StreamReceiver_Config_t;
@@ -255,7 +254,6 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
-    uint32_t untimedMetadataSendInterval;           /**< Time interval in microseconds for sending untimed metadata (0 means default value) */
 
 } ARSTREAM2_StreamReceiver_ResenderConfig_t;
 
