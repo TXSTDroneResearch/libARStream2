@@ -172,7 +172,6 @@ typedef struct ARSTREAM2_RtpReceiver_NaluBuffer_s {
 
 struct ARSTREAM2_RtpReceiver_NetInfos_t {
     char *serverAddr;
-    char *mcastAddr;
     char *mcastIfaceAddr;
     int serverStreamPort;
     int serverControlPort;
@@ -184,6 +183,7 @@ struct ARSTREAM2_RtpReceiver_NetInfos_t {
     int isMulticast;
     int streamSocket;
     int controlSocket;
+    struct sockaddr_in controlSendSin;
 };
 
 struct ARSTREAM2_RtpReceiver_MuxInfos_t {

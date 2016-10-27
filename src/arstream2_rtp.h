@@ -292,7 +292,7 @@ ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoPeekItem(ARSTREAM2_RTP_P
 ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoDuplicateItem(ARSTREAM2_RTP_PacketFifo_t *fifo,
                                                                       ARSTREAM2_RTP_PacketFifoItem_t *item);
 
-int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *queue, struct mmsghdr *msgVec, unsigned int msgVecCount);
+int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *queue, struct mmsghdr *msgVec, unsigned int msgVecCount, void *msgName, socklen_t msgNamelen);
 
 int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t *context,
                                                    ARSTREAM2_RTP_PacketFifo_t *fifo,

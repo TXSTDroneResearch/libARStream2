@@ -632,7 +632,7 @@ ARSTREAM2_RTP_PacketFifoItem_t* ARSTREAM2_RTP_PacketFifoDuplicateItem(ARSTREAM2_
 }
 
 
-int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *queue, struct mmsghdr *msgVec, unsigned int msgVecCount)
+int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *queue, struct mmsghdr *msgVec, unsigned int msgVecCount, void *msgName, socklen_t msgNamelen)
 {
     ARSTREAM2_RTP_PacketFifoItem_t* cur = NULL;
     unsigned int i;
@@ -656,8 +656,8 @@ int ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifoQueue_t *q
 
     for (cur = queue->head, i = 0; ((cur) && (i < msgVecCount)); cur = cur->next, i++)
     {
-        msgVec[i].msg_hdr.msg_name = NULL;
-        msgVec[i].msg_hdr.msg_namelen = 0;
+        msgVec[i].msg_hdr.msg_name = msgName;
+        msgVec[i].msg_hdr.msg_namelen = msgNamelen;
         msgVec[i].msg_hdr.msg_iov = cur->packet.buffer->msgIov;
         msgVec[i].msg_hdr.msg_iovlen = cur->packet.msgIovLength;
         msgVec[i].msg_hdr.msg_control = NULL;

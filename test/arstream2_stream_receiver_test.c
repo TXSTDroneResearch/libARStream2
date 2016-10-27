@@ -754,7 +754,8 @@ int startVideo(BD_MANAGER_t *deviceManager)
         memset(&streamReceiverNetConfig, 0, sizeof(streamReceiverNetConfig));
 
         streamReceiverNetConfig.serverAddr = deviceManager->addr;
-        streamReceiverNetConfig.mcastAddr = NULL; //"239.255.42.1";
+        int addrFirst = atoi(deviceManager->addr);
+        streamReceiverNetConfig.mcastAddr = ((addrFirst >= 224) && (addrFirst <= 239)) ? deviceManager->addr : NULL;
         streamReceiverNetConfig.mcastIfaceAddr = NULL;
         streamReceiverNetConfig.serverStreamPort = deviceManager->arstream2ServerStreamPort;
         streamReceiverNetConfig.serverControlPort = deviceManager->arstream2ServerControlPort;

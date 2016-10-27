@@ -125,7 +125,6 @@ struct ARSTREAM2_RtpSender_t {
     char *friendlyName;
     char *applicationName;
     char *clientAddr;
-    char *mcastAddr;
     char *mcastIfaceAddr;
     int serverStreamPort;
     int serverControlPort;
@@ -156,6 +155,7 @@ struct ARSTREAM2_RtpSender_t {
     int isMulticast;
     int streamSocketSendBufferSize;
     struct sockaddr_in streamSendSin;
+    struct sockaddr_in controlSendSin;
     int streamSocket;
     int controlSocket;
     
@@ -283,42 +283,31 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 
-    if (ret == 0)
+    if ((ret == 0) && (sender->isMulticast))
     {
-        if ((sender->mcastAddr) && (strlen(sender->mcastAddr)))
+        int addrFirst = atoi(sender->clientAddr);
+        if ((addrFirst >= 224) && (addrFirst <= 239))
         {
-            int addrFirst = atoi(sender->mcastAddr);
-            if ((addrFirst >= 224) && (addrFirst <= 239))
+            /* multicast */
+            if ((sender->mcastIfaceAddr) && (strlen(sender->mcastIfaceAddr) > 0))
             {
-                /* multicast */
-                err = inet_pton(AF_INET, sender->mcastAddr, &(sender->streamSendSin.sin_addr));
+                err = inet_pton(AF_INET, sender->mcastIfaceAddr, &(sourceSin.sin_addr));
                 if (err <= 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to convert address '%s'", sender->mcastAddr);
-                    ret = -1;
-                }
-
-                if ((sender->mcastIfaceAddr) && (strlen(sender->mcastIfaceAddr) > 0))
-                {
-                    err = inet_pton(AF_INET, sender->mcastIfaceAddr, &(sourceSin.sin_addr));
-                    if (err <= 0)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to convert address '%s'", sender->mcastIfaceAddr);
-                        ret = -1;
-                    }
-                    sender->isMulticast = 1;
-                }
-                else
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Trying to send multicast to address '%s' without an interface address", sender->mcastAddr);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to convert address '%s'", sender->mcastIfaceAddr);
                     ret = -1;
                 }
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Invalid multicast address '%s'", sender->mcastAddr);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Trying to send multicast to address '%s' without an interface address", sender->clientAddr);
                 ret = -1;
             }
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Invalid multicast address '%s'", sender->clientAddr);
+            ret = -1;
         }
     }
 
@@ -331,17 +320,6 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on stream socket bind: error=%d (%s)", errno, strerror(errno));
             ret = -1;
         }
-    }
-
-    if ((ret == 0) && (!sender->isMulticast))
-    {
-        /* connect the socket */
-        err = connect(sender->streamSocket, (struct sockaddr*)&sender->streamSendSin, sizeof(sender->streamSendSin));
-        if (err != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on stream socket connect to addr='%s' port=%d: error=%d (%s)", sender->clientAddr, sender->clientStreamPort, errno, strerror(errno));
-            ret = -1;
-        }                
     }
 
     if (ret == 0)
@@ -374,7 +352,6 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
 static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
 {
     int ret = 0;
-    struct sockaddr_in sendSin;
     struct sockaddr_in recvSin;
     int err;
 
@@ -443,22 +420,11 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
 
     if (ret == 0)
     {
-        /* bind the socket */
-        err = bind(sender->controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
-        if (err != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on control socket bind port=%d: error=%d (%s)", sender->clientControlPort, errno, strerror(errno));
-            ret = -1;
-        }
-    }
-
-    if (ret == 0)
-    {
         /* send address */
-        memset(&sendSin, 0, sizeof(struct sockaddr_in));
-        sendSin.sin_family = AF_INET;
-        sendSin.sin_port = htons(sender->clientControlPort);
-        err = inet_pton(AF_INET, sender->clientAddr, &(sendSin.sin_addr));
+        memset(&sender->controlSendSin, 0, sizeof(struct sockaddr_in));
+        sender->controlSendSin.sin_family = AF_INET;
+        sender->controlSendSin.sin_port = htons(sender->clientControlPort);
+        err = inet_pton(AF_INET, sender->clientAddr, &(sender->controlSendSin.sin_addr));
         if (err <= 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to convert address '%s'", sender->clientAddr);
@@ -466,13 +432,41 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
         }
     }
 
+    if ((ret == 0) && (sender->isMulticast))
+    {
+        int addrFirst = atoi(sender->clientAddr);
+        if ((addrFirst >= 224) && (addrFirst <= 239))
+        {
+            /* multicast */
+            if ((sender->mcastIfaceAddr) && (strlen(sender->mcastIfaceAddr) > 0))
+            {
+                err = inet_pton(AF_INET, sender->mcastIfaceAddr, &(recvSin.sin_addr));
+                if (err <= 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to convert address '%s'", sender->mcastIfaceAddr);
+                    ret = -1;
+                }
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Trying to send multicast to address '%s' without an interface address", sender->clientAddr);
+                ret = -1;
+            }
+        }
+        else
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Invalid multicast address '%s'", sender->clientAddr);
+            ret = -1;
+        }
+    }
+
     if (ret == 0)
     {
-        /* connect the socket */
-        err = connect(sender->controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
+        /* bind the socket */
+        err = bind(sender->controlSocket, (struct sockaddr*)&recvSin, sizeof(recvSin));
         if (err != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on control socket connect to addr='%s' port=%d: error=%d (%s)", sender->clientAddr, sender->clientControlPort, errno, strerror(errno));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Error on control socket bind port=%d: error=%d (%s)", sender->clientControlPort, errno, strerror(errno));
             ret = -1;
         }
     }
@@ -603,9 +597,10 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
     }
-    if ((config->clientAddr == NULL) || (!strlen(config->clientAddr)))
+    if (((config->clientAddr == NULL) || (!strlen(config->clientAddr)))
+            && (((config->mcastAddr == NULL) || (!strlen(config->mcastAddr))) || ((config->mcastIfaceAddr == NULL) || (!strlen(config->mcastIfaceAddr)))))
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no client address provided");
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no destination address provided");
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
     }
@@ -644,17 +639,18 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         {
             retSender->applicationName = strndup(config->applicationName, 40);
         }
-        if (config->clientAddr)
-        {
-            retSender->clientAddr = strndup(config->clientAddr, 16);
-        }
         if (config->mcastAddr)
         {
-            retSender->mcastAddr = strndup(config->mcastAddr, 16);
+            retSender->isMulticast = 1;
+            retSender->clientAddr = strndup(config->mcastAddr, 16);
         }
         if (config->mcastIfaceAddr)
         {
             retSender->mcastIfaceAddr = strndup(config->mcastIfaceAddr, 16);
+        }
+        if ((!retSender->clientAddr) && (config->clientAddr))
+        {
+            retSender->clientAddr = strndup(config->clientAddr, 16);
         }
         retSender->serverStreamPort = (config->serverStreamPort > 0) ? config->serverStreamPort : ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_STREAM_PORT;
         retSender->serverControlPort = (config->serverControlPort > 0) ? config->serverControlPort : ARSTREAM2_RTP_SENDER_DEFAULT_SERVER_CONTROL_PORT;
@@ -981,7 +977,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         free(retSender->friendlyName);
         free(retSender->applicationName);
         free(retSender->clientAddr);
-        free(retSender->mcastAddr);
         free(retSender->mcastIfaceAddr);
         free(retSender->debugPath);
         free(retSender->dateAndTime);
@@ -1060,7 +1055,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
             free((*sender)->friendlyName);
             free((*sender)->applicationName);
             free((*sender)->clientAddr);
-            free((*sender)->mcastAddr);
             free((*sender)->mcastIfaceAddr);
             free((*sender)->debugPath);
             free((*sender)->dateAndTime);
@@ -1504,7 +1498,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
         /* RTP packets sending */
         if ((!packetsPending) || ((packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, &writeSet)))))
         {
-            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifoQueue, sender->msgVec, sender->msgVecCount);
+            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifoQueue, sender->msgVec, sender->msgVecCount, (void*)&sender->streamSendSin, sizeof(sender->streamSendSin));
             if (ret < 0)
             {
                 if (ret != -2)
@@ -1580,7 +1574,7 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
             if ((ret == 0) && (size > 0))
             {
                 sender->rtcpDropStatsTotalPackets++;
-                ssize_t bytes = send(sender->controlSocket, sender->rtcpMsgBuffer, size, 0);
+                ssize_t bytes = sendto(sender->controlSocket, sender->rtcpMsgBuffer, size, 0, (struct sockaddr*)&sender->controlSendSin, sizeof(sender->controlSendSin));
                 if (bytes < 0)
                 {
                     if (errno == EAGAIN)

@@ -173,18 +173,18 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
         recvSin.sin_port = htons(receiver->net.clientStreamPort);
         recvSin.sin_addr.s_addr = htonl(INADDR_ANY);
 
-        if ((receiver->net.mcastAddr) && (strlen(receiver->net.mcastAddr)))
+        if (receiver->net.isMulticast)
         {
-            int addrFirst = atoi(receiver->net.mcastAddr);
+            int addrFirst = atoi(receiver->net.serverAddr);
             if ((addrFirst >= 224) && (addrFirst <= 239))
             {
                 /* multicast */
                 struct ip_mreq mreq;
                 memset(&mreq, 0, sizeof(mreq));
-                err = inet_pton(AF_INET, receiver->net.mcastAddr, &(mreq.imr_multiaddr.s_addr));
+                err = inet_pton(AF_INET, receiver->net.serverAddr, &(mreq.imr_multiaddr.s_addr));
                 if (err <= 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to convert address '%s'", receiver->net.mcastAddr);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to convert address '%s'", receiver->net.serverAddr);
                     ret = -1;
                 }
 
@@ -215,12 +215,10 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
                         ret = -1;
                     }
                 }
-
-                receiver->net.isMulticast = 1;
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Invalid multicast address '%s'", receiver->net.mcastAddr);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Invalid multicast address '%s'", receiver->net.serverAddr);
                 ret = -1;
             }
         }
@@ -339,7 +337,6 @@ fail:
 static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *receiver)
 {
     int ret = 0;
-    struct sockaddr_in sendSin;
     struct sockaddr_in recvSin;
     int err;
 
@@ -392,6 +389,56 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
         recvSin.sin_family = AF_INET;
         recvSin.sin_port = htons(receiver->net.clientControlPort);
         recvSin.sin_addr.s_addr = htonl(INADDR_ANY);
+
+        if (receiver->net.isMulticast)
+        {
+            int addrFirst = atoi(receiver->net.serverAddr);
+            if ((addrFirst >= 224) && (addrFirst <= 239))
+            {
+                /* multicast */
+                struct ip_mreq mreq;
+                memset(&mreq, 0, sizeof(mreq));
+                err = inet_pton(AF_INET, receiver->net.serverAddr, &(mreq.imr_multiaddr.s_addr));
+                if (err <= 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to convert address '%s'", receiver->net.serverAddr);
+                    ret = -1;
+                }
+
+                if (ret == 0)
+                {
+                    if ((receiver->net.mcastIfaceAddr) && (strlen(receiver->net.mcastIfaceAddr) > 0))
+                    {
+                        err = inet_pton(AF_INET, receiver->net.mcastIfaceAddr, &(mreq.imr_interface.s_addr));
+                        if (err <= 0)
+                        {
+                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to convert address '%s'", receiver->net.mcastIfaceAddr);
+                            ret = -1;
+                        }
+                    }
+                    else
+                    {
+                        mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+                    }
+                }
+
+                if (ret == 0)
+                {
+                    /* join the multicast group */
+                    err = setsockopt(receiver->net.controlSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+                    if (err != 0)
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to join multacast group: error=%d (%s)", errno, strerror(errno));
+                        ret = -1;
+                    }
+                }
+            }
+            else
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Invalid multicast address '%s'", receiver->net.serverAddr);
+                ret = -1;
+            }
+        }
     }
 
     if (ret == 0)
@@ -420,24 +467,13 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     if (ret == 0)
     {
         /* send address */
-        memset(&sendSin, 0, sizeof(struct sockaddr_in));
-        sendSin.sin_family = AF_INET;
-        sendSin.sin_port = htons(receiver->net.serverControlPort);
-        err = inet_pton(AF_INET, receiver->net.serverAddr, &(sendSin.sin_addr));
+        memset(&receiver->net.controlSendSin, 0, sizeof(struct sockaddr_in));
+        receiver->net.controlSendSin.sin_family = AF_INET;
+        receiver->net.controlSendSin.sin_port = htons(receiver->net.serverControlPort);
+        err = inet_pton(AF_INET, receiver->net.serverAddr, &(receiver->net.controlSendSin.sin_addr));
         if (err <= 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to convert address '%s'", receiver->net.serverAddr);
-            ret = -1;
-        }
-    }
-
-    if (ret == 0)
-    {
-        /* connect the socket */
-        err = connect(receiver->net.controlSocket, (struct sockaddr*)&sendSin, sizeof(sendSin));
-        if (err != 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Error on control socket connect to addr='%s' port=%d: error=%d (%s)", receiver->net.serverAddr, receiver->net.serverControlPort, errno, strerror(errno));
             ret = -1;
         }
     }
@@ -829,7 +865,7 @@ static int ARSTREAM2_RtpReceiver_MuxSendControlData(ARSTREAM2_RtpReceiver_t *rec
 
 static int ARSTREAM2_RtpReceiver_NetSendControlData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *buffer, int size)
 {
-    int ret = send(receiver->net.controlSocket, buffer, size, 0);
+    int ret = sendto(receiver->net.controlSocket, buffer, size, 0, (struct sockaddr*)&receiver->net.controlSendSin, sizeof(receiver->net.controlSendSin));
     if (ret < 0)
         ret = -errno;
     return ret;
@@ -1043,7 +1079,8 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 
     if (net_config != NULL)
     {
-        if ((net_config->serverAddr == NULL) || (!strlen(net_config->serverAddr)))
+        if (((net_config->serverAddr == NULL) || (!strlen(net_config->serverAddr)))
+                && (((net_config->mcastAddr == NULL) || (!strlen(net_config->mcastAddr))) || ((net_config->mcastIfaceAddr == NULL) || (!strlen(net_config->mcastIfaceAddr)))))
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Config: no server address provided");
             SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
@@ -1154,17 +1191,19 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->net.streamSocket = -1;
             retReceiver->net.controlSocket = -1;
 
-            if (net_config->serverAddr)
-            {
-                retReceiver->net.serverAddr = strndup(net_config->serverAddr, 16);
-            }
             if (net_config->mcastAddr)
             {
-                retReceiver->net.mcastAddr = strndup(net_config->mcastAddr, 16);
+                retReceiver->net.isMulticast = 1;
+                retReceiver->generateReceiverReports = 0; // Force not sending RTCP receiver reports in multicast mode
+                retReceiver->net.serverAddr = strndup(net_config->mcastAddr, 16);
             }
             if (net_config->mcastIfaceAddr)
             {
                 retReceiver->net.mcastIfaceAddr = strndup(net_config->mcastIfaceAddr, 16);
+            }
+            if ((!retReceiver->net.serverAddr) && (net_config->serverAddr))
+            {
+                retReceiver->net.serverAddr = strndup(net_config->serverAddr, 16);
             }
             retReceiver->net.serverStreamPort = net_config->serverStreamPort;
             retReceiver->net.serverControlPort = net_config->serverControlPort;
@@ -1393,7 +1432,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         free(retReceiver->friendlyName);
         free(retReceiver->applicationName);
         free(retReceiver->net.serverAddr);
-        free(retReceiver->net.mcastAddr);
         free(retReceiver->net.mcastIfaceAddr);
 
 #if BUILD_LIBMUX
@@ -1498,7 +1536,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             free((*receiver)->friendlyName);
             free((*receiver)->applicationName);
             free((*receiver)->net.serverAddr);
-            free((*receiver)->net.mcastAddr);
             free((*receiver)->net.mcastIfaceAddr);
 
 #if BUILD_LIBMUX
