@@ -26,6 +26,10 @@
 #define ARSTREAM2_RTP_SENDER_SSRC 0x41525353
 #define ARSTREAM2_RTP_RECEIVER_SSRC 0x41525352
 
+#define ARSTREAM2_RTP_CLOCKSKEW_WINDOW_SIZE 400
+#define ARSTREAM2_RTP_CLOCKSKEW_WINDOW_TIMEOUT 5000000
+#define ARSTREAM2_RTP_CLOCKSKEW_AVG_ALPHA 64
+
 
 /*
  * Types
@@ -105,7 +109,9 @@ typedef struct ARSTREAM2_RTP_Packet_s
     uint64_t inputTimestamp;
     uint64_t timeoutTimestamp;
     uint64_t ntpTimestamp;
+    uint64_t ntpTimestampUnskewed;
     uint64_t ntpTimestampRaw;
+    uint64_t ntpTimestampRawUnskewed;
     uint64_t ntpTimestampLocal;
     uint64_t extRtpTimestamp;
     uint32_t rtpTimestamp;
@@ -233,6 +239,16 @@ typedef struct ARSTREAM2_RTP_ReceiverContext_s
     int32_t previousExtSeqNum;
     uint64_t previousExtRtpTimestamp;
     uint64_t previousRecvRtpTimestamp;
+    uint64_t firstExtRtpTimestamp;
+    uint64_t firstRecvRtpTimestamp;
+    int64_t clockSkewWindow[ARSTREAM2_RTP_CLOCKSKEW_WINDOW_SIZE];
+    int clockSkewWindowSize;
+    uint64_t clockSkewWindowStartTimestamp;
+    int clockSkewInit;
+    int64_t clockSkewOffset;
+    int64_t clockSkewMin;
+    int64_t clockSkewMinAvg;
+    int64_t clockSkew;
 
 } ARSTREAM2_RTP_ReceiverContext_t;
 

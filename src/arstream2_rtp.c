@@ -1159,9 +1159,6 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 item->packet.header = (ARSTREAM2_RTP_Header_t*)item->packet.buffer->header;
                 item->packet.inputTimestamp = curTime;
                 item->packet.rtpTimestamp = ntohl(item->packet.header->timestamp);
-                item->packet.ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(rtcpContext, item->packet.rtpTimestamp);
-                item->packet.ntpTimestampLocal = ((rtcpContext->clockDeltaCtx.clockDeltaAvg != 0) && (item->packet.ntpTimestamp != 0)) ? (item->packet.ntpTimestamp - rtcpContext->clockDeltaCtx.clockDeltaAvg) : 0;
-                item->packet.timeoutTimestamp = curTime + context->nominalDelay; //TODO: compute the expected arrival time
                 item->packet.seqNum = ntohs(item->packet.header->seqNum);
                 if (context->previousExtSeqNum != -1)
                 {
@@ -1196,19 +1193,21 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 }
                 else
                 {
+                    /* first packet received */
                     item->packet.extSeqNum = item->packet.seqNum;
                     item->packet.extRtpTimestamp = item->packet.rtpTimestamp;
                     context->extHighestSeqNum = item->packet.extSeqNum;
                     context->extHighestRtpTimestamp = item->packet.extRtpTimestamp;
                     context->previousRecvRtpTimestamp = recvRtpTimestamp;
                     context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
+                    context->firstRecvRtpTimestamp = recvRtpTimestamp;
+                    context->firstExtRtpTimestamp = item->packet.extRtpTimestamp;
                     rtcpContext->senderSsrc = ntohl(item->packet.header->ssrc);
                     rtcpContext->firstSeqNum = item->packet.seqNum;
                     rtcpContext->extHighestSeqNum = context->extHighestSeqNum;
                     rtcpContext->packetsReceived = 0;
                     rtcpContext->packetsLost = 0;
                 }
-                item->packet.ntpTimestampRaw = (item->packet.extRtpTimestamp * 1000000 + context->rtpClockRate / 2) / context->rtpClockRate;
                 context->previousExtSeqNum = (int32_t)item->packet.extSeqNum;
                 flags = ntohs(item->packet.header->flags);
                 if (flags & (1 << 7))
@@ -1265,17 +1264,75 @@ int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext
                 }
                 else
                 {
+                    if ((recvRtpTimestamp != context->previousRecvRtpTimestamp) && (item->packet.extRtpTimestamp != context->previousExtRtpTimestamp))
+                    {
+                        /* clock skew computation */
+                        int64_t clockSkew = ((int64_t)recvRtpTimestamp - (int64_t)context->firstRecvRtpTimestamp)
+                                            - ((int64_t)item->packet.extRtpTimestamp - (int64_t)context->firstExtRtpTimestamp);
+
+                        /* initialize the window */
+                        if (context->clockSkewWindowSize == 0)
+                        {
+                            context->clockSkewWindowStartTimestamp = curTime;
+                        }
+
+                        /* fill the window */
+                        context->clockSkewWindow[context->clockSkewWindowSize] = clockSkew;
+                        context->clockSkewWindowSize++;
+
+                        if ((context->clockSkewWindowSize >= ARSTREAM2_RTP_CLOCKSKEW_WINDOW_SIZE)
+                                || ((context->clockSkewWindowSize >= ARSTREAM2_RTP_CLOCKSKEW_WINDOW_SIZE / 2) && (curTime >= context->clockSkewWindowStartTimestamp + ARSTREAM2_RTP_CLOCKSKEW_WINDOW_TIMEOUT)))
+                        {
+                            /* window is full or half-full and on timeout */
+                            int i;
+                            context->clockSkewMin = context->clockSkewWindow[0];
+
+                            /* Find the minimum clock skew in the window */
+                            for (i = 0; i < context->clockSkewWindowSize; i++)
+                            {
+                                if (context->clockSkewWindow[i] < context->clockSkewMin)
+                                {
+                                    context->clockSkewMin = context->clockSkewWindow[i];
+                                }
+                            }
+
+                            /* Average min clock skew */
+                            if (!context->clockSkewInit)
+                            {
+                                context->clockSkewOffset = context->clockSkewMin;
+                                context->clockSkewMinAvg = context->clockSkewMin - context->clockSkewOffset;
+                                context->clockSkewInit = 1;
+                            }
+                            else
+                            {
+                                /* Sliding average, alpha = 1 / ARSTREAM2_RTP_CLOCKSKEW_AVG_ALPHA */
+                                context->clockSkewMinAvg = context->clockSkewMinAvg
+                                                           + (context->clockSkewMin - context->clockSkewOffset - context->clockSkewMinAvg + ARSTREAM2_RTP_CLOCKSKEW_AVG_ALPHA / 2) / ARSTREAM2_RTP_CLOCKSKEW_AVG_ALPHA;
+                            }
+                            context->clockSkew = (context->clockSkewMinAvg * 1000000 + context->rtpClockRate / 2) / context->rtpClockRate;
+
+                            /* Reset the window */
+                            context->clockSkewWindowSize = 0;
+                        }
+                    }
+
                     /* interarrival jitter computation */
-                    int64_t d;
-                    d = ((int64_t)context->previousRecvRtpTimestamp - (int64_t)context->previousExtRtpTimestamp)
-                        - ((int64_t)recvRtpTimestamp - (int64_t)item->packet.extRtpTimestamp);
+                    int64_t d = ((int64_t)context->previousRecvRtpTimestamp - (int64_t)context->previousExtRtpTimestamp)
+                                - ((int64_t)recvRtpTimestamp - (int64_t)item->packet.extRtpTimestamp);
                     if (d < 0) d = -d;
                     rtcpContext->interarrivalJitter = (uint32_t)((int64_t)rtcpContext->interarrivalJitter
                                                       + (d - (int64_t)rtcpContext->interarrivalJitter) / 16);
+
                     context->previousRecvRtpTimestamp = recvRtpTimestamp;
                     context->previousExtRtpTimestamp = item->packet.extRtpTimestamp;
                     enqueueCount++;
                 }
+                item->packet.ntpTimestampRaw = (item->packet.extRtpTimestamp * 1000000 + context->rtpClockRate / 2) / context->rtpClockRate;
+                item->packet.ntpTimestampRawUnskewed = ((int64_t)item->packet.ntpTimestampRaw + context->clockSkew >= 0) ? item->packet.ntpTimestampRaw + context->clockSkew : 0;
+                item->packet.ntpTimestamp = ARSTREAM2_RTCP_Receiver_GetNtpTimestampFromRtpTimestamp(rtcpContext, item->packet.rtpTimestamp);
+                item->packet.ntpTimestampUnskewed = ((int64_t)item->packet.ntpTimestamp + context->clockSkew >= 0) ? item->packet.ntpTimestamp + context->clockSkew : 0;
+                item->packet.ntpTimestampLocal = ((rtcpContext->clockDeltaCtx.clockDeltaAvg != 0) && (item->packet.ntpTimestamp != 0)) ? (item->packet.ntpTimestamp - rtcpContext->clockDeltaCtx.clockDeltaAvg) : 0;
+                item->packet.timeoutTimestamp = curTime + context->nominalDelay; //TODO: compute the expected arrival time
             }
             else
             {
