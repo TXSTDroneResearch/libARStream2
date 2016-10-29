@@ -51,10 +51,6 @@
 #define ARSTREAM2_RTP_RECEIVER_STREAM_DATAREAD_TIMEOUT_MS (500)
 #define ARSTREAM2_RTP_RECEIVER_CONTROL_DATAREAD_TIMEOUT_MS (500)
 
-#define ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT (500)
-#define ARSTREAM2_RTP_RECEIVER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR (4)
-#define ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT (ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT * ARSTREAM2_RTP_RECEIVER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR)
-
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_COUNT (4)
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_MAX_NALU_BUFFER_COUNT (1024) //TODO: tune this value
 #define ARSTREAM2_RTP_RECEIVER_RTP_RESENDER_NALU_BUFFER_MALLOC_CHUNK_SIZE (4096)
@@ -97,6 +93,8 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< Optional user-provided packet FIFO (packet FIFO queue must also be provided) */
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< Optional user-provided packet FIFO queue (packet FIFO must also be provided) */
     ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
@@ -224,6 +222,7 @@ struct ARSTREAM2_RtpReceiver_t {
     struct ARSTREAM2_RtpReceiver_NetInfos_t net;
     struct ARSTREAM2_RtpReceiver_MuxInfos_t mux;
     struct ARSTREAM2_RtpReceiver_Ops_t ops;
+    uint32_t nextRrDelay;
 
     /* Process context */
     ARSTREAM2_RTP_ReceiverContext_t rtpReceiverContext;
@@ -244,8 +243,8 @@ struct ARSTREAM2_RtpReceiver_t {
     int pipe[2];
 
     /* Packet FIFO */
-    ARSTREAM2_RTP_PacketFifo_t packetFifo;
-    ARSTREAM2_RTP_PacketFifoQueue_t packetFifoQueue;
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;
     struct mmsghdr *msgVec;
     unsigned int msgVecCount;
 
@@ -324,6 +323,18 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
  * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
  */
 void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, int *useMux, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *shouldStop);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtcp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *shouldStop);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessEnd(ARSTREAM2_RtpReceiver_t *receiver);
 
 
 /**

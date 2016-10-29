@@ -22,6 +22,10 @@
 
 #define ARSTREAM2_STREAM_RECEIVER_TAG "ARSTREAM2_StreamReceiver"
 
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT (500)
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR (4)
+#define ARSTREAM2_STREAM_RECEIVER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT (ARSTREAM2_STREAM_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT * ARSTREAM2_STREAM_RECEIVER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR)
+
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_COUNT (200)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_ITEM_NALU_COUNT (128)
 #define ARSTREAM2_STREAM_RECEIVER_DEFAULT_AU_FIFO_BUFFER_COUNT (60)
@@ -40,10 +44,13 @@
 
 typedef struct ARSTREAM2_StreamReceiver_s
 {
+    ARSTREAM2_RTP_PacketFifo_t packetFifo;
+    ARSTREAM2_RTP_PacketFifoQueue_t packetFifoQueue;
     ARSTREAM2_H264_AuFifo_t auFifo;
     ARSTREAM2_H264Filter_Handle filter;
     ARSTREAM2_RtpReceiver_t *receiver;
 
+    int maxPacketSize;
     int sync;
     uint8_t *pSps;
     int spsSize;
@@ -125,7 +132,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
     ARSTREAM2_StreamReceiver_t *streamReceiver = NULL;
-    int auFifoCreated = 0;
+    int auFifoCreated = 0, packetFifoWasCreated = 0;
     int appOutputThreadMutexInit = 0, appOutputThreadCondInit = 0;
     int appOutputCallbackMutexInit = 0, appOutputCallbackCondInit = 0;
     int recorderThreadMutexInit = 0, recorderThreadCondInit = 0;
@@ -163,6 +170,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     if (ret == ARSTREAM2_OK)
     {
         memset(streamReceiver, 0, sizeof(*streamReceiver));
+        streamReceiver->maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
         streamReceiver->appOutput.filterOutSpsPps = (config->filterOutSpsPps > 0) ? 1 : 0;
         streamReceiver->appOutput.filterOutSei = (config->filterOutSei > 0) ? 1 : 0;
         streamReceiver->appOutput.replaceStartCodesWithNaluSize = (config->replaceStartCodesWithNaluSize > 0) ? 1 : 0;
@@ -289,6 +297,28 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         }
     }
 
+    /* Setup the packet FIFO */
+    if (ret == ARSTREAM2_OK)
+    {
+        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&streamReceiver->packetFifo, ARSTREAM2_STREAM_RECEIVER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT,
+                                                         ARSTREAM2_STREAM_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT,
+                                                         streamReceiver->maxPacketSize);
+        if (packetFifoRet != 0)
+        {
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&streamReceiver->packetFifo, &streamReceiver->packetFifoQueue);
+            if (packetFifoRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
+                ret = ARSTREAM2_ERROR_ALLOC;
+            }
+            packetFifoWasCreated = 1;
+        }
+    }
+
     /* Setup the access unit FIFO */
     if (ret == ARSTREAM2_OK)
     {
@@ -324,6 +354,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         receiverConfig.canonicalName = config->canonicalName;
         receiverConfig.friendlyName = config->friendlyName;
         receiverConfig.applicationName = config->applicationName;
+        receiverConfig.packetFifo = &(streamReceiver->packetFifo);
+        receiverConfig.packetFifoQueue = &(streamReceiver->packetFifoQueue);
         receiverConfig.auFifo = &(streamReceiver->auFifo);
         receiverConfig.auCallback = ARSTREAM2_StreamReceiver_RtpReceiverAuCallback;
         receiverConfig.auCallbackUserPtr = streamReceiver;
@@ -379,6 +411,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         {
             if (streamReceiver->receiver) ARSTREAM2_RtpReceiver_Delete(&(streamReceiver->receiver));
             if (streamReceiver->filter) ARSTREAM2_H264Filter_Free(&(streamReceiver->filter));
+            if (packetFifoWasCreated) ARSTREAM2_RTP_PacketFifoFree(&(streamReceiver->packetFifo));
             if (auFifoCreated) ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
             if (appOutputThreadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
             if (appOutputThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
@@ -438,6 +471,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete H264Filter: %s", ARSTREAM2_Error_ToString(ret));
     }
 
+    ARSTREAM2_RTP_PacketFifoFree(&(streamReceiver->packetFifo));
     ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
