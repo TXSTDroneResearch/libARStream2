@@ -85,7 +85,10 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *videoStatsCallbackUserPtr;                /**< Video stats callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;     /**< Disconnection callback function (optional, can be NULL) */
     void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
-    int naluFifoSize;                               /**< NAL unit FIFO size, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
+    int useThread;                                  /**< Use the sender thread */
+    int naluFifoSize;                               /**< NAL unit FIFO size, negative value means not using NALU FIFO, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< Optional user-provided packet FIFO (packet FIFO queue must also be provided) */
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< Optional user-provided packet FIFO queue (packet FIFO must also be provided) */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
@@ -209,6 +212,18 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
  * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
  */
 void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet);
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessEnd(ARSTREAM2_RtpSender_t *sender);
 
 
 /**

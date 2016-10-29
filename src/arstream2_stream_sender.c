@@ -130,6 +130,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.videoStatsCallbackUserPtr = streamSender;
         senderConfig.disconnectionCallback = config->disconnectionCallback;
         senderConfig.disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
+        senderConfig.useThread = 1;
         senderConfig.naluFifoSize = config->naluFifoSize;
         senderConfig.maxPacketSize = config->maxPacketSize;
         senderConfig.targetPacketSize = config->targetPacketSize;
