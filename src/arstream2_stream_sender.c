@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include <libARSAL/ARSAL_Print.h>
 
@@ -22,6 +23,23 @@
 
 #define ARSTREAM2_STREAM_SENDER_UNTIMED_METADATA_DEFAULT_SEND_INTERVAL (5000000)
 
+/**
+ * Default NAL unit FIFO size
+ */
+#define ARSTREAM2_STREAM_SENDER_DEFAULT_NALU_FIFO_SIZE         (1024)
+
+/**
+ * Default minimum packet FIFO size
+ */
+#define ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT (100)
+#define ARSTREAM2_STREAM_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR (1)
+#define ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT (ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT * ARSTREAM2_STREAM_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR)
+
+/**
+ * Default stream socket send buffer size (100ms at 10 Mbit/s)
+ */
+#define ARSTREAM2_STREAM_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE (10000000 * 100 / 1000 / 8)
+
 
 typedef struct ARSTREAM2_StreamSender_s
 {
@@ -31,6 +49,24 @@ typedef struct ARSTREAM2_StreamSender_s
     ARSTREAM2_StreamSender_VideoStatsCallback_t videoStatsCallback;
     void *videoStatsCallbackUserPtr;
     ARSTREAM2_StreamStats_VideoStats_t videoStatsForCb;
+    int streamSocketSendBufferSize;
+    int maxBitrate;
+    uint32_t maxPacketSize;
+    uint32_t targetPacketSize;
+    uint32_t maxLatencyUs;
+    uint32_t maxNetworkLatencyUs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
+
+    /* NALU and packet FIFO */
+    int naluFifoSize;
+    ARSTREAM2_H264_NaluFifo_t naluFifo;
+    ARSTREAM2_RTP_PacketFifo_t packetFifo;
+    ARSTREAM2_RTP_PacketFifoQueue_t packetFifoQueue;
+
+    /* Thread status */
+    ARSAL_Mutex_t threadMutex;
+    int threadStarted;
+    int threadShouldStop;
+    int signalPipe[2];
 
     /* Debug files */
     char *friendlyName;
@@ -52,6 +88,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
                                              const ARSTREAM2_StreamSender_Config_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int threadMutexWasInit = 0, packetFifoWasCreated = 0, naluFifoWasCreated = 0;
     ARSTREAM2_StreamSender_t *streamSender = NULL;
 
     if (!streamSenderHandle)
@@ -75,10 +112,43 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     if (ret == ARSTREAM2_OK)
     {
         memset(streamSender, 0, sizeof(*streamSender));
+        streamSender->signalPipe[0] = -1;
+        streamSender->signalPipe[1] = -1;
         streamSender->rtpStatsCallback = config->rtpStatsCallback;
         streamSender->rtpStatsCallbackUserPtr = config->rtpStatsCallbackUserPtr;
         streamSender->videoStatsCallback = config->videoStatsCallback;
         streamSender->videoStatsCallbackUserPtr = config->videoStatsCallbackUserPtr;
+        streamSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_STREAM_SENDER_DEFAULT_NALU_FIFO_SIZE;
+        streamSender->maxPacketSize = (config->maxPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
+        streamSender->targetPacketSize = (config->targetPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : streamSender->maxPacketSize;
+        streamSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
+
+        if (config->streamSocketBufferSize > 0)
+        {
+            streamSender->streamSocketSendBufferSize = config->streamSocketBufferSize;
+        }
+        else
+        {
+            int totalBufSize = 0;
+            if (config->maxNetworkLatencyMs[0] > 0)
+            {
+                totalBufSize = streamSender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
+            }
+            else if (config->maxLatencyMs > 0)
+            {
+                totalBufSize = streamSender->maxBitrate * config->maxLatencyMs / 1000 / 8;
+            }
+            int minStreamSocketSendBufferSize = (streamSender->maxBitrate > 0) ? streamSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_STREAM_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
+            streamSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
+        }
+
+        streamSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0) : 0;
+        int i;
+        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+        {
+            streamSender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0) : 0;
+        }
+
         if ((config->debugPath) && (strlen(config->debugPath)))
         {
             streamSender->debugPath = strdup(config->debugPath);
@@ -104,10 +174,56 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
                                                streamSender->friendlyName, streamSender->dateAndTime);
     }
 
+    /* Setup the NAL unit FIFO */
+    if (ret == ARSTREAM2_OK)
+    {
+        int naluFifoRet = ARSTREAM2_H264_NaluFifoInit(&streamSender->naluFifo, streamSender->naluFifoSize);
+        if (naluFifoRet != 0)
+        {
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            naluFifoWasCreated = 1;
+        }
+    }
+
+    /* Setup the packet FIFO */
+    if (ret == ARSTREAM2_OK)
+    {
+        int packetFifoBufferCount = ((streamSender->maxBitrate > 0) && (streamSender->maxNetworkLatencyUs[0] > 0))
+                ? (int)((uint64_t)streamSender->maxBitrate * streamSender->maxNetworkLatencyUs[0] * 5 / streamSender->targetPacketSize / 8 / 1000000)
+                : streamSender->naluFifoSize;
+        if (packetFifoBufferCount < ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT)
+        {
+            packetFifoBufferCount = ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
+        }
+        int packetFifoItemCount = packetFifoBufferCount * ARSTREAM2_STREAM_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR;
+        if (packetFifoItemCount < ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT)
+        {
+            packetFifoItemCount = ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT;
+        }
+        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&streamSender->packetFifo, packetFifoItemCount, packetFifoBufferCount, streamSender->maxPacketSize);
+        if (packetFifoRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&streamSender->packetFifo, &streamSender->packetFifoQueue);
+            if (packetFifoRet != 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
+                ret = ARSTREAM2_ERROR_ALLOC;
+            }
+            packetFifoWasCreated = 1;
+        }
+    }
+
     if (ret == ARSTREAM2_OK)
     {
         ARSTREAM2_RtpSender_Config_t senderConfig;
-        int i;
         memset(&senderConfig, 0, sizeof(senderConfig));
         senderConfig.canonicalName = config->canonicalName;
         senderConfig.friendlyName = config->friendlyName;
@@ -130,25 +246,42 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         senderConfig.videoStatsCallbackUserPtr = streamSender;
         senderConfig.disconnectionCallback = config->disconnectionCallback;
         senderConfig.disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
-        senderConfig.useThread = 1;
-        senderConfig.naluFifoSize = config->naluFifoSize;
-        senderConfig.maxPacketSize = config->maxPacketSize;
-        senderConfig.targetPacketSize = config->targetPacketSize;
-        senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
-        senderConfig.maxBitrate = config->maxBitrate;
-        senderConfig.maxLatencyMs = config->maxLatencyMs;
+        senderConfig.naluFifo = &streamSender->naluFifo;
+        senderConfig.packetFifo = &streamSender->packetFifo;
+        senderConfig.packetFifoQueue = &streamSender->packetFifoQueue;
+        senderConfig.maxPacketSize = streamSender->maxPacketSize;
+        senderConfig.targetPacketSize = streamSender->targetPacketSize;
+        senderConfig.streamSocketSendBufferSize = streamSender->streamSocketSendBufferSize;
+        senderConfig.maxBitrate = streamSender->maxBitrate;
+        senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
         senderConfig.debugPath = streamSender->debugPath;
         senderConfig.dateAndTime = streamSender->dateAndTime;
-        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-        {
-            senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs[i];
-        }
-        senderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
 
         streamSender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &ret);
         if (ret != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Error while creating sender : %s", ARSTREAM2_Error_ToString(ret));
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        if (pipe(streamSender->signalPipe) != 0)
+        {
+            ret = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        int mutexInitRet = ARSAL_Mutex_Init(&(streamSender->threadMutex));
+        if (mutexInitRet != 0)
+        {
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            threadMutexWasInit = 1;
         }
     }
 
@@ -160,7 +293,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     {
         if (streamSender)
         {
+            if (streamSender->signalPipe[0] != -1)
+            {
+                close(streamSender->signalPipe[0]);
+                streamSender->signalPipe[0] = -1;
+            }
+            if (streamSender->signalPipe[1] != -1)
+            {
+                close(streamSender->signalPipe[1]);
+                streamSender->signalPipe[1] = -1;
+            }
+            if (threadMutexWasInit == 1) ARSAL_Mutex_Destroy(&(streamSender->threadMutex));
             if (streamSender->sender) ARSTREAM2_RtpSender_Delete(&(streamSender->sender));
+            if (naluFifoWasCreated == 1) ARSTREAM2_H264_NaluFifoFree(&(streamSender->naluFifo));
+            if (packetFifoWasCreated == 1) ARSTREAM2_RTP_PacketFifoFree(&(streamSender->packetFifo));
             ARSTREAM2_StreamStats_RtpStatsFileClose(&streamSender->rtpStatsCtx);
             free(streamSender->debugPath);
             free(streamSender->friendlyName);
@@ -185,7 +331,16 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Stop(ARSTREAM2_StreamSender_Handle strea
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSTREAM2_RtpSender_Stop(streamSender->sender);
+    ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+    streamSender->threadShouldStop = 1;
+    ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
+
+    /* signal the thread to avoid a deadlock */
+    if (streamSender->signalPipe[1] != -1)
+    {
+        char * buff = "x";
+        write(streamSender->signalPipe[1], buff, 1);
+    }
 
     return ret;
 }
@@ -204,22 +359,51 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Free(ARSTREAM2_StreamSender_Handle *stre
 
     streamSender = (ARSTREAM2_StreamSender_t*)*streamSenderHandle;
 
-    ret = ARSTREAM2_RtpSender_Delete(&streamSender->sender);
-    if (ret != ARSTREAM2_OK)
+    int canDelete = 0;
+    ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+    if (streamSender->threadStarted == 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Unable to delete sender: %s", ARSTREAM2_Error_ToString(ret));
+        canDelete = 1;
     }
+    ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
 
-    ARSTREAM2_StreamStats_VideoStatsFileClose(&streamSender->videoStatsCtx);
-    ARSTREAM2_StreamStats_RtpStatsFileClose(&streamSender->rtpStatsCtx);
-    free(streamSender->debugPath);
-    free(streamSender->friendlyName);
-    free(streamSender->dateAndTime);
-    free(streamSender->videoStatsForCb.erroredSecondCountByZone);
-    free(streamSender->videoStatsForCb.macroblockStatus);
+    if (canDelete == 1)
+    {
+        ret = ARSTREAM2_RtpSender_Delete(&streamSender->sender);
+        if (ret != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Unable to delete sender: %s", ARSTREAM2_Error_ToString(ret));
+        }
 
-    free(streamSender);
-    *streamSenderHandle = NULL;
+        if (streamSender->signalPipe[0] != -1)
+        {
+            close(streamSender->signalPipe[0]);
+            streamSender->signalPipe[0] = -1;
+        }
+        if (streamSender->signalPipe[1] != -1)
+        {
+            close(streamSender->signalPipe[1]);
+            streamSender->signalPipe[1] = -1;
+        }
+        ARSAL_Mutex_Destroy(&(streamSender->threadMutex));
+        ARSTREAM2_H264_NaluFifoFree(&(streamSender->naluFifo));
+        ARSTREAM2_RTP_PacketFifoFree(&(streamSender->packetFifo));
+        ARSTREAM2_StreamStats_VideoStatsFileClose(&streamSender->videoStatsCtx);
+        ARSTREAM2_StreamStats_RtpStatsFileClose(&streamSender->rtpStatsCtx);
+        free(streamSender->debugPath);
+        free(streamSender->friendlyName);
+        free(streamSender->dateAndTime);
+        free(streamSender->videoStatsForCb.erroredSecondCountByZone);
+        free(streamSender->videoStatsForCb.macroblockStatus);
+
+        free(streamSender);
+        *streamSenderHandle = NULL;
+    }
+    else
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Call ARSTREAM2_StreamSender_Stop() before calling this function");
+        ret = ARSTREAM2_ERROR_BUSY;
+    }
 
     return ret;
 }
@@ -229,20 +413,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SendNewNalu(ARSTREAM2_StreamSender_Handl
                                                     const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu,
                                                     uint64_t inputTime)
 {
-    ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
-
-    if (!streamSenderHandle)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid handle");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-    if (!nalu)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid pointer");
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    return ARSTREAM2_RtpSender_SendNewNalu(streamSender->sender, nalu, inputTime);
+    return ARSTREAM2_StreamSender_SendNNewNalu(streamSenderHandle, nalu, 1, inputTime);
 }
 
 
@@ -251,6 +422,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SendNNewNalu(ARSTREAM2_StreamSender_Hand
                                                      int naluCount, uint64_t inputTime)
 {
     ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    int k, res;
 
     if (!streamSenderHandle)
     {
@@ -263,7 +436,85 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SendNNewNalu(ARSTREAM2_StreamSender_Hand
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    return ARSTREAM2_RtpSender_SendNNewNalu(streamSender->sender, nalu, naluCount, inputTime);
+    if (naluCount <= 0)
+    {
+        retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    if (retVal == ARSTREAM2_OK)
+    {
+        for (k = 0; k < naluCount; k++)
+        {
+            if ((nalu[k].naluBuffer == NULL) ||
+                (nalu[k].naluSize == 0) ||
+                (nalu[k].auTimestamp == 0))
+            {
+                retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+            }
+        }
+    }
+
+    if (retVal == ARSTREAM2_OK)
+    {
+        ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+        if (!streamSender->threadStarted)
+        {
+            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
+        }
+        ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
+    }
+
+    if (retVal == ARSTREAM2_OK)
+    {
+        for (k = 0; k < naluCount; k++)
+        {
+            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&streamSender->naluFifo);
+            if (item)
+            {
+                ARSTREAM2_H264_NaluReset(&item->nalu);
+                item->nalu.inputTimestamp = inputTime;
+                item->nalu.ntpTimestamp = nalu[k].auTimestamp;
+                item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
+                item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
+                item->nalu.importance = (nalu[k].importance < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS) ? nalu[k].importance : 0;
+                item->nalu.priority = (nalu[k].priority < ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS) ? nalu[k].priority : 0;
+                uint64_t timeoutTimestamp1 = (streamSender->maxLatencyUs > 0) ? nalu[k].auTimestamp + streamSender->maxLatencyUs : 0;
+                uint64_t timeoutTimestamp2 = ((streamSender->maxNetworkLatencyUs[item->nalu.importance] > 0) && (inputTime > 0)) ? inputTime + streamSender->maxNetworkLatencyUs[item->nalu.importance] : 0;
+                item->nalu.timeoutTimestamp = timeoutTimestamp1;
+                if ((timeoutTimestamp1 == 0) || ((timeoutTimestamp2 > 0) && (timeoutTimestamp2 < timeoutTimestamp1)))
+                {
+                    item->nalu.timeoutTimestamp = timeoutTimestamp2;
+                }
+                item->nalu.metadata = nalu[k].auMetadata;
+                item->nalu.metadataSize = nalu[k].auMetadataSize;
+                item->nalu.nalu = nalu[k].naluBuffer;
+                item->nalu.naluSize = nalu[k].naluSize;
+                item->nalu.auUserPtr = nalu[k].auUserPtr;
+                item->nalu.naluUserPtr = nalu[k].naluUserPtr;
+
+                res = ARSTREAM2_H264_NaluFifoEnqueueItem(&streamSender->naluFifo, item);
+                if (res != 0)
+                {
+                    res = ARSTREAM2_H264_NaluFifoPushFreeItem(&streamSender->naluFifo, item);
+                    retVal = ARSTREAM2_ERROR_INVALID_STATE;
+                    break;
+                }
+            }
+            else
+            {
+                retVal = ARSTREAM2_ERROR_QUEUE_FULL;
+                break;
+            }
+        }
+
+        if (streamSender->signalPipe[1] != -1)
+        {
+            char * buff = "x";
+            write(streamSender->signalPipe[1], buff, 1);
+        }
+    }
+
+    return retVal;
 }
 
 
@@ -284,6 +535,14 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_FlushNaluQueue(ARSTREAM2_StreamSender_Ha
 void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
 {
     ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
+    int shouldStop, selectRet;
+    fd_set readSet;
+    fd_set writeSet;
+    fd_set exceptSet;
+    int maxFd = 0;
+    struct timeval tv;
+    uint32_t nextTimeout = 0;
+    eARSTREAM2_ERROR err;
 
     if (!streamSenderHandle)
     {
@@ -291,7 +550,101 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
         return (void*)NULL;
     }
 
-    return ARSTREAM2_RtpSender_RunThread(streamSender->sender);
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_STREAM_SENDER_TAG, "Sender thread running");
+    ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+    streamSender->threadStarted = 1;
+    shouldStop = streamSender->threadShouldStop;
+    ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
+
+    FD_ZERO(&readSet);
+    FD_ZERO(&writeSet);
+    FD_ZERO(&exceptSet);
+
+    err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+    if (err != ARSTREAM2_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
+        return (void *)0;
+    }
+
+    FD_SET(streamSender->signalPipe[0], &readSet);
+    FD_SET(streamSender->signalPipe[0], &exceptSet);
+    if (streamSender->signalPipe[0] > maxFd) maxFd = streamSender->signalPipe[0];
+    maxFd++;
+    tv.tv_sec = 0;
+    tv.tv_usec = nextTimeout;
+
+    while (shouldStop == 0)
+    {
+        selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv);
+
+        if (selectRet < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Select error (%d): %s", errno, strerror(errno));
+        }
+
+        err = ARSTREAM2_RtpSender_ProcessRtcp(streamSender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_ProcessRtcp() failed (%d)", err);
+        }
+        err = ARSTREAM2_RtpSender_ProcessRtp(streamSender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_ProcessRtp() failed (%d)", err);
+        }
+
+        if ((selectRet >= 0) && (FD_ISSET(streamSender->signalPipe[0], &readSet)))
+        {
+            /* Dump bytes (so it won't be ready next time) */
+            char dump[10];
+            int readRet = read(streamSender->signalPipe[0], &dump, 10);
+            if (readRet < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));
+            }
+        }
+
+        ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+        shouldStop = streamSender->threadShouldStop;
+        ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
+
+        if (!shouldStop)
+        {
+            /* Prepare the next select */
+            FD_ZERO(&readSet);
+            FD_ZERO(&writeSet);
+            FD_ZERO(&exceptSet);
+
+            err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+            if (err != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
+                break;
+            }
+
+            FD_SET(streamSender->signalPipe[0], &readSet);
+            FD_SET(streamSender->signalPipe[0], &exceptSet);
+            if (streamSender->signalPipe[0] > maxFd) maxFd = streamSender->signalPipe[0];
+            maxFd++;
+            tv.tv_sec = 0;
+            tv.tv_usec = nextTimeout;
+        }
+    }
+
+    ARSAL_Mutex_Lock(&(streamSender->threadMutex));
+    streamSender->threadStarted = 0;
+    ARSAL_Mutex_Unlock(&(streamSender->threadMutex));
+
+    err = ARSTREAM2_RtpSender_ProcessEnd(streamSender->sender, 0);
+    if (err != ARSTREAM2_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
+    }
+
+    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_STREAM_SENDER_TAG, "Sender thread ended");
+
+    return (void*)0;
 }
 
 
@@ -313,22 +666,27 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetDynamicConfig(ARSTREAM2_StreamSender_
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSTREAM2_RtpSender_DynamicConfig_t senderConfig;
-    memset(&senderConfig, 0, sizeof(senderConfig));
-    ret = ARSTREAM2_RtpSender_GetDynamicConfig(streamSender->sender, &senderConfig);
-    if (ret != ARSTREAM2_OK)
+    config->targetPacketSize = streamSender->targetPacketSize;
+    config->streamSocketBufferSize = streamSender->streamSocketSendBufferSize;
+    config->maxBitrate = streamSender->maxBitrate;
+    if (streamSender->maxLatencyUs > 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Invalid config");
-        return ret;
+        config->maxLatencyMs = (streamSender->maxLatencyUs + ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0)) / 1000;
     }
-
-    config->targetPacketSize = senderConfig.targetPacketSize;
-    config->streamSocketBufferSize = senderConfig.streamSocketBufferSize;
-    config->maxBitrate = senderConfig.maxBitrate;
-    config->maxLatencyMs = senderConfig.maxLatencyMs;
+    else
+    {
+        config->maxLatencyMs = 0;
+    }
     for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
     {
-        config->maxNetworkLatencyMs[i] = senderConfig.maxNetworkLatencyMs[i];
+        if (streamSender->maxNetworkLatencyUs[i] > 0)
+        {
+            config->maxNetworkLatencyMs[i] = (streamSender->maxNetworkLatencyUs[i] + ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0)) / 1000;
+        }
+        else
+        {
+            config->maxNetworkLatencyMs[i] = 0;
+        }
     }
 
     return ret;
@@ -352,16 +710,37 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSTREAM2_RtpSender_DynamicConfig_t senderConfig;
-    memset(&senderConfig, 0, sizeof(senderConfig));
-    senderConfig.targetPacketSize = config->targetPacketSize;
-    senderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
-    senderConfig.maxBitrate = config->maxBitrate;
-    senderConfig.maxLatencyMs = config->maxLatencyMs;
+    streamSender->targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : streamSender->maxPacketSize;
+    streamSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
+    if (config->streamSocketBufferSize > 0)
+    {
+        streamSender->streamSocketSendBufferSize = config->streamSocketBufferSize;
+    }
+    else
+    {
+        int totalBufSize = 0;
+        if (config->maxNetworkLatencyMs[0] > 0)
+        {
+            totalBufSize = streamSender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
+        }
+        else if (config->maxLatencyMs > 0)
+        {
+            totalBufSize = streamSender->maxBitrate * config->maxLatencyMs / 1000 / 8;
+        }
+        int minStreamSocketSendBufferSize = (streamSender->maxBitrate > 0) ? streamSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_STREAM_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
+        streamSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
+    }
+    streamSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0) : 0;
     for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
     {
-        senderConfig.maxNetworkLatencyMs[i] = config->maxNetworkLatencyMs[i];
+        streamSender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((streamSender->maxBitrate > 0) ? (int)((uint64_t)streamSender->streamSocketSendBufferSize * 8 * 1000000 / streamSender->maxBitrate) : 0) : 0;
     }
+
+    ARSTREAM2_RtpSender_DynamicConfig_t senderConfig;
+    memset(&senderConfig, 0, sizeof(senderConfig));
+    senderConfig.targetPacketSize = streamSender->targetPacketSize;
+    senderConfig.streamSocketSendBufferSize = streamSender->streamSocketSendBufferSize;
+    senderConfig.maxBitrate = streamSender->maxBitrate;
 
     return ARSTREAM2_RtpSender_SetDynamicConfig(streamSender->sender, &senderConfig);
 }

@@ -33,12 +33,6 @@ extern "C" {
 
 
 /**
- * @brief Default H.264 NAL unit FIFO size
- */
-#define ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE         (1024)
-
-
-/**
  * @brief Callback function for RTP stats
  * This callback function is called when an RTCP receiver report has been received.
  *
@@ -74,7 +68,7 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     int clientStreamPort;                           /**< Client stream port */
     int clientControlPort;                          /**< Client control port */
     eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
-    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
+    int streamSocketSendBufferSize;                 /**< Send buffer size for the stream socket (optional, can be 0) */
     ARSTREAM2_StreamSender_AuCallback_t auCallback;       /**< Access unit callback function (optional, can be NULL) */
     void *auCallbackUserPtr;                        /**< Access unit callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_NaluCallback_t naluCallback;   /**< NAL unit callback function (optional, can be NULL) */
@@ -85,15 +79,12 @@ typedef struct ARSTREAM2_RtpSender_Config_t
     void *videoStatsCallbackUserPtr;                /**< Video stats callback function user pointer (optional, can be NULL) */
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;     /**< Disconnection callback function (optional, can be NULL) */
     void *disconnectionCallbackUserPtr;             /**< Disconnection callback function user pointer (optional, can be NULL) */
-    int useThread;                                  /**< Use the sender thread */
-    int naluFifoSize;                               /**< NAL unit FIFO size, negative value means not using NALU FIFO, @see ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE */
-    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< Optional user-provided packet FIFO (packet FIFO queue must also be provided) */
-    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< Optional user-provided packet FIFO queue (packet FIFO must also be provided) */
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;            /**< Optional user-provided NALU FIFO */
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< User-provided packet FIFO */
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< User-provided packet FIFO queue */
     int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int targetPacketSize;                           /**< Target network packet size in bytes */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
-    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
     int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
     const char *dateAndTime;
     const char *debugPath;
@@ -107,10 +98,8 @@ typedef struct ARSTREAM2_RtpSender_Config_t
 typedef struct ARSTREAM2_RtpSender_DynamicConfig_t
 {
     int targetPacketSize;                           /**< Target network packet size in bytes */
-    int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
+    int streamSocketSendBufferSize;                 /**< Send buffer size for the stream socket (optional, can be 0) */
     int maxBitrate;                                 /**< Maximum streaming bitrate in bit/s (optional, can be 0) */
-    int maxLatencyMs;                               /**< Maximum acceptable total latency in milliseconds (optional, can be 0) */
-    int maxNetworkLatencyMs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];  /**< Maximum acceptable network latency in milliseconds for each NALU importance level */
 
 } ARSTREAM2_RtpSender_DynamicConfig_t;
 
@@ -137,60 +126,16 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
 
 
 /**
- * @brief Stops a running RtpSender
- * @warning Once stopped, a sender cannot be restarted
- *
- * @param[in] sender The sender instance
- *
- * @note Calling this function multiple times has no effect
- */
-void ARSTREAM2_RtpSender_Stop(ARSTREAM2_RtpSender_t *sender);
-
-
-/**
  * @brief Deletes an RtpSender
- * @warning This function should NOT be called on a running sender
  *
  * @param sender Pointer to the ARSTREAM2_RtpSender_t* to delete
  *
  * @return ARSTREAM2_OK if the sender was deleted
- * @return ARSTREAM2_ERROR_BUSY if the sender is still busy and can not be stopped now (probably because ARSTREAM2_RtpSender_Stop() has not been called yet)
  * @return ARSTREAM2_ERROR_BAD_PARAMETERS if sender does not point to a valid ARSTREAM2_RtpSender_t
  *
  * @note The function uses a double pointer, so it can set *sender to NULL after freeing it
  */
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender);
-
-
-/**
- * @brief Sends a new NAL unit
- * @warning The NAL unit buffer must remain available for the sender until the NAL unit or access unit callback functions are called.
- *
- * @param[in] sender The sender instance
- * @param[in] nalu Pointer to a NAL unit descriptor
- * @param[in] inputTime Optional input timestamp in microseconds
- *
- * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if naluSize or auTimestamp is zero
- * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
- */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, uint64_t inputTime);
-
-
-/**
- * @brief Sends multiple new NAL units
- * @warning The NAL unit buffers must remain available for the sender until the NAL unit or access unit callback functions are called.
- *
- * @param[in] sender The sender instance
- * @param[in] nalu Pointer to a NAL unit descriptor array
- * @param[in] naluCount Number of NAL units in the array
- * @param[in] inputTime Optional input timestamp in microseconds
- *
- * @return ARSTREAM2_OK if no error happened
- * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the sender, nalu or naluBuffer pointers are invalid, or if a naluSize or auTimestamp is zero
- * @return ARSTREAM2_ERROR_QUEUE_FULL if the NAL unit FIFO is full
- */
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime);
 
 
 /**
@@ -204,16 +149,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender,
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sender);
 
 
-/**
- * @brief Runs the main loop of the RtpSender
- * @warning This function never returns until ARSTREAM2_RtpSender_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the Sender by calling ARSTREAM2_RtpSender_Stop() before joining the thread calling this function.
- *
- * @param[in] ARSTREAM2_RtpSender_t_Param A valid (ARSTREAM2_RtpSender_t *) casted as a (void *)
- */
-void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param);
-
-
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
 
 
@@ -223,7 +158,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet);
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessEnd(ARSTREAM2_RtpSender_t *sender);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessEnd(ARSTREAM2_RtpSender_t *sender, int queueOnly);
 
 
 /**
