@@ -89,9 +89,9 @@ typedef struct ARSTREAM2_RtpReceiver_Config_t
     const char *canonicalName;                      /**< RTP participant canonical name (CNAME SDES item) */
     const char *friendlyName;                       /**< RTP participant friendly name (NAME SDES item) (optional, can be NULL) */
     const char *applicationName;                    /**< RTP participant application name (TOOL SDES item) (optional, can be NULL) */
-    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< Optional user-provided packet FIFO (packet FIFO queue must also be provided) */
-    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< Optional user-provided packet FIFO queue (packet FIFO must also be provided) */
-    ARSTREAM2_H264_AuFifo_t *auFifo;
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;         /**< User-provided packet FIFO */
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;  /**< User-provided packet FIFO queue */
+    ARSTREAM2_H264_AuFifo_t *auFifo;                /**< User-provided access unit FIFO */
     ARSTREAM2_H264_ReceiverAuCallback_t auCallback;
     void *auCallbackUserPtr;
     int maxPacketSize;                              /**< Maximum network packet size in bytes (should be provided by the server, if 0 the maximum UDP packet size is used) */
@@ -172,7 +172,6 @@ struct ARSTREAM2_RtpReceiver_t {
     struct ARSTREAM2_RtpReceiver_NetInfos_t net;
     struct ARSTREAM2_RtpReceiver_MuxInfos_t mux;
     struct ARSTREAM2_RtpReceiver_Ops_t ops;
-    uint32_t nextRrDelay;
 
     /* Process context */
     ARSTREAM2_RTP_ReceiverContext_t rtpReceiverContext;
@@ -185,21 +184,14 @@ struct ARSTREAM2_RtpReceiver_t {
     int insertStartCodes;
     int generateReceiverReports;
     uint8_t *rtcpMsgBuffer;
+    uint32_t nextRrDelay;
 
-    /* Thread status */
-    ARSAL_Mutex_t streamMutex;
-    int threadShouldStop;
-    int threadStarted;
-    int pipe[2];
-
-    /* Packet FIFO */
+    /* Packet and access unit FIFO */
+    ARSTREAM2_H264_AuFifo_t *auFifo;
     ARSTREAM2_RTP_PacketFifo_t *packetFifo;
     ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;
     struct mmsghdr *msgVec;
     unsigned int msgVecCount;
-
-    /* Access unit FIFO */
-    ARSTREAM2_H264_AuFifo_t *auFifo;
 
     /* Monitoring */
     ARSAL_Mutex_t monitoringMutex;
@@ -257,16 +249,6 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver);
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver);
 
 
-/**
- * @brief Runs the main loop of the RtpReceiver
- * @warning This function never returns until ARSTREAM2_RtpReceiver_Stop() is called. Thus, it should be called on its own thread.
- * @post Stop the receiver by calling ARSTREAM2_RtpReceiver_Stop() before joining the thread calling this function.
- *
- * @param[in] ARSTREAM2_RtpReceiver_t_Param A valid (ARSTREAM2_RtpReceiver_t *) casted as a (void *)
- */
-void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param);
-
-
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, int *useMux, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
 
 
@@ -276,7 +258,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *recei
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtcp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *shouldStop);
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessEnd(ARSTREAM2_RtpReceiver_t *receiver);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessEnd(ARSTREAM2_RtpReceiver_t *receiver, int queueOnly);
 
 
 /**
