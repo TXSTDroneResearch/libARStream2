@@ -128,7 +128,6 @@ struct ARSTREAM2_RtpSender_t {
 
     ARSTREAM2_RTP_SenderContext_t rtpSenderContext;
     ARSTREAM2_RTCP_SenderContext_t rtcpSenderContext;
-    ARSAL_Mutex_t streamMutex;
 
     /* Sockets */
     int isMulticast;
@@ -557,7 +556,6 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
 ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpSender_t *retSender = NULL;
-    int streamMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
@@ -718,18 +716,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     /* Setup internal mutexes/sems */
     if (internalError == ARSTREAM2_OK)
     {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retSender->streamMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            streamMutexWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
         int mutexInitRet = ARSAL_Mutex_Init(&(retSender->monitoringMutex));
         if (mutexInitRet != 0)
         {
@@ -853,14 +839,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             close(retSender->controlSocket);
             retSender->controlSocket = -1;
         }
-        if (streamMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retSender->streamMutex));
-        }
-        if (monitoringMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
-        }
+        if (monitoringMutexWasInit == 1) ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
         free(retSender->msgVec);
         free(retSender->rtcpMsgBuffer);
         free(retSender->canonicalName);
@@ -889,7 +868,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
     if ((sender != NULL) &&
         (*sender != NULL))
     {
-        ARSAL_Mutex_Destroy(&((*sender)->streamMutex));
         ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
         if ((*sender)->streamSocket != -1)
         {
