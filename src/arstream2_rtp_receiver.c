@@ -1720,7 +1720,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessEnd(ARSTREAM2_RtpReceiver_t *recei
     }
 
     /* flush the packet FIFO */
-    ARSTREAM2_RTP_Receiver_PacketFifoFlush(receiver->packetFifo);
+    ARSTREAM2_RTP_Receiver_PacketFifoFlushQueue(receiver->packetFifo, receiver->packetFifoQueue);
 
     return retVal;
 }
@@ -1822,6 +1822,7 @@ void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
     }
+    ARSTREAM2_RTP_Receiver_PacketFifoFlush(receiver->packetFifo);
 
     ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_RECEIVER_TAG, "Receiver thread ended");
 

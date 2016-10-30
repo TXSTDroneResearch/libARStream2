@@ -1710,7 +1710,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessEnd(ARSTREAM2_RtpSender_t *sender)
     ARSAL_Time_GetTime(&t1);
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
     if (sender->naluFifoSize > 0) ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
-    ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, sender->packetFifo, curTime);
+    ARSTREAM2_RTP_Sender_PacketFifoFlushQueue(&sender->rtpSenderContext, sender->packetFifo, sender->packetFifoQueue, curTime);
 
     return retVal;
 }
@@ -1811,6 +1811,11 @@ void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
     }
+
+    struct timespec t1;
+    ARSAL_Time_GetTime(&t1);
+    uint64_t curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, sender->packetFifo, curTime);
 
     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
 
