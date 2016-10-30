@@ -977,7 +977,7 @@ static int ARSTREAM2_RtpReceiver_NetReadControlData(ARSTREAM2_RtpReceiver_t *rec
 
 void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
 {
-    int i, ret;
+    int ret;
 
     if (receiver != NULL)
     {
@@ -1007,18 +1007,6 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the control channel (error %d : %s).", -ret, strerror(-ret));
             }
         }
-
-        /* stop all resenders */
-        ARSAL_Mutex_Lock(&(receiver->resenderMutex));
-        for (i = 0; i < receiver->resenderCount; i++)
-        {
-            if (receiver->resender[i] != NULL)
-            {
-                ARSTREAM2_RtpSender_Stop(receiver->resender[i]->sender);
-                receiver->resender[i]->senderRunning = 0;
-            }
-        }
-        ARSAL_Mutex_Unlock(&(receiver->resenderMutex));
     }
 }
 
@@ -1031,8 +1019,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     ARSTREAM2_RtpReceiver_t *retReceiver = NULL;
     int streamMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
-    int resenderMutexWasInit = 0;
-    int naluBufferMutexWasInit = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -1293,30 +1279,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             monitoringMutexWasInit = 1;
         }
     }
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->resenderMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            resenderMutexWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->naluBufferMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            naluBufferMutexWasInit = 1;
-        }
-    }
 
     /* MsgVec array */
     if (internalError == ARSTREAM2_OK)
@@ -1405,14 +1367,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             ARSAL_Mutex_Destroy(&(retReceiver->monitoringMutex));
         }
-        if (resenderMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retReceiver->resenderMutex));
-        }
-        if (naluBufferMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retReceiver->naluBufferMutex));
-        }
         free(retReceiver->msgVec);
         free(retReceiver->rtcpMsgBuffer);
         free(retReceiver->canonicalName);
@@ -1454,44 +1408,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 
         if (canDelete == 1)
         {
-            int i;
-
-            /* delete all resenders */
-            ARSAL_Mutex_Lock(&((*receiver)->resenderMutex));
-            for (i = 0; i < (*receiver)->resenderCount; i++)
-            {
-                ARSTREAM2_RtpReceiver_RtpResender_t *resender = (*receiver)->resender[i];
-                if (resender == NULL)
-                {
-                    continue;
-                }
-
-                if (!resender->senderRunning)
-                {
-                    retVal = ARSTREAM2_RtpSender_Delete(&(resender->sender));
-                    if (retVal == ARSTREAM2_OK)
-                    {
-                        free(resender);
-                        (*receiver)->resender[i] = NULL;
-                    }
-                    else
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "RtpResender: failed to delete Sender (%d)", retVal);
-                    }
-                }
-                else
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "RtpResender #%d is still running", i);
-                }
-            }
-            ARSAL_Mutex_Unlock(&((*receiver)->resenderMutex));
-
-            for (i = 0; i < (*receiver)->naluBufferCount; i++)
-            {
-                ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = &(*receiver)->naluBuffer[i];
-                free(naluBuf->naluBuffer);
-            }
-
             int ret = (*receiver)->ops.streamChannelTeardown((*receiver));
             if (ret != 0)
             {
@@ -1514,8 +1430,6 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
             }
             ARSAL_Mutex_Destroy(&((*receiver)->streamMutex));
             ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
-            ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
-            ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
             free((*receiver)->msgVec);
             free((*receiver)->rtcpMsgBuffer);
             free((*receiver)->canonicalName);
