@@ -972,7 +972,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    if (FD_ISSET(sender->streamSocket, exceptSet))
+    if ((exceptSet) && (FD_ISSET(sender->streamSocket, exceptSet)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on stream socket");
     }
@@ -1079,7 +1079,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
 #endif
 
     /* RTP packets sending */
-    if ((!sender->packetsPending) || ((sender->packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, writeSet)))))
+    if ((!sender->packetsPending) || ((sender->packetsPending) && ((!writeSet) || ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, writeSet))))))
     {
         ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(sender->packetFifoQueue, sender->msgVec, sender->msgVecCount, (void*)&sender->streamSendSin, sizeof(sender->streamSendSin));
         if (ret < 0)
@@ -1161,7 +1161,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, 
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    if (FD_ISSET(sender->controlSocket, exceptSet))
+    if ((exceptSet) && (FD_ISSET(sender->controlSocket, exceptSet)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on control socket");
     }
@@ -1170,7 +1170,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, 
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
     /* RTCP receiver reports */
-    if ((selectRet >= 0) && (FD_ISSET(sender->controlSocket, readSet)))
+    if ((!readSet) || ((selectRet >= 0) && (FD_ISSET(sender->controlSocket, readSet))))
     {
         /* The control socket is ready for reading */
         //TODO: recvmmsg?

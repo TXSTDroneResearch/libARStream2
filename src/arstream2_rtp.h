@@ -330,6 +330,7 @@ int ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(ARSTREAM2_RTP_PacketFifo_t *fifo
    must not be broken (no change made to the free items list) */
 int ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(ARSTREAM2_RTP_ReceiverContext_t *context,
                                                    ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTREAM2_RTP_PacketFifoQueue_t *queue,
+                                                   ARSTREAM2_RTP_PacketFifoQueue_t **resendQueue, uint32_t *resendTimeout, unsigned int resendCount,
                                                    struct mmsghdr *msgVec, unsigned int msgVecCount, uint64_t curTime,
                                                    ARSTREAM2_RTCP_ReceiverContext_t *rtcpContext);
 

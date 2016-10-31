@@ -15,6 +15,7 @@
 #include <libARStream2/arstream2_stream_receiver.h>
 #include "arstream2_stream_recorder.h"
 #include "arstream2_rtp_receiver.h"
+#include "arstream2_rtp_resender.h"
 #include "arstream2_h264_filter.h"
 #include "arstream2_h264.h"
 #include "arstream2_stream_stats_internal.h"
@@ -49,6 +50,10 @@ typedef struct ARSTREAM2_StreamReceiver_s
     ARSTREAM2_H264_AuFifo_t auFifo;
     ARSTREAM2_H264Filter_Handle filter;
     ARSTREAM2_RtpReceiver_t *receiver;
+    ARSTREAM2_RtpResender_t *resender;
+    ARSTREAM2_RTP_PacketFifoQueue_t **resendQueue;
+    uint32_t *resendTimeout;
+    unsigned int resendCount;
 
     int maxPacketSize;
     int sync;
@@ -1492,14 +1497,15 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
 
 void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 {
-    ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    ARSTREAM2_StreamReceiver_t *streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    ARSTREAM2_RtpResender_t *resender;
     int shouldStop, selectRet = 0;
     fd_set readSet;
     fd_set writeSet;
     fd_set exceptSet;
-    int maxFd = 0, useMux = 0;
+    int maxFd = 0, _maxFd = 0, useMux = 0;
     struct timeval tv;
-    uint32_t nextTimeout = 0;
+    uint32_t nextTimeout = 0, _timeout = 0;
     eARSTREAM2_ERROR err;
 
     if (!streamReceiverHandle)
@@ -1523,6 +1529,18 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
         return (void *)0;
+    }
+
+    for (resender = streamReceiver->resender; resender; resender = resender->next)
+    {
+        err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
+            return (void *)0;
+        }
+        if (_timeout < nextTimeout) nextTimeout = _timeout;
+        if (_maxFd > maxFd) maxFd = _maxFd;
     }
 
     FD_SET(streamReceiver->signalPipe[0], &readSet);
@@ -1549,10 +1567,25 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_ProcessRtcp() failed (%d)", err);
         }
-        err = ARSTREAM2_RtpReceiver_ProcessRtp(streamReceiver->receiver, selectRet, &readSet, &writeSet, &exceptSet, &shouldStop);
+        err = ARSTREAM2_RtpReceiver_ProcessRtp(streamReceiver->receiver, selectRet, &readSet, &writeSet, &exceptSet, &shouldStop,
+                                               streamReceiver->resendQueue, streamReceiver->resendTimeout, streamReceiver->resendCount);
         if (err != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_ProcessRtp() failed (%d)", err);
+        }
+
+        for (resender = streamReceiver->resender; resender; resender = resender->next)
+        {
+            err = ARSTREAM2_RtpSender_ProcessRtcp(resender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+            if (err != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessRtcp() failed (%d)", err);
+            }
+            err = ARSTREAM2_RtpSender_ProcessRtp(resender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+            if (err != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessRtp() failed (%d)", err);
+            }
         }
 
         if ((!useMux) && ((selectRet >= 0) && (FD_ISSET(streamReceiver->signalPipe[0], &readSet))))
@@ -1585,6 +1618,18 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
                 break;
+            }
+
+            for (resender = streamReceiver->resender; resender; resender = resender->next)
+            {
+                err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
+                if (err != ARSTREAM2_OK)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
+                    return (void *)0;
+                }
+                if (_timeout < nextTimeout) nextTimeout = _timeout;
+                if (_maxFd > maxFd) maxFd = _maxFd;
             }
 
             FD_SET(streamReceiver->signalPipe[0], &readSet);
@@ -2226,11 +2271,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata(ARSTREAM2_Strea
 
 
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                        ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
+                                                        ARSTREAM2_StreamReceiver_ResenderHandle *streamResenderHandle,
                                                         const ARSTREAM2_StreamReceiver_ResenderConfig_t *config)
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
-    ARSTREAM2_RtpReceiver_RtpResender_t* retResender = NULL;
+    ARSTREAM2_RtpResender_t* resender = NULL;
+    int packetFifoQueueCreated = 0;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!streamReceiverHandle)
@@ -2238,7 +2284,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid handle");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if (!resenderHandle)
+    if (!streamResenderHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for resender");
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
@@ -2249,64 +2295,203 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSTREAM2_RtpReceiver_RtpResender_Config_t resenderConfig;
-    memset(&resenderConfig, 0, sizeof(resenderConfig));
-
-    resenderConfig.canonicalName = config->canonicalName;
-    resenderConfig.friendlyName = config->friendlyName;
-    resenderConfig.applicationName = config->applicationName;
-    resenderConfig.clientAddr = config->clientAddr;
-    resenderConfig.mcastAddr = config->mcastAddr;
-    resenderConfig.mcastIfaceAddr = config->mcastIfaceAddr;
-    resenderConfig.serverStreamPort = config->serverStreamPort;
-    resenderConfig.serverControlPort = config->serverControlPort;
-    resenderConfig.clientStreamPort = config->clientStreamPort;
-    resenderConfig.clientControlPort = config->clientControlPort;
-    resenderConfig.classSelector = config->classSelector;
-    resenderConfig.maxPacketSize = config->maxPacketSize;
-    resenderConfig.streamSocketBufferSize = config->streamSocketBufferSize;
-    resenderConfig.maxNetworkLatencyMs = config->maxNetworkLatencyMs;
-    resenderConfig.useRtpHeaderExtensions = config->useRtpHeaderExtensions;
-
-    retResender = ARSTREAM2_RtpReceiverResender_New(streamReceiver->receiver, &resenderConfig, &ret);
-    if (ret != ARSTREAM2_OK)
+    resender = (ARSTREAM2_RtpResender_t*)malloc(sizeof(*resender));
+    if (!resender)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating resender : %s", ARSTREAM2_Error_ToString(ret));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", sizeof(*resender));
+        ret = ARSTREAM2_ERROR_ALLOC;
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        memset(resender, 0, sizeof(*resender));
+        resender->streamSocketSendBufferSize = (config->streamSocketBufferSize > 0) ? config->streamSocketBufferSize : ARSTREAM2_RTP_RESENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
+        resender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 : 0;
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        int packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&streamReceiver->packetFifo, &resender->packetFifoQueue);
+        if (packetFifoRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            packetFifoQueueCreated = 1;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        ARSTREAM2_RtpSender_Config_t senderConfig;
+        memset(&senderConfig, 0, sizeof(senderConfig));
+        senderConfig.canonicalName = config->canonicalName;
+        senderConfig.friendlyName = config->friendlyName;
+        senderConfig.applicationName = config->applicationName;
+        senderConfig.clientAddr = config->clientAddr;
+        senderConfig.mcastAddr = config->mcastAddr;
+        senderConfig.mcastIfaceAddr = config->mcastIfaceAddr;
+        senderConfig.serverStreamPort = config->serverStreamPort;
+        senderConfig.serverControlPort = config->serverControlPort;
+        senderConfig.clientStreamPort = config->clientStreamPort;
+        senderConfig.clientControlPort = config->clientControlPort;
+        senderConfig.classSelector = config->classSelector;
+        senderConfig.streamSocketSendBufferSize = resender->streamSocketSendBufferSize;
+        senderConfig.maxPacketSize = streamReceiver->maxPacketSize;
+        senderConfig.naluFifo = NULL;
+        senderConfig.packetFifo = &streamReceiver->packetFifo;
+        senderConfig.packetFifoQueue = &resender->packetFifoQueue;
+        senderConfig.debugPath = streamReceiver->debugPath;
+        senderConfig.dateAndTime = streamReceiver->dateAndTime;
+
+        resender->sender = ARSTREAM2_RtpSender_New(&senderConfig, &ret);
+        if (ret != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while creating sender : %s", ARSTREAM2_Error_ToString(ret));
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        resender->prev = NULL;
+        resender->next = streamReceiver->resender;
+        if (resender->next)
+        {
+            resender->next->prev = resender;
+        }
+        streamReceiver->resender = resender;
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        ARSTREAM2_RtpResender_t* r;
+        for (r = streamReceiver->resender, streamReceiver->resendCount = 0; r; r = resender->next)
+            streamReceiver->resendCount++;
+        streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+        if (!streamReceiver->resendQueue)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            int k;
+            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                streamReceiver->resendQueue[k] = &r->packetFifoQueue;
+        }
+        streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
+        if (!streamReceiver->resendTimeout)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            int k;
+            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        *streamResenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle*)resender;
     }
     else
     {
-        *resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)retResender;
+        if (resender)
+        {
+            if (resender->sender) ARSTREAM2_RtpSender_Delete(&(resender->sender));
+            if (packetFifoQueueCreated) ARSTREAM2_RTP_PacketFifoRemoveQueue(&streamReceiver->packetFifo, &resender->packetFifoQueue);
+            free(resender);
+        }
+        *streamResenderHandle = NULL;
     }
 
     return ret;
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle)
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                       ARSTREAM2_StreamReceiver_ResenderHandle *streamResenderHandle)
 {
-    ARSTREAM2_RtpReceiverResender_Stop((ARSTREAM2_RtpReceiver_RtpResender_t*)resenderHandle);
-
-    return ARSTREAM2_OK;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle)
-{
+    ARSTREAM2_StreamReceiver_t *streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
+    ARSTREAM2_RtpResender_t* resender;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
-    ret = ARSTREAM2_RtpReceiverResender_Delete((ARSTREAM2_RtpReceiver_RtpResender_t**)resenderHandle);
-    if (ret != ARSTREAM2_OK)
+    if (!streamReceiverHandle)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Error while deleting resender : %s", ARSTREAM2_Error_ToString(ret));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid receiver handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((!streamResenderHandle) || (!*streamResenderHandle))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Invalid pointer for handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
+    resender = (ARSTREAM2_RtpResender_t*)*streamResenderHandle;
+
+    ret = ARSTREAM2_RtpSender_ProcessEnd(resender->sender, 1);
+    if (ret != ARSTREAM2_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessEnd() failed (%d)", ret);
+    }
+    ARSTREAM2_RTP_PacketFifoRemoveQueue(&streamReceiver->packetFifo, &resender->packetFifoQueue);
+
+    ret = ARSTREAM2_RtpSender_Delete(&resender->sender);
+    if (ret != ARSTREAM2_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete sender: %s", ARSTREAM2_Error_ToString(ret));
+    }
+
+    if (resender->prev)
+    {
+        resender->prev->next = resender->next;
+    }
+    if (resender->next)
+    {
+        resender->next->prev = resender->prev;
+    }
+    if (resender == streamReceiver->resender)
+    {
+        streamReceiver->resender = resender->next;
+    }
+
+    ARSTREAM2_RtpResender_t* r;
+    for (r = streamReceiver->resender, streamReceiver->resendCount = 0; r; r = resender->next)
+        streamReceiver->resendCount++;
+    streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+    if (!streamReceiver->resendQueue)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+        ret = ARSTREAM2_ERROR_ALLOC;
+    }
+    else
+    {
+        int k;
+        for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+            streamReceiver->resendQueue[k] = &r->packetFifoQueue;
+    }
+    streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
+    if (!streamReceiver->resendTimeout)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
+        ret = ARSTREAM2_ERROR_ALLOC;
+    }
+    else
+    {
+        int k;
+        for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+            streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+    }
+
+    free(resender);
+    *streamResenderHandle = NULL;
+
     return ret;
-}
-
-
-void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle)
-{
-    return ARSTREAM2_RtpReceiverResender_RunThread(resenderHandle);
 }
 
 

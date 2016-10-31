@@ -1412,7 +1412,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *shouldStop)
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet,
+                                                  int *shouldStop, ARSTREAM2_RTP_PacketFifoQueue_t **resendQueue, uint32_t *resendTimeout, unsigned int resendCount)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     struct timespec t1;
@@ -1464,7 +1465,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *recei
                 unsigned int recvMsgCount = (unsigned int)ret;
 
                 ret = ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(&receiver->rtpReceiverContext, receiver->packetFifo,
-                                                                     receiver->packetFifoQueue, receiver->msgVec, recvMsgCount, curTime,
+                                                                     receiver->packetFifoQueue, resendQueue, resendTimeout, resendCount,
+                                                                     receiver->msgVec, recvMsgCount, curTime,
                                                                      &receiver->rtcpReceiverContext);
                 if (ret < 0)
                 {
