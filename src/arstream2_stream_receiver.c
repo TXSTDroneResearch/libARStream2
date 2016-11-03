@@ -54,6 +54,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
     ARSTREAM2_RTP_PacketFifoQueue_t **resendQueue;
     uint32_t *resendTimeout;
     unsigned int resendCount;
+    ARSAL_Mutex_t resendMutex;
 
     int maxPacketSize;
     int sync;
@@ -147,7 +148,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     int appOutputThreadMutexInit = 0, appOutputThreadCondInit = 0;
     int appOutputCallbackMutexInit = 0, appOutputCallbackCondInit = 0;
     int recorderThreadMutexInit = 0, recorderThreadCondInit = 0;
-    int threadMutexInit = 0;
+    int threadMutexInit = 0, resendMutexInit = 0;
 
     if (!streamReceiverHandle)
     {
@@ -246,6 +247,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
         else
         {
             threadMutexInit = 1;
+        }
+    }
+
+    if (ret == ARSTREAM2_OK)
+    {
+        int mutexInitRet = ARSAL_Mutex_Init(&(streamReceiver->resendMutex));
+        if (mutexInitRet != 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Mutex creation failed (%d)", mutexInitRet);
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            resendMutexInit = 1;
         }
     }
 
@@ -460,6 +475,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
                 streamReceiver->signalPipe[1] = -1;
             }
             if (threadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->threadMutex));
+            if (resendMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->resendMutex));
             if (appOutputThreadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
             if (appOutputThreadCondInit) ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
             if (appOutputCallbackMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
@@ -530,6 +546,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSTREAM2_RTP_PacketFifoFree(&(streamReceiver->packetFifo));
     ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
     ARSAL_Mutex_Destroy(&(streamReceiver->threadMutex));
+    ARSAL_Mutex_Destroy(&(streamReceiver->resendMutex));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.threadMutex));
     ARSAL_Cond_Destroy(&(streamReceiver->appOutput.threadCond));
     ARSAL_Mutex_Destroy(&(streamReceiver->appOutput.callbackMutex));
@@ -1531,6 +1548,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
         return (void *)0;
     }
 
+    ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
     for (resender = streamReceiver->resender; resender; resender = resender->next)
     {
         err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
@@ -1542,6 +1560,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
         if (_timeout < nextTimeout) nextTimeout = _timeout;
         if (_maxFd > maxFd) maxFd = _maxFd;
     }
+    ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
     FD_SET(streamReceiver->signalPipe[0], &readSet);
     FD_SET(streamReceiver->signalPipe[0], &exceptSet);
@@ -1561,6 +1580,8 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Select error (%d): %s", errno, strerror(errno));
             }
         }
+
+        ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
 
         err = ARSTREAM2_RtpReceiver_ProcessRtcp(streamReceiver->receiver, selectRet, &readSet, &writeSet, &exceptSet, &shouldStop);
         if (err != ARSTREAM2_OK)
@@ -1587,6 +1608,8 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessRtp() failed (%d)", err);
             }
         }
+
+        ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
         if ((!useMux) && ((selectRet >= 0) && (FD_ISSET(streamReceiver->signalPipe[0], &readSet))))
         {
@@ -1620,6 +1643,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
                 break;
             }
 
+            ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
             for (resender = streamReceiver->resender; resender; resender = resender->next)
             {
                 err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
@@ -1631,6 +1655,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
                 if (_timeout < nextTimeout) nextTimeout = _timeout;
                 if (_maxFd > maxFd) maxFd = _maxFd;
             }
+            ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
             FD_SET(streamReceiver->signalPipe[0], &readSet);
             FD_SET(streamReceiver->signalPipe[0], &exceptSet);
@@ -2309,6 +2334,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
         resender->maxNetworkLatencyUs = (config->maxNetworkLatencyMs > 0) ? config->maxNetworkLatencyMs * 1000 : 0;
     }
 
+    ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
+
     if (ret == ARSTREAM2_OK)
     {
         int packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&streamReceiver->packetFifo, &resender->packetFifoQueue);
@@ -2410,6 +2437,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
         *streamResenderHandle = NULL;
     }
 
+    ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
+
     return ret;
 }
 
@@ -2433,6 +2462,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_
     }
 
     resender = (ARSTREAM2_RtpResender_t*)*streamResenderHandle;
+
+    ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
 
     ret = ARSTREAM2_RtpSender_ProcessEnd(resender->sender, 1);
     if (ret != ARSTREAM2_OK)
@@ -2487,6 +2518,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_
         for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
             streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
     }
+
+    ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
     free(resender);
     *streamResenderHandle = NULL;
