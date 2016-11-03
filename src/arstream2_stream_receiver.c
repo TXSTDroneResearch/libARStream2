@@ -531,6 +531,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_StreamRecorderFree() failed (%d)", recErr);
     }
 
+    ARSTREAM2_RtpResender_t *resender, *next;
+    for (resender = streamReceiver->resender; resender; resender = resender->next)
+    {
+        ret = ARSTREAM2_RtpSender_Delete(&resender->sender);
+        if (ret != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Unable to delete sender: %s", ARSTREAM2_Error_ToString(ret));
+        }
+        next = resender->next;
+        free(resender);
+    }
+    free(streamReceiver->resendQueue);
+    free(streamReceiver->resendTimeout);
+
     ret = ARSTREAM2_RtpReceiver_Delete(&streamReceiver->receiver);
     if (ret != ARSTREAM2_OK)
     {
