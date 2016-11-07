@@ -1227,13 +1227,16 @@ void* ARSTREAM2_StreamReceiver_RunAppOutputThread(void *streamReceiverHandle)
 
     while (shouldStop == 0)
     {
-        ARSTREAM2_H264_AuFifoItem_t *auItem;
+        ARSTREAM2_H264_AuFifoItem_t *auItem = NULL;
 
         ARSAL_Time_GetTime(&t1);
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-        /* dequeue an access unit */
-        auItem = ARSTREAM2_H264_AuFifoDequeueItem(&streamReceiver->appOutput.auFifoQueue);
+        if (running)
+        {
+            /* dequeue an access unit */
+            auItem = ARSTREAM2_H264_AuFifoDequeueItem(&streamReceiver->appOutput.auFifoQueue);
+        }
 
         while (auItem != NULL)
         {
