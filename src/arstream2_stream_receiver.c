@@ -1001,6 +1001,39 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_
     if (streamReceiver->recorder.recorder)
     {
         eARSTREAM2_ERROR err;
+
+        /* Set the untimed metadata */
+        ARSTREAM2_StreamReceiver_UntimedMetadata_t metadata;
+        memset(&metadata, 0, sizeof(ARSTREAM2_StreamReceiver_UntimedMetadata_t));
+        err = ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata((ARSTREAM2_StreamReceiver_Handle)streamReceiver, &metadata);
+        if (err != ARSTREAM2_OK)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata() failed: %d (%s)",
+                        err, ARSTREAM2_Error_ToString(err));
+        }
+        else
+        {
+            ARSTREAM2_StreamRecorder_UntimedMetadata_t meta;
+            memset(&meta, 0, sizeof(ARSTREAM2_StreamRecorder_UntimedMetadata_t));
+            meta.makerAndModel = metadata.friendlyName;
+            meta.serialNumber = metadata.canonicalName;
+            meta.softwareVersion = metadata.applicationName;
+            meta.runDate = metadata.runDate;
+            meta.runUuid = metadata.runUuid;
+            meta.takeoffLatitude = metadata.takeoffLatitude;
+            meta.takeoffLongitude = metadata.takeoffLongitude;
+            meta.takeoffAltitude = metadata.takeoffAltitude;
+            meta.pictureHFov = metadata.pictureHFov;
+            meta.pictureVFov = metadata.pictureVFov;
+            err = ARSTREAM2_StreamRecorder_SetUntimedMetadata(streamReceiver->recorder.recorder, &meta);
+            if (err != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_StreamRecorder_SetUntimedMetadata() failed: %d (%s)",
+                            err, ARSTREAM2_Error_ToString(err));
+            }
+        }
+
+        /* Stop the recorder */
         err = ARSTREAM2_StreamRecorder_Stop(streamReceiver->recorder.recorder);
         if (err != ARSTREAM2_OK)
         {

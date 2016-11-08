@@ -45,6 +45,22 @@ typedef struct
 } ARSTREAM2_StreamRecorder_Config_t;
 
 
+typedef struct
+{
+    char *makerAndModel;                    /**< product maker and model */
+    char *serialNumber;                     /**< product serial number */
+    char *softwareVersion;                  /**< software version */
+    char *runDate;                          /**< run date and time */
+    char *runUuid;                          /**< run UUID */
+    double takeoffLatitude;                 /**< takeoff latitude (500 means unknown) */
+    double takeoffLongitude;                /**< takeoff longitude (500 means unknown) */
+    float takeoffAltitude;                  /**< takeoff altitude */
+    float pictureHFov;                      /**< camera horizontal field of view (0 means unknown) */
+    float pictureVFov;                      /**< camera vertical field of view (0 means unknown) */
+
+} ARSTREAM2_StreamRecorder_UntimedMetadata_t;
+
+
 /**
  * @brief Initialize a StreamRecorder instance.
  *
@@ -84,6 +100,19 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Free(ARSTREAM2_StreamRecorder_Handle *
  * @return a eARSTREAM2_ERROR if an error occurred.
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Stop(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle);
+
+
+/**
+ * @brief Set the untimed metadata
+ *
+ * @param streamRecorderHandle Instance handle.
+ * @param[in] metadata Untimed metadata structure
+ *
+ * @return ARSTREAM2_OK if no error happened
+ * @return ARSTREAM2_ERROR_BAD_PARAMETERS if the streamRecorderHandle or metadata pointer are invalid
+ */
+eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_SetUntimedMetadata(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle,
+                                                             const ARSTREAM2_StreamRecorder_UntimedMetadata_t *metadata);
 
 
 /**
