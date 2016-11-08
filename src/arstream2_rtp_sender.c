@@ -318,7 +318,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->streamSocket >= 0)
         {
-            close(sender->streamSocket);
+            while (((err = close(sender->streamSocket)) == -1) && (errno == EINTR));
         }
         sender->streamSocket = -1;
     }
@@ -464,7 +464,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->controlSocket >= 0)
         {
-            close(sender->controlSocket);
+            while (((err = close(sender->controlSocket)) == -1) && (errno == EINTR));
         }
         sender->controlSocket = -1;
     }
@@ -486,7 +486,7 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
 
     for (i = 0, count = 0; i < vlen; i++)
     {
-        ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags);
+        while (((ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
         if (ret < 0)
         {
             if (count == 0)
@@ -829,14 +829,15 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     if ((internalError != ARSTREAM2_OK) &&
         (retSender != NULL))
     {
+        int err;
         if (retSender->streamSocket != -1)
         {
-            close(retSender->streamSocket);
+            while (((err = close(retSender->streamSocket)) == -1) && (errno == EINTR));
             retSender->streamSocket = -1;
         }
         if (retSender->controlSocket != -1)
         {
-            close(retSender->controlSocket);
+            while (((err = close(retSender->controlSocket)) == -1) && (errno == EINTR));
             retSender->controlSocket = -1;
         }
         if (monitoringMutexWasInit == 1) ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
@@ -868,15 +869,16 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
     if ((sender != NULL) &&
         (*sender != NULL))
     {
+        int err;
         ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
         if ((*sender)->streamSocket != -1)
         {
-            close((*sender)->streamSocket);
+            while (((err = close((*sender)->streamSocket)) == -1) && (errno == EINTR));
             (*sender)->streamSocket = -1;
         }
         if ((*sender)->controlSocket != -1)
         {
-            close((*sender)->controlSocket);
+            while (((err = close((*sender)->controlSocket)) == -1) && (errno == EINTR));
             (*sender)->controlSocket = -1;
         }
         free((*sender)->msgVec);
@@ -1099,7 +1101,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
 #endif
 
             sender->packetsPending = 1;
-            ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0);
+            while (((ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0)) == -1) && (errno == EINTR));
             if (ret < 0)
             {
                 if (errno == EAGAIN)
@@ -1174,7 +1176,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, 
     {
         /* The control socket is ready for reading */
         //TODO: recvmmsg?
-        ssize_t bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0);
+        ssize_t bytes;
+        while (((bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0)) == -1) && (errno == EINTR));
         if ((bytes < 0) && (errno != EAGAIN))
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
@@ -1221,7 +1224,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, 
                 sender->rtpStatsCallback(&rtpStats, sender->rtpStatsCallbackUserPtr);
             }
 
-            bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0);
+            while (((bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0)) == -1) && (errno == EINTR));
             if ((bytes < 0) && (errno != EAGAIN))
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
@@ -1242,7 +1245,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, 
         if ((ret == 0) && (size > 0))
         {
             sender->rtcpDropStatsTotalPackets++;
-            ssize_t bytes = sendto(sender->controlSocket, sender->rtcpMsgBuffer, size, 0, (struct sockaddr*)&sender->controlSendSin, sizeof(sender->controlSendSin));
+            ssize_t bytes;
+            while (((bytes = sendto(sender->controlSocket, sender->rtcpMsgBuffer, size, 0, (struct sockaddr*)&sender->controlSendSin, sizeof(sender->controlSendSin))) == -1) && (errno == EINTR));
             if (bytes < 0)
             {
                 if (errno == EAGAIN)

@@ -460,18 +460,19 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
     {
         if (streamReceiver)
         {
+            int err;
             if (streamReceiver->receiver) ARSTREAM2_RtpReceiver_Delete(&(streamReceiver->receiver));
             if (streamReceiver->filter) ARSTREAM2_H264Filter_Free(&(streamReceiver->filter));
             if (packetFifoWasCreated) ARSTREAM2_RTP_PacketFifoFree(&(streamReceiver->packetFifo));
             if (auFifoCreated) ARSTREAM2_H264_AuFifoFree(&(streamReceiver->auFifo));
             if (streamReceiver->signalPipe[0] != -1)
             {
-                close(streamReceiver->signalPipe[0]);
+                while (((err = close(streamReceiver->signalPipe[0])) == -1) && (errno == EINTR));
                 streamReceiver->signalPipe[0] = -1;
             }
             if (streamReceiver->signalPipe[1] != -1)
             {
-                close(streamReceiver->signalPipe[1]);
+                while (((err = close(streamReceiver->signalPipe[1])) == -1) && (errno == EINTR));
                 streamReceiver->signalPipe[1] = -1;
             }
             if (threadMutexInit) ARSAL_Mutex_Destroy(&(streamReceiver->threadMutex));
@@ -501,6 +502,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
 {
     ARSTREAM2_StreamReceiver_t* streamReceiver;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+    int err;
 
     if ((!streamReceiverHandle) || (!*streamReceiverHandle))
     {
@@ -569,12 +571,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSAL_Cond_Destroy(&(streamReceiver->recorder.threadCond));
     if (streamReceiver->signalPipe[0] != -1)
     {
-        close(streamReceiver->signalPipe[0]);
+        while (((err = close(streamReceiver->signalPipe[0])) == -1) && (errno == EINTR));
         streamReceiver->signalPipe[0] = -1;
     }
     if (streamReceiver->signalPipe[1] != -1)
     {
-        close(streamReceiver->signalPipe[1]);
+        while (((err = close(streamReceiver->signalPipe[1])) == -1) && (errno == EINTR));
         streamReceiver->signalPipe[1] = -1;
     }
     free(streamReceiver->recorder.fileName);
@@ -1590,7 +1592,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     {
         if (!useMux)
         {
-            selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv);
+            while (((selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv)) == -1) && (errno == EINTR));
 
             if (selectRet < 0)
             {
@@ -1632,7 +1634,8 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
-            int readRet = read(streamReceiver->signalPipe[0], &dump, 10);
+            int readRet;
+            while (((readRet = read(streamReceiver->signalPipe[0], &dump, 10)) == -1) && (errno == EINTR));
             if (readRet < 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));

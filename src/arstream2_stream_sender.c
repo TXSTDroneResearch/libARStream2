@@ -293,14 +293,15 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     {
         if (streamSender)
         {
+            int err;
             if (streamSender->signalPipe[0] != -1)
             {
-                close(streamSender->signalPipe[0]);
+                while (((err = close(streamSender->signalPipe[0])) == -1) && (errno == EINTR));
                 streamSender->signalPipe[0] = -1;
             }
             if (streamSender->signalPipe[1] != -1)
             {
-                close(streamSender->signalPipe[1]);
+                while (((err = close(streamSender->signalPipe[1])) == -1) && (errno == EINTR));
                 streamSender->signalPipe[1] = -1;
             }
             if (threadMutexWasInit == 1) ARSAL_Mutex_Destroy(&(streamSender->threadMutex));
@@ -339,7 +340,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Stop(ARSTREAM2_StreamSender_Handle strea
     if (streamSender->signalPipe[1] != -1)
     {
         char * buff = "x";
-        write(streamSender->signalPipe[1], buff, 1);
+        ssize_t err;
+        while (((err = write(streamSender->signalPipe[1], buff, 1)) == -1) && (errno == EINTR));
     }
 
     return ret;
@@ -510,7 +512,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SendNNewNalu(ARSTREAM2_StreamSender_Hand
         if (streamSender->signalPipe[1] != -1)
         {
             char * buff = "x";
-            write(streamSender->signalPipe[1], buff, 1);
+            ssize_t err;
+            while (((err = write(streamSender->signalPipe[1], buff, 1)) == -1) && (errno == EINTR));
         }
     }
 
@@ -576,7 +579,7 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
 
     while (shouldStop == 0)
     {
-        selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv);
+        while (((selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv)) == -1) && (errno == EINTR));
 
         if (selectRet < 0)
         {

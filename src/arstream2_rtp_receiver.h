@@ -22,7 +22,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <math.h>
 
 #include <libARStream2/arstream2_error.h>
@@ -144,10 +143,6 @@ struct ARSTREAM2_RtpReceiver_Ops_t {
     /* Stream channel */
     int (*streamChannelSetup)(ARSTREAM2_RtpReceiver_t *);
     int (*streamChannelTeardown)(ARSTREAM2_RtpReceiver_t *);
-    int (*streamChannelRead)(ARSTREAM2_RtpReceiver_t *,
-                             uint8_t *,
-                             int,
-                             int *);
     int (*streamChannelRecvMmsg)(ARSTREAM2_RtpReceiver_t *,
                                  struct mmsghdr *,
                                  unsigned int,
@@ -162,7 +157,6 @@ struct ARSTREAM2_RtpReceiver_Ops_t {
                               int);
     int (*controlChannelRead)(ARSTREAM2_RtpReceiver_t *,
                               uint8_t *,
-                              int,
                               int);
 };
 
