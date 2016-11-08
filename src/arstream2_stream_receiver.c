@@ -1970,13 +1970,13 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata(ARSTREAM2_Strea
         {
             if (sscanf(ptr, "%f", &metadata->pictureHFov) != 1)
             {
-                metadata->pictureHFov = -1.;
+                metadata->pictureHFov = 0.;
             }
         }
     }
     else
     {
-        metadata->pictureHFov = -1.;
+        metadata->pictureHFov = 0.;
     }
 
     ptr = NULL;
@@ -1987,13 +1987,13 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_GetPeerUntimedMetadata(ARSTREAM2_Strea
         {
             if (sscanf(ptr, "%f", &metadata->pictureVFov) != 1)
             {
-                metadata->pictureVFov = -1.;
+                metadata->pictureVFov = 0.;
             }
         }
     }
     else
     {
-        metadata->pictureVFov = -1.;
+        metadata->pictureVFov = 0.;
     }
 
     _ret = ARSTREAM2_RtpReceiver_GetPeerSdesItem(streamReceiver->receiver, ARSTREAM2_RTCP_SDES_PRIV_ITEM, "run_date", &metadata->runDate);

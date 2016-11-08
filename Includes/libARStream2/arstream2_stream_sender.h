@@ -232,11 +232,11 @@ typedef struct ARSTREAM2_StreamSender_UntimedMetadata_t
     char *applicationName;                          /**< Application name (such as software name and version) */
     char *runDate;                                  /**< Run date and time */
     char *runUuid;                                  /**< Run UUID */
-    double takeoffLatitude;                         /**< Takeoff latitude */
-    double takeoffLongitude;                        /**< Takeoff longitude */
+    double takeoffLatitude;                         /**< Takeoff latitude (500 means unknown) */
+    double takeoffLongitude;                        /**< Takeoff longitude (500 means unknown) */
     float takeoffAltitude;                          /**< Takeoff altitude */
-    float pictureHFov;                              /**< Camera horizontal field of view */
-    float pictureVFov;                              /**< Camera vertical field of view */
+    float pictureHFov;                              /**< Camera horizontal field of view (0 means unknown) */
+    float pictureVFov;                              /**< Camera vertical field of view (0 means unknown) */
 
 } ARSTREAM2_StreamSender_UntimedMetadata_t;
 
