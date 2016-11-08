@@ -669,6 +669,73 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Stop(ARSTREAM2_StreamRecorder_Handle s
 }
 
 
+eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_SetUntimedMetadata(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle,
+                                                             const ARSTREAM2_StreamRecorder_UntimedMetadata_t *metadata)
+{
+    ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)streamRecorderHandle;
+    eARSTREAM2_ERROR ret = ARSTREAM2_OK;
+
+    if (!streamRecorderHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid handle");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if (!metadata)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "Invalid metadata");
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+#if BUILD_LIBARMEDIA
+    ARMEDIA_Untimed_Metadata_t meta;
+    memset(&meta, 0, sizeof(ARMEDIA_Untimed_Metadata_t));
+    if (metadata->makerAndModel)
+    {
+        snprintf(meta.makerAndModel,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_MAKER_SIZE,
+                 "%s", metadata->makerAndModel);
+    }
+    if (metadata->serialNumber)
+    {
+        snprintf(meta.serialNumber,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_SERIAL_NUM_SIZE,
+                 "%s", metadata->serialNumber);
+    }
+    if (metadata->softwareVersion)
+    {
+        snprintf(meta.softwareVersion,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_SOFT_VER_SIZE,
+                 "%s", metadata->softwareVersion);
+    }
+    if (metadata->runDate)
+    {
+        snprintf(meta.runDate,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_RUN_DATE_SIZE,
+                 "%s", metadata->runDate);
+    }
+    if (metadata->runUuid)
+    {
+        snprintf(meta.runUuid,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_RUN_UUID_SIZE,
+                 "%s", metadata->runUuid);
+    }
+    meta.takeoffLatitude = metadata->takeoffLatitude;
+    meta.takeoffLongitude = metadata->takeoffLongitude;
+    meta.takeoffAltitude = metadata->takeoffAltitude;
+    meta.pictureHFov = metadata->pictureHFov;
+    meta.pictureVFov = metadata->pictureVFov;
+    eARMEDIA_ERROR err = ARMEDIA_VideoEncapsuler_SetUntimedMetadata(streamRecorder->videoEncap, &meta);
+    if (err != ARMEDIA_OK)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_SetUntimedMetadata() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
+        ret = ARSTREAM2_ERROR_INVALID_STATE;
+    }
+#endif
+
+    return ret;
+}
+
+
 void* ARSTREAM2_StreamRecorder_RunThread(void *param)
 {
     ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)param;
