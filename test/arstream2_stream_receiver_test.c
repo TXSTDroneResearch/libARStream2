@@ -270,7 +270,6 @@ int main(int argc, char *argv[])
 
     while ((c = getopt_long(argc, argv, short_options, long_options, &idx)) != -1)
     {
-        char *str;
         switch (c)
         {
             case 0:
