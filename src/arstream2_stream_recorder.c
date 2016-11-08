@@ -732,7 +732,7 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                 streamRecorder->videoEncapFrameHeader.height = streamRecorder->videoHeight;
                 streamRecorder->videoEncapFrameHeader.timestamp = au->ntpTimestamp;
                 streamRecorder->videoEncapFrameHeader.frame_type = (au->syncType == ARSTREAM2_H264_AU_SYNC_TYPE_NONE) ? ARMEDIA_ENCAPSULER_FRAME_TYPE_P_FRAME : ARMEDIA_ENCAPSULER_FRAME_TYPE_I_FRAME;
-                streamRecorder->videoEncapFrameHeader.frame = au->buffer->auBuffer;
+                streamRecorder->videoEncapFrameHeader.frame = NULL;
                 streamRecorder->videoEncapFrameHeader.avc_insert_ps = 0;
                 unsigned int naluCount = 0;
                 for (naluItem = au->naluHead; naluItem; naluItem = naluItem->next)
