@@ -42,7 +42,7 @@
 #define BD_AU_BUFFER_SIZE (1920 * 1088 * 3 / 2)
 
 
-static const char short_options[] = "hk:K:i:s:c:";
+static const char short_options[] = "hk:K:i:s:c:S:C:";
 
 
 static const struct option
@@ -51,8 +51,10 @@ long_options[] = {
     { "arsdk"           , required_argument  , NULL, 'k' },
     { "arsdk-start"     , required_argument  , NULL, 'K' },
     { "ip"              , required_argument  , NULL, 'i' },
-    { "strmp"           , required_argument  , NULL, 's' },
-    { "ctrlp"           , required_argument  , NULL, 'c' },
+    { "sstrmp"          , required_argument  , NULL, 's' },
+    { "sctrlp"          , required_argument  , NULL, 'c' },
+    { "cstrmp"          , required_argument  , NULL, 'S' },
+    { "cctrlp"          , required_argument  , NULL, 'C' },
     { 0, 0, 0, 0 }
 };
 
@@ -224,9 +226,11 @@ static void usage(int argc, char *argv[])
             "-h | --help                        Print this message\n"
             "-k | --arsdk <ip_address>          ARSDK connection to drone with its IP address\n"
             "-K | --arsdk-start <ip_address>    ARSDK connection to drone with its IP address (connect only, do not start stream)\n"
-            "-i | --ip <ip_address>[:<port>]    Direct RTP/AVP reception with an IP address and optional port\n"
-            "-s | --strmp <port>                Server stream port for direct RTP/AVP reception\n"
-            "-c | --ctrlp <port>                Server control port for direct RTP/AVP reception\n"
+            "-i | --ip <ip_address>             Direct RTP/AVP reception with an IP address\n"
+            "-s | --sstrmp <port>               Server stream port for direct RTP/AVP reception\n"
+            "-c | --sctrlp <port>               Server control port for direct RTP/AVP reception\n"
+            "-S | --cstrmp <port>               Client stream port for direct RTP/AVP reception\n"
+            "-C | --cctrlp <port>               Client control port for direct RTP/AVP reception\n"
             "\n",
             argv[0]);
 }
@@ -291,20 +295,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'i':
-                if ((str = strstr(optarg, ":")) != NULL)
-                {
-                    if (sscanf(str + 1, "%d", &deviceManager->arstream2ServerStreamPort) == 1)
-                    {
-                        deviceManager->arstream2ServerControlPort = deviceManager->arstream2ServerStreamPort + 1;
-                    }
-                    unsigned int sz = (unsigned int)(str - optarg);
-                    strncpy(deviceManager->addr, optarg, (sz < sizeof(deviceManager->addr)) ? sz : sizeof(deviceManager->addr));
-                    ARSAL_PRINT(ARSAL_PRINT_INFO, TAG, "IP:%s streamPort:%d controlPort:%d", deviceManager->addr, deviceManager->arstream2ServerStreamPort, deviceManager->arstream2ServerControlPort);
-                }
-                else
-                {
-                    strncpy(deviceManager->addr, optarg, sizeof(deviceManager->addr));
-                }
+                strncpy(deviceManager->addr, optarg, sizeof(deviceManager->addr));
                 deviceManager->receiveStream = 1;
                 break;
 
@@ -314,6 +305,14 @@ int main(int argc, char *argv[])
 
             case 'c':
                 sscanf(optarg, "%d", &deviceManager->arstream2ServerControlPort);
+                break;
+
+            case 'S':
+                sscanf(optarg, "%d", &deviceManager->arstream2ClientStreamPort);
+                break;
+
+            case 'C':
+                sscanf(optarg, "%d", &deviceManager->arstream2ClientControlPort);
                 break;
 
             default:

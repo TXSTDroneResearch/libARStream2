@@ -251,7 +251,7 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     {
         if (receiver->net.streamSocket >= 0)
         {
-            close(receiver->net.streamSocket);
+            while (((err = close(receiver->net.streamSocket)) == -1) && (errno == EINTR));
         }
         receiver->net.streamSocket = -1;
     }
@@ -287,7 +287,8 @@ static int ARSTREAM2_RtpReceiver_StreamSocketTeardown(ARSTREAM2_RtpReceiver_t *r
 
     if (receiver->net.streamSocket != -1)
     {
-        close(receiver->net.streamSocket);
+        int err;
+        while (((err = close(receiver->net.streamSocket)) == -1) && (errno == EINTR));
         receiver->net.streamSocket = -1;
     }
 
@@ -493,7 +494,7 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     {
         if (receiver->net.controlSocket >= 0)
         {
-            close(receiver->net.controlSocket);
+            while (((err = close(receiver->net.controlSocket)) == -1) && (errno == EINTR));
         }
         receiver->net.controlSocket = -1;
     }
@@ -529,7 +530,8 @@ static int ARSTREAM2_RtpReceiver_ControlSocketTeardown(ARSTREAM2_RtpReceiver_t *
 
     if (receiver->net.controlSocket != -1)
     {
-        close(receiver->net.controlSocket);
+        int err;
+        while (((err = close(receiver->net.controlSocket)) == -1) && (errno == EINTR));
         receiver->net.controlSocket = -1;
     }
 
@@ -554,50 +556,6 @@ static void ARSTREAM2_RtpReceiver_UpdateMonitoring(ARSTREAM2_RtpReceiver_t *rece
     receiver->monitoringPoint[receiver->monitoringIndex].recvTimestamp = recvTimestamp;
 
     ARSAL_Mutex_Unlock(&(receiver->monitoringMutex));
-}
-
-static int ARSTREAM2_RtpReceiver_MuxReadData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *recvBuffer, int recvBufferSize, int *recvSize)
-{
-#if BUILD_LIBMUX
-    int ret;
-    struct pomp_buffer *buffer;
-    const void *pb_data;
-    size_t pb_len;
-
-    if (receiver == NULL ||
-        receiver->mux.data == NULL ||
-        recvBuffer == NULL ||
-        recvSize == NULL)
-        return -EINVAL;
-
-    ret = mux_queue_get_buf(receiver->mux.data,
-                            &buffer);
-
-    if (ret != 0)
-        return ret;
-
-    ret = pomp_buffer_get_cdata(buffer,
-                                &pb_data,
-                                &pb_len,
-                                NULL);
-
-    if (ret != 0)
-        goto unref_buffer;
-
-    if (pb_len > (size_t)recvBufferSize) {
-        ret = -E2BIG;
-        goto unref_buffer;
-    }
-
-    *recvSize = pb_len;
-    memcpy(recvBuffer, pb_data, pb_len);
-
-unref_buffer:
-    pomp_buffer_unref(buffer);
-    return ret;
-#else
-    return -ENOSYS;
-#endif
 }
 
 static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, struct mmsghdr *msgvec, unsigned int vlen, int blocking)
@@ -685,7 +643,7 @@ static int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen,
 
     for (i = 0, count = 0; i < vlen; i++)
     {
-        ret = recvmsg(sockfd, &msgvec[i].msg_hdr, flags);
+        while (((ret = recvmsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
         if (ret < 0)
         {
             if (count == 0)
@@ -719,7 +677,7 @@ static int ARSTREAM2_RtpReceiver_NetRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, 
         return -1;
     }
 
-    ret = recvmmsg(receiver->net.streamSocket, msgvec, vlen, 0, NULL);
+    while (((ret = recvmmsg(receiver->net.streamSocket, msgvec, vlen, 0, NULL)) == -1) && (errno == EINTR));
     if (ret < 0)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Stream socket - recvmmsg error (%d): %s", errno, strerror(errno));
@@ -729,103 +687,6 @@ static int ARSTREAM2_RtpReceiver_NetRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, 
     {
         return ret;
     }
-}
-
-static int ARSTREAM2_RtpReceiver_NetReadData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *recvBuffer, int recvBufferSize, int *recvSize)
-{
-    int ret = 0, pollRet;
-    ssize_t bytes;
-    struct pollfd p;
-
-    if ((!recvBuffer) || (!recvSize))
-    {
-        if (recvSize)
-            *recvSize = 0;
-        return -1;
-    }
-
-    bytes = recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
-    if (bytes < 0)
-    {
-        /* socket receive failed */
-        switch (errno)
-        {
-        case EAGAIN:
-            /* poll */
-            p.fd = receiver->net.streamSocket;
-            p.events = POLLIN;
-            p.revents = 0;
-            pollRet = poll(&p, 1, ARSTREAM2_RTP_RECEIVER_STREAM_DATAREAD_TIMEOUT_MS);
-            if (pollRet == 0)
-            {
-                /* failed: poll timeout */
-                ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Polling timed out");
-                ret = -ETIMEDOUT;
-                *recvSize = 0;
-            }
-            else if (pollRet < 0)
-            {
-                /* failed: poll error */
-                ret = -errno;
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Poll error: error=%d (%s)", -ret, strerror(-ret));
-                *recvSize = 0;
-            }
-            else if (p.revents & POLLIN)
-            {
-                bytes = recv(receiver->net.streamSocket, recvBuffer, recvBufferSize, 0);
-                if (bytes >= 0)
-                {
-                    /* success: save the number of bytes read */
-                    *recvSize = bytes;
-                }
-                else if (errno == EAGAIN)
-                {
-                    /* failed: socket not ready (this should not happen) */
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Socket not ready for reading");
-                    ret = -EAGAIN;
-                    *recvSize = 0;
-                }
-                else
-                {
-                    /* failed: socket error */
-                    ret = -errno;
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Socket receive error #2 %d ('%s')", -ret, strerror(-ret));
-                    *recvSize = 0;
-                }
-            }
-            else
-            {
-                /* no poll error, no timeout, but socket is not ready */
-                int err, error = 0;
-                socklen_t errlen = sizeof(error);
-                err = getsockopt(receiver->net.streamSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
-                if (err < 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to retrieve socket error: error=%d (%s)",  errno, strerror(errno));
-                }
-                else
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
-                }
-                ret = -EIO;
-                *recvSize = 0;
-            }
-            break;
-        default:
-            /* failed: socket error */
-            ret = -errno;
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Socket receive error %d ('%s')", -ret, strerror(-ret));
-            *recvSize = 0;
-            break;
-        }
-    }
-    else
-    {
-        /* success: save the number of bytes read */
-        *recvSize = bytes;
-    }
-
-    return ret;
 }
 
 static int ARSTREAM2_RtpReceiver_MuxSendControlData(ARSTREAM2_RtpReceiver_t *receiver,
@@ -865,7 +726,8 @@ static int ARSTREAM2_RtpReceiver_MuxSendControlData(ARSTREAM2_RtpReceiver_t *rec
 
 static int ARSTREAM2_RtpReceiver_NetSendControlData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *buffer, int size)
 {
-    int ret = sendto(receiver->net.controlSocket, buffer, size, 0, (struct sockaddr*)&receiver->net.controlSendSin, sizeof(receiver->net.controlSendSin));
+    int ret;
+    while (((ret = sendto(receiver->net.controlSocket, buffer, size, 0, (struct sockaddr*)&receiver->net.controlSendSin, sizeof(receiver->net.controlSendSin))) == -1) && (errno == EINTR));
     if (ret < 0)
         ret = -errno;
     return ret;
@@ -873,8 +735,7 @@ static int ARSTREAM2_RtpReceiver_NetSendControlData(ARSTREAM2_RtpReceiver_t *rec
 
 static int ARSTREAM2_RtpReceiver_MuxReadControlData(ARSTREAM2_RtpReceiver_t *receiver,
                                                     uint8_t *buffer,
-                                                    int size,
-                                                    int blocking)
+                                                    int size)
 {
 #if BUILD_LIBMUX
     int ret;
@@ -887,15 +748,11 @@ static int ARSTREAM2_RtpReceiver_MuxReadControlData(ARSTREAM2_RtpReceiver_t *rec
         buffer == NULL)
         return -EINVAL;
 
-    if (blocking)
-        ret = mux_queue_get_buf(receiver->mux.control,
+    ret = mux_queue_try_get_buf(receiver->mux.control,
                                 &pbuffer);
-    else
-        ret = mux_queue_try_get_buf(receiver->mux.control,
-                                    &pbuffer);
 
     if (ret != 0)
-        return (blocking) ? ret : 0;
+        return 0;
 
     ret = pomp_buffer_get_cdata(pbuffer,
                                 &pb_data,
@@ -924,74 +781,21 @@ unref_buffer:
 #endif
 }
 
-static int ARSTREAM2_RtpReceiver_NetReadControlData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *buffer, int size, int blocking)
+static int ARSTREAM2_RtpReceiver_NetReadControlData(ARSTREAM2_RtpReceiver_t *receiver, uint8_t *buffer, int size)
 {
-    struct pollfd p;
-    int pollRet;
-    int bytes;
+    ssize_t bytes;
 
-    if (blocking)
-    {
-        p.fd = receiver->net.controlSocket;
-        p.events = POLLIN;
-        p.revents = 0;
-        pollRet = poll(&p, 1, ARSTREAM2_RTP_RECEIVER_CONTROL_DATAREAD_TIMEOUT_MS);
-        if (pollRet == 0)
-        {
-            /* failed: poll timeout */
-            ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Polling timed out");
-            return -ETIMEDOUT;
-        }
-        else if (pollRet < 0)
-        {
-            /* failed: poll error */
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Poll error: error=%d (%s)", errno, strerror(errno));
-            return -errno;
-        }
-        else if (p.revents & POLLIN)
-        {
-            bytes = recv(receiver->net.controlSocket, buffer, size, 0);
-        }
-        else
-        {
-            /* no poll error, no timeout, but socket is not ready */
-            int err, error = 0;
-            socklen_t errlen = sizeof(error);
-            err = getsockopt(receiver->net.controlSocket, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen);
-            if (err < 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to retrieve socket error: error=%d (%s)",  errno, strerror(errno));
-            }
-            else
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No poll error, no timeout, but socket is not ready (revents = %d, error = %d)", p.revents, error);
-            }
-            bytes = -EIO;
-        }
-    } else {
-        bytes = recv(receiver->net.controlSocket, buffer, size, 0);
-    }
-    return bytes;
+    while (((bytes = recv(receiver->net.controlSocket, buffer, size, 0)) == -1) && (errno == EINTR));
+    return (int)bytes;
 }
 
 
 void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
 {
-    int i, ret;
+    int ret;
 
     if (receiver != NULL)
     {
-        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Stopping receiver...");
-        ARSAL_Mutex_Lock(&(receiver->streamMutex));
-        receiver->threadShouldStop = 1;
-        ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-        if (receiver->pipe[1] != -1)
-        {
-            char * buff = "x";
-            write(receiver->pipe[1], buff, 1);
-        }
-
         if (receiver->useMux) {
             /* To stop the mux threads, we have to teardown the channels here.
                The second teardown, done at the end of the thread loops, will
@@ -1007,18 +811,6 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver)
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the control channel (error %d : %s).", -ret, strerror(-ret));
             }
         }
-
-        /* stop all resenders */
-        ARSAL_Mutex_Lock(&(receiver->resenderMutex));
-        for (i = 0; i < receiver->resenderCount; i++)
-        {
-            if (receiver->resender[i] != NULL)
-            {
-                ARSTREAM2_RtpSender_Stop(receiver->resender[i]->sender);
-                receiver->resender[i]->senderRunning = 0;
-            }
-        }
-        ARSAL_Mutex_Unlock(&(receiver->resenderMutex));
     }
 }
 
@@ -1029,11 +821,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
                                                    eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpReceiver_t *retReceiver = NULL;
-    int streamMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
-    int resenderMutexWasInit = 0;
-    int naluBufferMutexWasInit = 0;
-    int packetFifoWasCreated = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -1046,6 +834,12 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     if ((config->canonicalName == NULL) || (!strlen(config->canonicalName)))
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Config: no canonical name provided");
+        SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
+        return retReceiver;
+    }
+    if ((!config->packetFifo) || (!config->packetFifoQueue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "No packet FIFO provided");
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retReceiver;
     }
@@ -1122,8 +916,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
     if (internalError == ARSTREAM2_OK)
     {
         memset(retReceiver, 0, sizeof(ARSTREAM2_RtpReceiver_t));
-        retReceiver->pipe[0] = -1;
-        retReceiver->pipe[1] = -1;
         if (config->canonicalName)
         {
             retReceiver->canonicalName = strndup(config->canonicalName, 40);
@@ -1137,6 +929,9 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->applicationName = strndup(config->applicationName, 40);
         }
         retReceiver->auFifo = config->auFifo;
+        retReceiver->packetFifo = config->packetFifo;
+        retReceiver->packetFifoQueue = config->packetFifoQueue;
+        retReceiver->msgVecCount = retReceiver->packetFifo->bufferPoolSize;
         retReceiver->rtph264ReceiverContext.auCallback = config->auCallback;
         retReceiver->rtph264ReceiverContext.auCallbackUserPtr = config->auCallbackUserPtr;
         retReceiver->rtpReceiverContext.maxPacketSize = (config->maxPacketSize > 0) ? config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
@@ -1214,7 +1009,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->useMux = 0;
 
             retReceiver->ops.streamChannelSetup = ARSTREAM2_RtpReceiver_StreamSocketSetup;
-            retReceiver->ops.streamChannelRead = ARSTREAM2_RtpReceiver_NetReadData;
             retReceiver->ops.streamChannelRecvMmsg = ARSTREAM2_RtpReceiver_NetRecvMmsg;
             retReceiver->ops.streamChannelTeardown = ARSTREAM2_RtpReceiver_StreamSocketTeardown;
 
@@ -1233,7 +1027,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->useMux = 1;
 
             retReceiver->ops.streamChannelSetup = ARSTREAM2_RtpReceiver_StreamMuxSetup;
-            retReceiver->ops.streamChannelRead = ARSTREAM2_RtpReceiver_MuxReadData;
             retReceiver->ops.streamChannelRecvMmsg = ARSTREAM2_RtpReceiver_MuxRecvMmsg;
             retReceiver->ops.streamChannelTeardown = ARSTREAM2_RtpReceiver_StreamMuxTeardown;
 
@@ -1246,27 +1039,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
 
     }
 
-    if (internalError == ARSTREAM2_OK)
-    {
-        if (pipe(retReceiver->pipe) != 0)
-        {
-            internalError = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
-        }
-    }
-
     /* Setup internal mutexes/sems */
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->streamMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            streamMutexWasInit = 1;
-        }
-    }
     if (internalError == ARSTREAM2_OK)
     {
         int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->monitoringMutex));
@@ -1277,53 +1050,6 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         else
         {
             monitoringMutexWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->resenderMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            resenderMutexWasInit = 1;
-        }
-    }
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retReceiver->naluBufferMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            naluBufferMutexWasInit = 1;
-        }
-    }
-
-    /* Setup the packet FIFO */
-    if (internalError == ARSTREAM2_OK)
-    {
-        retReceiver->msgVecCount = ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
-        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retReceiver->packetFifo, ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT,
-                                                         ARSTREAM2_RTP_RECEIVER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT,
-                                                         retReceiver->rtpReceiverContext.maxPacketSize);
-        if (packetFifoRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&retReceiver->packetFifo, &retReceiver->packetFifoQueue);
-            if (packetFifoRet != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
-                internalError = ARSTREAM2_ERROR_ALLOC;
-            }
-            packetFifoWasCreated = 1;
         }
     }
 
@@ -1396,35 +1122,9 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the control channel (error %d : %s).\n", -ret, strerror(-ret));
         }
-        if (retReceiver->pipe[0] != -1)
-        {
-            close(retReceiver->pipe[0]);
-            retReceiver->pipe[0] = -1;
-        }
-        if (retReceiver->pipe[1] != -1)
-        {
-            close(retReceiver->pipe[1]);
-            retReceiver->pipe[1] = -1;
-        }
-        if (streamMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retReceiver->streamMutex));
-        }
         if (monitoringMutexWasInit == 1)
         {
             ARSAL_Mutex_Destroy(&(retReceiver->monitoringMutex));
-        }
-        if (resenderMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retReceiver->resenderMutex));
-        }
-        if (naluBufferMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retReceiver->naluBufferMutex));
-        }
-        if (packetFifoWasCreated == 1)
-        {
-            ARSTREAM2_RTP_PacketFifoFree(&retReceiver->packetFifo);
         }
         free(retReceiver->msgVec);
         free(retReceiver->rtcpMsgBuffer);
@@ -1456,138 +1156,179 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
     if ((receiver != NULL) &&
         (*receiver != NULL))
     {
-        int canDelete = 0;
-        ARSAL_Mutex_Lock(&((*receiver)->streamMutex));
-        if ((*receiver)->threadStarted == 0)
+        int ret = (*receiver)->ops.streamChannelTeardown((*receiver));
+        if (ret != 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Thread is stopped");
-            canDelete = 1;
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the stream channel (error %d : %s).\n", -ret, strerror(-ret));
         }
-        ARSAL_Mutex_Unlock(&((*receiver)->streamMutex));
-
-        if (canDelete == 1)
+        ret = (*receiver)->ops.controlChannelTeardown((*receiver));
+        if (ret != 0)
         {
-            int i;
-
-            /* delete all resenders */
-            ARSAL_Mutex_Lock(&((*receiver)->resenderMutex));
-            for (i = 0; i < (*receiver)->resenderCount; i++)
-            {
-                ARSTREAM2_RtpReceiver_RtpResender_t *resender = (*receiver)->resender[i];
-                if (resender == NULL)
-                {
-                    continue;
-                }
-
-                if (!resender->senderRunning)
-                {
-                    retVal = ARSTREAM2_RtpSender_Delete(&(resender->sender));
-                    if (retVal == ARSTREAM2_OK)
-                    {
-                        free(resender);
-                        (*receiver)->resender[i] = NULL;
-                    }
-                    else
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "RtpResender: failed to delete Sender (%d)", retVal);
-                    }
-                }
-                else
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "RtpResender #%d is still running", i);
-                }
-            }
-            ARSAL_Mutex_Unlock(&((*receiver)->resenderMutex));
-
-            for (i = 0; i < (*receiver)->naluBufferCount; i++)
-            {
-                ARSTREAM2_RtpReceiver_NaluBuffer_t *naluBuf = &(*receiver)->naluBuffer[i];
-                free(naluBuf->naluBuffer);
-            }
-
-            int ret = (*receiver)->ops.streamChannelTeardown((*receiver));
-            if (ret != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the stream channel (error %d : %s).\n", -ret, strerror(-ret));
-            }
-            ret = (*receiver)->ops.controlChannelTeardown((*receiver));
-            if (ret != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the control channel (error %d : %s).\n", -ret, strerror(-ret));
-            }
-            if ((*receiver)->pipe[0] != -1)
-            {
-                close((*receiver)->pipe[0]);
-                (*receiver)->pipe[0] = -1;
-            }
-            if ((*receiver)->pipe[1] != -1)
-            {
-                close((*receiver)->pipe[1]);
-                (*receiver)->pipe[1] = -1;
-            }
-            ARSAL_Mutex_Destroy(&((*receiver)->streamMutex));
-            ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
-            ARSAL_Mutex_Destroy(&((*receiver)->resenderMutex));
-            ARSAL_Mutex_Destroy(&((*receiver)->naluBufferMutex));
-            ARSTREAM2_RTP_PacketFifoFree(&(*receiver)->packetFifo);
-            free((*receiver)->msgVec);
-            free((*receiver)->rtcpMsgBuffer);
-            free((*receiver)->canonicalName);
-            free((*receiver)->friendlyName);
-            free((*receiver)->applicationName);
-            free((*receiver)->net.serverAddr);
-            free((*receiver)->net.mcastIfaceAddr);
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to teardown the control channel (error %d : %s).\n", -ret, strerror(-ret));
+        }
+        ARSAL_Mutex_Destroy(&((*receiver)->monitoringMutex));
+        free((*receiver)->msgVec);
+        free((*receiver)->rtcpMsgBuffer);
+        free((*receiver)->canonicalName);
+        free((*receiver)->friendlyName);
+        free((*receiver)->applicationName);
+        free((*receiver)->net.serverAddr);
+        free((*receiver)->net.mcastIfaceAddr);
 
 #if BUILD_LIBMUX
-            if ((*receiver)->mux.mux)
-            {
-                mux_unref((*receiver)->mux.mux);
-            }
+        if ((*receiver)->mux.mux)
+        {
+            mux_unref((*receiver)->mux.mux);
+        }
 #endif
 
-            free(*receiver);
-            *receiver = NULL;
-            retVal = ARSTREAM2_OK;
-        }
-        else
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Call ARSTREAM2_RtpReceiver_StopRtpReceiver before calling this function");
-            retVal = ARSTREAM2_ERROR_BUSY;
-        }
+        free(*receiver);
+        *receiver = NULL;
+        retVal = ARSTREAM2_OK;
     }
     return retVal;
 }
 
 
-static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Param)
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, int *useMux, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout)
 {
-    /* Local declarations */
-    ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
-    int shouldStop, ret;
-    struct timespec t1;
-    uint64_t curTime;
-    uint32_t nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL, rrDelay = 0;
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    int _maxFd = 0;
 
-    /* Parameters check */
+    // Args check
     if (receiver == NULL)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Cannot start thread: bad context parameter");
-        return (void *)0;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((!receiver->useMux) && ((!readSet) || (!writeSet) || (!exceptSet)))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_RECEIVER_TAG, "Receiver thread running");
-    ARSAL_Mutex_Lock(&(receiver->streamMutex));
-    receiver->threadStarted = 1;
-    shouldStop = receiver->threadShouldStop;
-    ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-    while (shouldStop == 0)
+    if (!receiver->useMux)
     {
-        ARSAL_Time_GetTime(&t1);
-        curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+        _maxFd = -1;
+        if (receiver->net.streamSocket > _maxFd) _maxFd = receiver->net.streamSocket;
+        if (receiver->net.controlSocket > _maxFd) _maxFd = receiver->net.controlSocket;
 
-        /* RTCP sender reports */
-        ssize_t bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize, 0);
+        FD_SET(receiver->net.streamSocket, readSet);
+        FD_SET(receiver->net.controlSocket, readSet);
+        FD_SET(receiver->net.streamSocket, exceptSet);
+        FD_SET(receiver->net.controlSocket, exceptSet);
+    }
+
+    if (maxFd) *maxFd = _maxFd;
+    if (nextTimeout) *nextTimeout = (receiver->generateReceiverReports) ? ((receiver->nextRrDelay < ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) ? receiver->nextRrDelay : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
+    if (useMux) *useMux = receiver->useMux;
+
+    return retVal;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet,
+                                                  int *shouldStop, ARSTREAM2_RTP_PacketFifoQueue_t **resendQueue, uint32_t *resendTimeout, unsigned int resendCount)
+{
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    struct timespec t1;
+    uint64_t curTime;
+    int ret;
+
+    // Args check
+    if (receiver == NULL)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    if ((exceptSet) && (FD_ISSET(receiver->net.streamSocket, exceptSet)))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Exception on stream socket");
+    }
+
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+    /* RTP packets reception */
+    if ((!readSet) || ((selectRet >= 0) && (FD_ISSET(receiver->net.streamSocket, readSet))))
+    {
+        ret = ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(receiver->packetFifo, receiver->msgVec, receiver->msgVecCount);
+        if (ret < 0)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec() failed (%d)", ret);
+        }
+        else if (ret > 0)
+        {
+            unsigned int msgCount = (unsigned  int)ret;
+
+            ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->msgVec, msgCount, receiver->useMux);
+            if (ret < 0)
+            {
+                if (ret == -EPIPE && receiver->useMux == 1)
+                {
+                    /* EPIPE with the mux means that we should no longer use the channel */
+                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for stream channel, stopping thread");
+                    if (shouldStop) *shouldStop = 1;
+                }
+                if (ret != -ETIMEDOUT)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read data (%d)", ret);
+                }
+            }
+            else if (ret > 0)
+            {
+                unsigned int recvMsgCount = (unsigned int)ret;
+
+                ret = ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(&receiver->rtpReceiverContext, receiver->packetFifo,
+                                                                     receiver->packetFifoQueue, resendQueue, resendTimeout, resendCount,
+                                                                     receiver->msgVec, recvMsgCount, curTime,
+                                                                     &receiver->rtcpReceiverContext);
+                if (ret < 0)
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec() failed (%d)", ret);
+                }
+            }
+        }
+    }
+
+    /* RTP packets processing */
+    ret = ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(&receiver->rtph264ReceiverContext, receiver->packetFifo,
+                                                        receiver->packetFifoQueue, receiver->auFifo,
+                                                        curTime, &receiver->rtcpReceiverContext);
+    if (ret < 0)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo() failed (%d)", ret);
+    }
+
+    return retVal;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtcp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *shouldStop)
+{
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    struct timespec t1;
+    uint64_t curTime;
+    uint32_t rrDelay = 0;
+    int ret;
+
+    // Args check
+    if (receiver == NULL)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    if ((exceptSet) && (FD_ISSET(receiver->net.controlSocket, exceptSet)))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Exception on control socket");
+    }
+
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+    /* RTCP sender reports */
+    if ((!readSet) || ((selectRet >= 0) && (FD_ISSET(receiver->net.controlSocket, readSet))))
+    {
+        /* The control channel is ready for reading */
+        ssize_t bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize);
         if ((bytes < 0) && (errno != EAGAIN))
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - read error (%d): %s", errno, strerror(errno));
@@ -1595,7 +1336,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
             {
                 /* For the mux case, EPIPE means that the channel should not be used again */
                 ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for control channel, stopping thread");
-                shouldStop = 1;
+                if (shouldStop) *shouldStop = 1;
             }
         }
         while (bytes > 0)
@@ -1607,7 +1348,7 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process compound RTCP packet (%d)", ret);
             }
 
-            bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize, 0);
+            bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize);
             if ((bytes < 0) && (errno != EAGAIN))
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - read error (%d): %s", errno, strerror(errno));
@@ -1615,425 +1356,96 @@ static void* ARSTREAM2_RtpReceiver_RunMuxThread(void *ARSTREAM2_RtpReceiver_t_Pa
                 {
                     /* For the mux case, EPIPE means that the channel should not be used again */
                     ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for control channel, stopping thread");
-                    shouldStop = 1;
+                    if (shouldStop) *shouldStop = 1;
                 }
             }
         }
+    }
 
-        /* RTP packets reception */
-        ret = ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(&receiver->packetFifo, receiver->msgVec, receiver->msgVecCount);
-        if (ret < 0)
+    /* RTCP receiver reports */
+    if (receiver->generateReceiverReports)
+    {
+        rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRtcpTimestamp);
+        if ((rrDelay >= receiver->nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec() failed (%d)", ret);
-        }
-        else if (ret > 0)
-        {
-            unsigned int msgCount = (unsigned  int)ret;
+            unsigned int size = 0;
+            int generateVideoStats = 0;
 
-            ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->msgVec, msgCount, 1);
-            if (ret < 0)
+            if ((receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime)
+                    && (receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval > 0)
+                    && ((receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime == 0)
+                        || (curTime >= receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime + receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval)))
             {
-                if (ret == -EPIPE && receiver->useMux == 1)
-                {
-                    /* EPIPE with the mux means that we should no longer use the channel */
-                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for stream channel, stopping thread");
-                    shouldStop = 1;
-                }
-                if (ret != -ETIMEDOUT)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read data (%d)", ret);
-                }
+                generateVideoStats = 1;
+                receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime = curTime;
+                receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 0;
             }
-            else if (ret > 0)
+
+            ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
+                                                                 curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
+            if ((ret == 0) && (size > 0))
             {
-                unsigned int recvMsgCount = (unsigned int)ret;
-
-                ARSAL_Time_GetTime(&t1);
-                curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-                ret = ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(&receiver->rtpReceiverContext, &receiver->packetFifo,
-                                                                     &receiver->packetFifoQueue, receiver->msgVec, recvMsgCount, curTime,
-                                                                     &receiver->rtcpReceiverContext);
-                if (ret < 0)
+                receiver->rtcpDropStatsTotalPackets++;
+                ssize_t bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
+                if (bytes < 0)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec() failed (%d)", ret);
-                }
-            }
-        }
-
-        /* RTP packets processing */
-        ret = ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(&receiver->rtph264ReceiverContext, &receiver->packetFifo,
-                                                            &receiver->packetFifoQueue, receiver->auFifo,
-                                                            curTime, &receiver->rtcpReceiverContext);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo() failed (%d)", ret);
-        }
-
-        /* RTCP receiver reports */
-        if (receiver->generateReceiverReports)
-        {
-            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRtcpTimestamp);
-            if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
-            {
-                unsigned int size = 0;
-                int generateVideoStats = 0;
-
-                if ((receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime)
-                        && (receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval > 0)
-                        && ((receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime == 0)
-                            || (curTime >= receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime + receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval)))
-                {
-                    generateVideoStats = 1;
-                    receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime = curTime;
-                    receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 0;
-                }
-
-                ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
-                                                                     curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
-                if ((ret == 0) && (size > 0))
-                {
-                    receiver->rtcpDropStatsTotalPackets++;
-                    bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
-                    if (bytes < 0)
+                    if (errno == EAGAIN)
                     {
-                        if (errno == EAGAIN)
+                        /* Log drops once in a while */
+                        receiver->rtcpDropCount++;
+                        if (receiver->rtcpDropLogStartTime)
                         {
-                            /* Log drops once in a while */
-                            receiver->rtcpDropCount++;
-                            if (receiver->rtcpDropLogStartTime)
+                            if (curTime >= receiver->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL * 1000000)
                             {
-                                if (curTime >= receiver->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL * 1000000)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
-                                                receiver->rtcpDropCount, receiver->rtcpDropStatsTotalPackets, (float)receiver->rtcpDropCount * 100. / (float)receiver->rtcpDropStatsTotalPackets,
-                                                (float)(curTime - receiver->rtcpDropLogStartTime) / 1000000.);
-                                    receiver->rtcpDropCount = 0;
-                                    receiver->rtcpDropStatsTotalPackets = 0;
-                                    receiver->rtcpDropLogStartTime = 0;
-                                }
-                            }
-                            else
-                            {
-                                receiver->rtcpDropLogStartTime = curTime;
+                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
+                                            receiver->rtcpDropCount, receiver->rtcpDropStatsTotalPackets, (float)receiver->rtcpDropCount * 100. / (float)receiver->rtcpDropStatsTotalPackets,
+                                            (float)(curTime - receiver->rtcpDropLogStartTime) / 1000000.);
+                                receiver->rtcpDropCount = 0;
+                                receiver->rtcpDropStatsTotalPackets = 0;
+                                receiver->rtcpDropLogStartTime = 0;
                             }
                         }
                         else
                         {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                            receiver->rtcpDropLogStartTime = curTime;
                         }
                     }
+                    else
+                    {
+                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
+                    }
                 }
-
-                receiver->rtcpReceiverContext.lastRtcpTimestamp = curTime;
-                rrDelay = 0;
-                nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
-                if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
             }
-        }
 
-        if (!shouldStop)
-        {
-            ARSAL_Mutex_Lock(&(receiver->streamMutex));
-            shouldStop = receiver->threadShouldStop;
-            ARSAL_Mutex_Unlock(&(receiver->streamMutex));
+            receiver->rtcpReceiverContext.lastRtcpTimestamp = curTime;
+            rrDelay = 0;
+            receiver->nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
+            if (receiver->nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) receiver->nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
         }
+        receiver->nextRrDelay = receiver->nextRrDelay - rrDelay;
     }
 
-    ARSAL_Mutex_Lock(&(receiver->streamMutex));
-    receiver->threadStarted = 0;
-    ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-    /* flush the packet FIFO */
-    ARSTREAM2_RTP_Receiver_PacketFifoFlush(&receiver->packetFifo);
-
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_RECEIVER_TAG, "Receiver thread ended");
-
-    return (void*)0;
+    return retVal;
 }
 
 
-static void* ARSTREAM2_RtpReceiver_RunNetThread(void *ARSTREAM2_RtpReceiver_t_Param)
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessEnd(ARSTREAM2_RtpReceiver_t *receiver, int queueOnly)
 {
-    /* Local declarations */
-    ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
-    int shouldStop, ret, selectRet;
-    struct timespec t1;
-    uint64_t curTime;
-    uint32_t nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL, rrDelay = 0;
-    fd_set readSet, readSetSaved;
-    fd_set exceptSet, exceptSetSaved;
-    int maxFd;
-    struct timeval tv;
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
 
-    /* Parameters check */
+    // Args check
     if (receiver == NULL)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Cannot start thread: bad context parameter");
-        return (void *)0;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_RECEIVER_TAG, "Receiver thread running");
-    ARSAL_Mutex_Lock(&(receiver->streamMutex));
-    receiver->threadStarted = 1;
-    shouldStop = receiver->threadShouldStop;
-    ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-
-    FD_ZERO(&readSetSaved);
-    FD_SET(receiver->pipe[0], &readSetSaved);
-    FD_SET(receiver->net.streamSocket, &readSetSaved);
-    FD_SET(receiver->net.controlSocket, &readSetSaved);
-    FD_ZERO(&exceptSetSaved);
-    FD_SET(receiver->pipe[0], &exceptSetSaved);
-    FD_SET(receiver->net.streamSocket, &exceptSetSaved);
-    FD_SET(receiver->net.controlSocket, &exceptSetSaved);
-    maxFd = receiver->pipe[0];
-    if (receiver->net.streamSocket > maxFd) maxFd = receiver->net.streamSocket;
-    if (receiver->net.controlSocket > maxFd) maxFd = receiver->net.controlSocket;
-    maxFd++;
-    readSet = readSetSaved;
-    exceptSet = exceptSetSaved;
-    tv.tv_sec = 0;
-    tv.tv_usec = ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-
-    while (shouldStop == 0)
-    {
-        selectRet = select(maxFd, &readSet, NULL, &exceptSet, &tv);
-
-        ARSAL_Time_GetTime(&t1);
-        curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-
-        if (FD_ISSET(receiver->net.streamSocket, &exceptSet))
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Exception on stream socket");
-        }
-        if (FD_ISSET(receiver->net.controlSocket, &exceptSet))
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Exception on control socket");
-        }
-        if (selectRet < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Select error (%d): %s", errno, strerror(errno));
-        }
-
-        /* RTCP sender reports */
-        if ((selectRet >= 0) && (FD_ISSET(receiver->net.controlSocket, &readSet)))
-        {
-            /* The control channel is ready for reading */
-            ssize_t bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize, 0);
-            if ((bytes < 0) && (errno != EAGAIN))
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - read error (%d): %s", errno, strerror(errno));
-                if (bytes == -EPIPE && receiver->useMux == 1)
-                {
-                    /* For the mux case, EPIPE means that the channel should not be used again */
-                    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for control channel, stopping thread");
-                    shouldStop = 1;
-                }
-            }
-            while (bytes > 0)
-            {
-                ret = ARSTREAM2_RTCP_Receiver_ProcessCompoundPacket(receiver->rtcpMsgBuffer, (unsigned int)bytes,
-                                                                    curTime, &receiver->rtcpReceiverContext);
-                if (ret != 0)
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to process compound RTCP packet (%d)", ret);
-                }
-
-                bytes = receiver->ops.controlChannelRead(receiver, receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize, 0);
-                if ((bytes < 0) && (errno != EAGAIN))
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - read error (%d): %s", errno, strerror(errno));
-                    if (bytes == -EPIPE && receiver->useMux == 1)
-                    {
-                        /* For the mux case, EPIPE means that the channel should not be used again */
-                        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for control channel, stopping thread");
-                        shouldStop = 1;
-                    }
-                }
-            }
-        }
-
-        /* RTP packets reception */
-        if ((selectRet >= 0) && (FD_ISSET(receiver->net.streamSocket, &readSet)))
-        {
-            ret = ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec(&receiver->packetFifo, receiver->msgVec, receiver->msgVecCount);
-            if (ret < 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoFillMsgVec() failed (%d)", ret);
-            }
-            else if (ret > 0)
-            {
-                unsigned int msgCount = (unsigned  int)ret;
-
-                ret = receiver->ops.streamChannelRecvMmsg(receiver, receiver->msgVec, msgCount, 0);
-                if (ret < 0)
-                {
-                    if (ret == -EPIPE && receiver->useMux == 1)
-                    {
-                        /* EPIPE with the mux means that we should no longer use the channel */
-                        ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_RECEIVER_TAG, "Got an EPIPE for stream channel, stopping thread");
-                        shouldStop = 1;
-                    }
-                    if (ret != -ETIMEDOUT)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read data (%d)", ret);
-                    }
-                }
-                else if (ret > 0)
-                {
-                    unsigned int recvMsgCount = (unsigned int)ret;
-
-                    ret = ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec(&receiver->rtpReceiverContext, &receiver->packetFifo,
-                                                                         &receiver->packetFifoQueue, receiver->msgVec, recvMsgCount, curTime,
-                                                                         &receiver->rtcpReceiverContext);
-                    if (ret < 0)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTP_Receiver_PacketFifoAddFromMsgVec() failed (%d)", ret);
-                    }
-                }
-            }
-        }
-
-        /* RTP packets processing */
-        ret = ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo(&receiver->rtph264ReceiverContext, &receiver->packetFifo,
-                                                            &receiver->packetFifoQueue, receiver->auFifo,
-                                                            curTime, &receiver->rtcpReceiverContext);
-        if (ret < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "ARSTREAM2_RTPH264_Receiver_PacketFifoToAuFifo() failed (%d)", ret);
-        }
-
-        /* RTCP receiver reports */
-        if (receiver->generateReceiverReports)
-        {
-            rrDelay = (uint32_t)(curTime - receiver->rtcpReceiverContext.lastRtcpTimestamp);
-            if ((rrDelay >= nextRrDelay) && (receiver->rtcpReceiverContext.prevSrNtpTimestamp != 0))
-            {
-                unsigned int size = 0;
-                int generateVideoStats = 0;
-
-                if ((receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime)
-                        && (receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval > 0)
-                        && ((receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime == 0)
-                            || (curTime >= receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime + receiver->rtcpReceiverContext.videoStatsCtx.sendTimeInterval)))
-                {
-                    generateVideoStats = 1;
-                    receiver->rtcpReceiverContext.videoStatsCtx.lastSendTime = curTime;
-                    receiver->rtcpReceiverContext.videoStatsCtx.updatedSinceLastTime = 0;
-                }
-
-                ret = ARSTREAM2_RTCP_Receiver_GenerateCompoundPacket(receiver->rtcpMsgBuffer, receiver->rtpReceiverContext.maxPacketSize,
-                                                                     curTime, 1, 1, 1, generateVideoStats, &receiver->rtcpReceiverContext, &size);
-                if ((ret == 0) && (size > 0))
-                {
-                    receiver->rtcpDropStatsTotalPackets++;
-                    ssize_t bytes = receiver->ops.controlChannelSend(receiver, receiver->rtcpMsgBuffer, size);
-                    if (bytes < 0)
-                    {
-                        if (errno == EAGAIN)
-                        {
-                            /* Log drops once in a while */
-                            receiver->rtcpDropCount++;
-                            if (receiver->rtcpDropLogStartTime)
-                            {
-                                if (curTime >= receiver->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_RECEIVER_RTCP_DROP_LOG_INTERVAL * 1000000)
-                                {
-                                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_RECEIVER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
-                                                receiver->rtcpDropCount, receiver->rtcpDropStatsTotalPackets, (float)receiver->rtcpDropCount * 100. / (float)receiver->rtcpDropStatsTotalPackets,
-                                                (float)(curTime - receiver->rtcpDropLogStartTime) / 1000000.);
-                                    receiver->rtcpDropCount = 0;
-                                    receiver->rtcpDropStatsTotalPackets = 0;
-                                    receiver->rtcpDropLogStartTime = 0;
-                                }
-                            }
-                            else
-                            {
-                                receiver->rtcpDropLogStartTime = curTime;
-                            }
-                        }
-                        else
-                        {
-                            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Control channel - send error (%d): %s", errno, strerror(errno));
-                        }
-                    }
-                }
-
-                receiver->rtcpReceiverContext.lastRtcpTimestamp = curTime;
-                rrDelay = 0;
-                nextRrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / receiver->rtcpReceiverContext.rtcpByteRate;
-                if (nextRrDelay < ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL) nextRrDelay = ARSTREAM2_RTCP_RECEIVER_MIN_PACKET_TIME_INTERVAL;
-            }
-        }
-
-        if ((selectRet >= 0) && (FD_ISSET(receiver->pipe[0], &readSet)))
-        {
-            /* Dump bytes (so it won't be ready next time) */
-            char dump[10];
-            int readRet = read(receiver->pipe[0], &dump, 10);
-            if (readRet < 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));
-            }
-        }
-
-        if (!shouldStop)
-        {
-            ARSAL_Mutex_Lock(&(receiver->streamMutex));
-            shouldStop = receiver->threadShouldStop;
-            ARSAL_Mutex_Unlock(&(receiver->streamMutex));
-        }
-
-        if (!shouldStop)
-        {
-            /* Prepare the next select */
-            readSet = readSetSaved;
-            exceptSet = exceptSetSaved;
-            tv.tv_sec = 0;
-            if (receiver->generateReceiverReports)
-            {
-                tv.tv_usec = (nextRrDelay - rrDelay < ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) ? nextRrDelay - rrDelay : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-            }
-            else
-            {
-                tv.tv_usec = ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-            }
-        }
-    }
-
-    ARSAL_Mutex_Lock(&(receiver->streamMutex));
-    receiver->threadStarted = 0;
-    ARSAL_Mutex_Unlock(&(receiver->streamMutex));
 
     /* flush the packet FIFO */
-    ARSTREAM2_RTP_Receiver_PacketFifoFlush(&receiver->packetFifo);
-
-    ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_RTP_RECEIVER_TAG, "Receiver thread ended");
-
-    return (void*)0;
-}
-
-
-void* ARSTREAM2_RtpReceiver_RunThread(void *ARSTREAM2_RtpReceiver_t_Param)
-{
-    /* Local declarations */
-    ARSTREAM2_RtpReceiver_t *receiver = (ARSTREAM2_RtpReceiver_t *)ARSTREAM2_RtpReceiver_t_Param;
-
-    /* Parameters check */
-    if (receiver == NULL)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Cannot start thread: bad context parameter");
-        return (void *)0;
-    }
-
-    if (receiver->useMux)
-    {
-        return ARSTREAM2_RtpReceiver_RunMuxThread(ARSTREAM2_RtpReceiver_t_Param);
-    }
+    if (queueOnly)
+        ARSTREAM2_RTP_Receiver_PacketFifoFlushQueue(receiver->packetFifo, receiver->packetFifoQueue);
     else
-    {
-        return ARSTREAM2_RtpReceiver_RunNetThread(ARSTREAM2_RtpReceiver_t_Param);
-    }
+        ARSTREAM2_RTP_Receiver_PacketFifoFlush(receiver->packetFifo);
+
+    return retVal;
 }
 
 

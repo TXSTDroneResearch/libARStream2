@@ -385,8 +385,8 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *au
 // ---------------------------------------
 
 JNIEXPORT jlong JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobject thizz, jlong cStreamReceiver, jstring clientAddress,
-        jint serverStreamPort, jint serverControlPort, jint clientStreamPort, jint clientControlPort, jint maxPacketSize, jint maxNetworkLatency)
+Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobject thizz, jlong cStreamReceiver, jstring clientAddress, jstring mcastAddress, jstring mcastIfaceAddress,
+        jint serverStreamPort, jint serverControlPort, jint clientStreamPort, jint clientControlPort, jstring canonicalName, jstring friendlyName, jint classSelector, jint maxNetworkLatency)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "ARStream2Resender_nativeInit");
     jboolean retVal = JNI_TRUE;
@@ -396,15 +396,21 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobjec
     memset(&config, 0, sizeof(ARSTREAM2_StreamReceiver_ResenderConfig_t));
 
     const char *c_clientAddress = (*env)->GetStringUTFChars(env, clientAddress, NULL);
+    const char *c_mcastAddress = (*env)->GetStringUTFChars(env, mcastAddress, NULL);
+    const char *c_mcastIfaceAddress = (*env)->GetStringUTFChars(env, mcastIfaceAddress, NULL);
+    const char *c_canonicalName = (*env)->GetStringUTFChars(env, canonicalName, NULL);
+    const char *c_friendlyName = (*env)->GetStringUTFChars(env, friendlyName, NULL);
 
+    config.canonicalName = c_canonicalName;
+    config.friendlyName = c_friendlyName;
     config.clientAddr = c_clientAddress;
-    config.mcastAddr = NULL;
-    config.mcastIfaceAddr = NULL;
+    config.mcastAddr = (strlen(c_mcastAddress)) ? c_mcastAddress : NULL;
+    config.mcastIfaceAddr = (strlen(c_mcastIfaceAddress)) ? c_mcastIfaceAddress : NULL;
     config.serverStreamPort = serverStreamPort;
     config.serverControlPort = serverControlPort;
     config.clientStreamPort = clientStreamPort;
     config.clientControlPort = clientControlPort;
-    config.maxPacketSize = maxPacketSize;
+    config.classSelector = classSelector;
     config.streamSocketBufferSize = 0;
     config.maxNetworkLatencyMs = maxNetworkLatency;
 
@@ -412,6 +418,10 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobjec
     eARSTREAM2_ERROR result = ARSTREAM2_StreamReceiver_StartResender(streamReceiverHandle, &resenderHandle, &config);
 
     (*env)->ReleaseStringUTFChars(env, clientAddress, c_clientAddress);
+    (*env)->ReleaseStringUTFChars(env, mcastAddress, c_mcastAddress);
+    (*env)->ReleaseStringUTFChars(env, mcastIfaceAddress, c_mcastIfaceAddress);
+    (*env)->ReleaseStringUTFChars(env, canonicalName, c_canonicalName);
+    (*env)->ReleaseStringUTFChars(env, friendlyName, c_friendlyName);
 
     if (result != ARSTREAM2_OK)
     {
@@ -424,13 +434,14 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobjec
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop(JNIEnv *env, jobject thizz, jlong cResender)
+Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop(JNIEnv *env, jobject thizz, jlong cStreamReceiver, jlong cResender)
 {
     ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop: %d", cResender);
     jboolean retVal = JNI_TRUE;
+    ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = (ARSTREAM2_StreamReceiver_Handle)(intptr_t)cStreamReceiver;
     ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
 
-    eARSTREAM2_ERROR err = ARSTREAM2_StreamReceiver_StopResender(resenderHandle);
+    eARSTREAM2_ERROR err = ARSTREAM2_StreamReceiver_StopResender(streamReceiverHandle, &resenderHandle);
 
     if (err != ARSTREAM2_OK)
     {
@@ -439,32 +450,6 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop(JNIEnv *env, jobjec
     }
 
     return retVal;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeFree(JNIEnv *env, jobject thizz, jlong cResender)
-{
-    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeFree: %d", cResender);
-    jboolean retVal = JNI_TRUE;
-    ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
-
-    eARSTREAM2_ERROR err = ARSTREAM2_StreamReceiver_FreeResender(&resenderHandle);
-
-    if (err != ARSTREAM2_OK)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Unable to delete resender: %s", ARSTREAM2_Error_ToString(err));
-        retVal = JNI_FALSE;
-    }
-
-    return retVal;
-}
-
-JNIEXPORT void JNICALL
-Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunThread(JNIEnv *env, jobject thizz, jlong cResender)
-{
-    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeRunThread %d", cResender);
-    ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
-    ARSTREAM2_StreamReceiver_RunResenderThread((void*)resenderHandle);
 }
 
 

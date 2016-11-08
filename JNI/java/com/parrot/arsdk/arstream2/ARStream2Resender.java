@@ -1,32 +1,27 @@
 package com.parrot.arsdk.arstream2;
 
-import android.os.Process;
+import com.parrot.arsdk.arsal.ARSAL_SOCKET_CLASS_SELECTOR_ENUM;
+
+import android.os.Build;
 import android.util.Log;
 
 public class ARStream2Resender
 {
     private static final String TAG = ARStream2Resender.class.getSimpleName();
     private final long nativeRef;
-    private final Thread resenderThread;
+    private final ARStream2Manager manager;
 
     public ARStream2Resender(ARStream2Manager manager, String clientAddress,
+                          String mcastAddress, String mcastIfaceAddress,
                           int serverStreamPort, int serverControlPort,
                           int clientStreamPort, int clientControlPort,
-                          int maxPacketSize, int maxNetworkLatency)
+                          String canonicalName, ARSAL_SOCKET_CLASS_SELECTOR_ENUM classSelector, int maxNetworkLatency)
     {
-        this.nativeRef = nativeInit(manager.getNativeRef(), clientAddress,
-                serverStreamPort, serverControlPort,
-                clientStreamPort, clientControlPort,
-                maxPacketSize, maxNetworkLatency);
-        this.resenderThread = new Thread(new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY);
-                nativeRunThread(nativeRef);
-            }
-        }, "ARStream2Resender");
+        this.manager = manager;
+        String friendlyName = Build.MODEL + " " + Build.DEVICE + " " + canonicalName;
+        this.nativeRef = nativeInit(manager.getNativeRef(), clientAddress, mcastAddress, mcastIfaceAddress,
+                serverStreamPort, serverControlPort, clientStreamPort, clientControlPort,
+                canonicalName, friendlyName, classSelector.getValue(), maxNetworkLatency);
     }
 
     private boolean isValid()
@@ -34,49 +29,21 @@ public class ARStream2Resender
         return nativeRef != 0;
     }
 
-    public void start()
-    {
-        if (isValid())
-        {
-            resenderThread.start();
-        }
-        else
-        {
-            Log.e(TAG, "unable to start, resender is not valid! ");
-        }
-    }
-
     public void stop()
     {
         if (isValid())
         {
-            nativeStop(nativeRef);
-        }
-    }
-
-    public void dispose()
-    {
-        if (isValid())
-        {
-            try
-            {
-                resenderThread.join();
-            } catch (InterruptedException e)
-            {
-            }
-            nativeFree(nativeRef);
+            nativeStop(manager.getNativeRef(), nativeRef);
         }
     }
 
     private native long nativeInit(long arstream2ManagerNativeRef, String clientAddress,
+                                   String mcastAddress, String mcastIfaceAddress,
                                    int serverStreamPort, int serverControlPort,
                                    int clientStreamPort, int clientControlPort,
-                                   int maxPacketSize, int maxNetworkLatency);
+                                   String canonicalName, String friendlyName,
+                                   int classSelector, int maxNetworkLatency);
 
-    private native boolean nativeStop(long nativeRef);
-
-    private native boolean nativeFree(long nativeRef);
-
-    private native void nativeRunThread(long nativeRef);
+    private native boolean nativeStop(long arstream2ManagerNativeRef, long nativeRef);
 
 }

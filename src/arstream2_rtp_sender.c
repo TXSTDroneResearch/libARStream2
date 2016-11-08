@@ -50,12 +50,6 @@
 
 
 /**
- * Default stream socket send buffer size (100ms at 10 Mbit/s)
- */
-#define ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE (10000000 * 100 / 1000 / 8)
-
-
-/**
  * Maximum number of elements for the monitoring
  */
 #define ARSTREAM2_RTP_SENDER_MONITORING_MAX_POINTS (2048)
@@ -77,14 +71,6 @@
  * Default minimum stream socket send buffer size: 50ms @ 5Mbit/s
  */
 #define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_STREAM_SOCKET_SEND_BUFFER_SIZE (31250)
-
-
-/**
- * Default minimum packet FIFO size
- */
-#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT (100)
-#define ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR (1)
-#define ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT (ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT * ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR)
 
 
 /**
@@ -137,19 +123,11 @@ struct ARSTREAM2_RtpSender_t {
     void *videoStatsCallbackUserPtr;
     ARSTREAM2_StreamSender_DisconnectionCallback_t disconnectionCallback;
     void *disconnectionCallbackUserPtr;
-    int naluFifoSize;
     int maxBitrate;
-    uint32_t maxLatencyUs;
-    uint32_t maxNetworkLatencyUs[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     uint8_t *rtcpMsgBuffer;
 
     ARSTREAM2_RTP_SenderContext_t rtpSenderContext;
     ARSTREAM2_RTCP_SenderContext_t rtcpSenderContext;
-    ARSAL_Mutex_t streamMutex;
-
-    /* Thread status */
-    int threadShouldStop;
-    int threadStarted;
 
     /* Sockets */
     int isMulticast;
@@ -158,14 +136,14 @@ struct ARSTREAM2_RtpSender_t {
     struct sockaddr_in controlSendSin;
     int streamSocket;
     int controlSocket;
-    
-    /* NAL unit FIFO */
-    int naluFifoPipe[2];
-    ARSTREAM2_H264_NaluFifo_t naluFifo;
+    int packetsPending;
+    int previouslySending;
+    uint32_t nextSrDelay;
 
-    /* Packet FIFO */
-    ARSTREAM2_RTP_PacketFifo_t packetFifo;
-    ARSTREAM2_RTP_PacketFifoQueue_t packetFifoQueue;
+    /* NALU and packet FIFO */
+    ARSTREAM2_H264_NaluFifo_t *naluFifo;
+    ARSTREAM2_RTP_PacketFifo_t *packetFifo;
+    ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue;
     struct mmsghdr *msgVec;
     unsigned int msgVecCount;
 
@@ -340,7 +318,7 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->streamSocket >= 0)
         {
-            close(sender->streamSocket);
+            while (((err = close(sender->streamSocket)) == -1) && (errno == EINTR));
         }
         sender->streamSocket = -1;
     }
@@ -486,7 +464,7 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     {
         if (sender->controlSocket >= 0)
         {
-            close(sender->controlSocket);
+            while (((err = close(sender->controlSocket)) == -1) && (errno == EINTR));
         }
         sender->controlSocket = -1;
     }
@@ -508,7 +486,7 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
 
     for (i = 0, count = 0; i < vlen; i++)
     {
-        ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags);
+        while (((ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
         if (ret < 0)
         {
             if (count == 0)
@@ -578,10 +556,7 @@ static void ARSTREAM2_RtpSender_UpdateMonitoring(uint64_t inputTimestamp, uint64
 ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_t *config, eARSTREAM2_ERROR *error)
 {
     ARSTREAM2_RtpSender_t *retSender = NULL;
-    int streamMutexWasInit = 0;
     int monitoringMutexWasInit = 0;
-    int packetFifoWasCreated = 0;
-    int naluFifoWasCreated = 0;
     eARSTREAM2_ERROR internalError = ARSTREAM2_OK;
 
     /* ARGS Check */
@@ -610,6 +585,12 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
         return retSender;
     }
+    if ((!config->packetFifo) || (!config->packetFifoQueue))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Config: no packet FIFO provided");
+        SET_WITH_CHECK(error, ARSTREAM2_ERROR_BAD_PARAMETERS);
+        return retSender;
+    }
 
     /* Alloc new sender */
     retSender = malloc(sizeof(ARSTREAM2_RtpSender_t));
@@ -625,8 +606,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->isMulticast = 0;
         retSender->streamSocket = -1;
         retSender->controlSocket = -1;
-        retSender->naluFifoPipe[0] = -1;
-        retSender->naluFifoPipe[1] = -1;
         if (config->canonicalName)
         {
             retSender->canonicalName = strndup(config->canonicalName, 40);
@@ -669,35 +648,14 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->videoStatsCallbackUserPtr = config->videoStatsCallbackUserPtr;
         retSender->disconnectionCallback = config->disconnectionCallback;
         retSender->disconnectionCallbackUserPtr = config->disconnectionCallbackUserPtr;
-        retSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_RTP_SENDER_DEFAULT_NALU_FIFO_SIZE;
-        retSender->rtpSenderContext.maxPacketSize = (config->maxPacketSize > 0) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
-        retSender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : retSender->rtpSenderContext.maxPacketSize;
-        retSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-        if (config->streamSocketBufferSize > 0)
-        {
-            retSender->streamSocketSendBufferSize = config->streamSocketBufferSize;
-        }
-        else
-        {
-            int totalBufSize = 0;
-            if (config->maxNetworkLatencyMs[0] > 0)
-            {
-                totalBufSize = retSender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
-            }
-            else if (config->maxLatencyMs > 0)
-            {
-                totalBufSize = retSender->maxBitrate * config->maxLatencyMs / 1000 / 8;
-            }
-            int minStreamSocketSendBufferSize = (retSender->maxBitrate > 0) ? retSender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
-            retSender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
-        }
-
-        retSender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
-        int i;
-        for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-        {
-            retSender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((retSender->maxBitrate > 0) ? (int)((uint64_t)retSender->streamSocketSendBufferSize * 8 * 1000000 / retSender->maxBitrate) : 0) : 0;
-        }
+        retSender->naluFifo = config->naluFifo;
+        retSender->packetFifo = config->packetFifo;
+        retSender->packetFifoQueue = config->packetFifoQueue;
+        retSender->msgVecCount = retSender->packetFifo->bufferPoolSize;
+        retSender->rtpSenderContext.maxPacketSize = config->maxPacketSize;
+        retSender->rtpSenderContext.targetPacketSize = config->targetPacketSize;
+        retSender->maxBitrate = config->maxBitrate;
+        retSender->streamSocketSendBufferSize = config->streamSocketSendBufferSize;
         retSender->rtpSenderContext.useRtpHeaderExtensions = (config->useRtpHeaderExtensions > 0) ? 1 : 0;
         retSender->rtpSenderContext.senderSsrc = ARSTREAM2_RTP_SENDER_SSRC;
         retSender->rtpSenderContext.rtpClockRate = 90000;
@@ -731,6 +689,9 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         retSender->rtcpSenderContext.rtcpByteRate = (retSender->maxBitrate > 0) ? retSender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
         retSender->rtcpSenderContext.rtpClockRate = 90000;
         retSender->rtcpSenderContext.rtpTimestampOffset = 0;
+        retSender->packetsPending = 0;
+        retSender->previouslySending = 0;
+        retSender->nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
 
         if (retSender->rtpSenderContext.maxPacketSize < sizeof(ARSTREAM2_RTCP_SenderReport_t))
         {
@@ -752,27 +713,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         srand(t1.tv_nsec);
     }
 
-    if (internalError == ARSTREAM2_OK)
-    {
-        if (pipe(retSender->naluFifoPipe) != 0)
-        {
-            internalError = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
-        }
-    }
-
     /* Setup internal mutexes/sems */
-    if (internalError == ARSTREAM2_OK)
-    {
-        int mutexInitRet = ARSAL_Mutex_Init(&(retSender->streamMutex));
-        if (mutexInitRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            streamMutexWasInit = 1;
-        }
-    }
     if (internalError == ARSTREAM2_OK)
     {
         int mutexInitRet = ARSAL_Mutex_Init(&(retSender->monitoringMutex));
@@ -786,53 +727,6 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
         }
     }
 
-    /* Setup the NAL unit FIFO */
-    if (internalError == ARSTREAM2_OK)
-    {
-        int naluFifoRet = ARSTREAM2_H264_NaluFifoInit(&retSender->naluFifo, retSender->naluFifoSize);
-        if (naluFifoRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            naluFifoWasCreated = 1;
-        }
-    }
-
-    /* Setup the packet FIFO */
-    if (internalError == ARSTREAM2_OK)
-    {
-        int packetFifoBufferCount = ((retSender->maxBitrate > 0) && (retSender->maxNetworkLatencyUs[0] > 0))
-                ? (int)((uint64_t)retSender->maxBitrate * retSender->maxNetworkLatencyUs[0] * 5 / retSender->rtpSenderContext.targetPacketSize / 8 / 1000000)
-                : retSender->naluFifoSize;
-        if (packetFifoBufferCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT)
-        {
-            packetFifoBufferCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT;
-        }
-        retSender->msgVecCount = packetFifoBufferCount;
-        int packetFifoItemCount = packetFifoBufferCount * ARSTREAM2_RTP_SENDER_DEFAULT_PACKET_FIFO_BUFFER_TO_ITEM_FACTOR;
-        if (packetFifoItemCount < ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT)
-        {
-            packetFifoItemCount = ARSTREAM2_RTP_SENDER_DEFAULT_MIN_PACKET_FIFO_ITEM_COUNT;
-        }
-        int packetFifoRet = ARSTREAM2_RTP_PacketFifoInit(&retSender->packetFifo, packetFifoItemCount, packetFifoBufferCount, retSender->rtpSenderContext.maxPacketSize);
-        if (packetFifoRet != 0)
-        {
-            internalError = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            packetFifoRet = ARSTREAM2_RTP_PacketFifoAddQueue(&retSender->packetFifo, &retSender->packetFifoQueue);
-            if (packetFifoRet != 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_PacketFifoAddQueue() failed (%d)", packetFifoRet);
-                internalError = ARSTREAM2_ERROR_ALLOC;
-            }
-            packetFifoWasCreated = 1;
-        }
-    }
-
     /* MsgVec array */
     if (internalError == ARSTREAM2_OK)
     {
@@ -841,7 +735,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             retSender->msgVec = malloc(retSender->msgVecCount * sizeof(struct mmsghdr));
             if (!retSender->msgVec)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "FIFO allocation failed (size %d)", retSender->msgVecCount * sizeof(struct mmsghdr));
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "MsgVec allocation failed (size %d)", retSender->msgVecCount * sizeof(struct mmsghdr));
                 internalError = ARSTREAM2_ERROR_ALLOC;
             }
             else
@@ -935,42 +829,18 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
     if ((internalError != ARSTREAM2_OK) &&
         (retSender != NULL))
     {
+        int err;
         if (retSender->streamSocket != -1)
         {
-            close(retSender->streamSocket);
+            while (((err = close(retSender->streamSocket)) == -1) && (errno == EINTR));
             retSender->streamSocket = -1;
         }
         if (retSender->controlSocket != -1)
         {
-            close(retSender->controlSocket);
+            while (((err = close(retSender->controlSocket)) == -1) && (errno == EINTR));
             retSender->controlSocket = -1;
         }
-        if (retSender->naluFifoPipe[0] != -1)
-        {
-            close(retSender->naluFifoPipe[0]);
-            retSender->naluFifoPipe[0] = -1;
-        }
-        if (retSender->naluFifoPipe[1] != -1)
-        {
-            close(retSender->naluFifoPipe[1]);
-            retSender->naluFifoPipe[1] = -1;
-        }
-        if (streamMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retSender->streamMutex));
-        }
-        if (monitoringMutexWasInit == 1)
-        {
-            ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
-        }
-        if (packetFifoWasCreated == 1)
-        {
-            ARSTREAM2_RTP_PacketFifoFree(&retSender->packetFifo);
-        }
-        if (naluFifoWasCreated == 1)
-        {
-            ARSTREAM2_H264_NaluFifoFree(&retSender->naluFifo);
-        }
+        if (monitoringMutexWasInit == 1) ARSAL_Mutex_Destroy(&(retSender->monitoringMutex));
         free(retSender->msgVec);
         free(retSender->rtcpMsgBuffer);
         free(retSender->canonicalName);
@@ -993,256 +863,40 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
 }
 
 
-void ARSTREAM2_RtpSender_Stop(ARSTREAM2_RtpSender_t *sender)
-{
-    if (sender != NULL)
-    {
-        ARSAL_Mutex_Lock(&(sender->streamMutex));
-        sender->threadShouldStop = 1;
-        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-        /* signal the sending thread to avoid a deadlock */
-        if (sender->naluFifoPipe[1] != -1)
-        {
-            char * buff = "x";
-            write(sender->naluFifoPipe[1], buff, 1);
-        }
-    }
-}
-
-
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
     if ((sender != NULL) &&
         (*sender != NULL))
     {
-        int canDelete = 0;
-        ARSAL_Mutex_Lock(&((*sender)->streamMutex));
-        if ((*sender)->threadStarted == 0)
+        int err;
+        ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
+        if ((*sender)->streamSocket != -1)
         {
-            canDelete = 1;
+            while (((err = close((*sender)->streamSocket)) == -1) && (errno == EINTR));
+            (*sender)->streamSocket = -1;
         }
-        ARSAL_Mutex_Unlock(&((*sender)->streamMutex));
-
-        if (canDelete == 1)
+        if ((*sender)->controlSocket != -1)
         {
-            ARSAL_Mutex_Destroy(&((*sender)->streamMutex));
-            ARSAL_Mutex_Destroy(&((*sender)->monitoringMutex));
-            ARSTREAM2_RTP_PacketFifoFree(&(*sender)->packetFifo);
-            ARSTREAM2_H264_NaluFifoFree(&(*sender)->naluFifo);
-            if ((*sender)->naluFifoPipe[0] != -1)
-            {
-                close((*sender)->naluFifoPipe[0]);
-                (*sender)->naluFifoPipe[0] = -1;
-            }
-            if ((*sender)->naluFifoPipe[1] != -1)
-            {
-                close((*sender)->naluFifoPipe[1]);
-                (*sender)->naluFifoPipe[1] = -1;
-            }
-            if ((*sender)->streamSocket != -1)
-            {
-                close((*sender)->streamSocket);
-                (*sender)->streamSocket = -1;
-            }
-            if ((*sender)->controlSocket != -1)
-            {
-                close((*sender)->controlSocket);
-                (*sender)->controlSocket = -1;
-            }
-            free((*sender)->msgVec);
-            free((*sender)->rtcpMsgBuffer);
-            free((*sender)->friendlyName);
-            free((*sender)->applicationName);
-            free((*sender)->clientAddr);
-            free((*sender)->mcastIfaceAddr);
-            free((*sender)->debugPath);
-            free((*sender)->dateAndTime);
-            if ((*sender)->fMonitorOut)
-            {
-                fclose((*sender)->fMonitorOut);
-            }
-            free(*sender);
-            *sender = NULL;
-            retVal = ARSTREAM2_OK;
+            while (((err = close((*sender)->controlSocket)) == -1) && (errno == EINTR));
+            (*sender)->controlSocket = -1;
         }
-        else
+        free((*sender)->msgVec);
+        free((*sender)->rtcpMsgBuffer);
+        free((*sender)->friendlyName);
+        free((*sender)->applicationName);
+        free((*sender)->clientAddr);
+        free((*sender)->mcastIfaceAddr);
+        free((*sender)->debugPath);
+        free((*sender)->dateAndTime);
+        if ((*sender)->fMonitorOut)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Call ARSTREAM2_RtpSender_Stop before calling this function");
-            retVal = ARSTREAM2_ERROR_BUSY;
+            fclose((*sender)->fMonitorOut);
         }
+        free(*sender);
+        *sender = NULL;
+        retVal = ARSTREAM2_OK;
     }
-    return retVal;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, uint64_t inputTime)
-{
-    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
-    int res;
-
-    // Args check
-    if ((sender == NULL) ||
-        (nalu == NULL))
-    {
-        retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        if ((nalu->naluBuffer == NULL) ||
-            (nalu->naluSize == 0) ||
-            (nalu->auTimestamp == 0))
-        {
-            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-        }
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        ARSAL_Mutex_Lock(&(sender->streamMutex));
-        if (!sender->threadStarted)
-        {
-            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-        }
-        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
-        if (item)
-        {
-            ARSTREAM2_H264_NaluReset(&item->nalu);
-            item->nalu.inputTimestamp = inputTime;
-            item->nalu.ntpTimestamp = nalu->auTimestamp;
-            item->nalu.isLastInAu = nalu->isLastNaluInAu;
-            item->nalu.seqNumForcedDiscontinuity = nalu->seqNumForcedDiscontinuity;
-            item->nalu.importance = (nalu->importance < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS) ? nalu->importance : 0;
-            item->nalu.priority = (nalu->priority < ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS) ? nalu->priority : 0;
-            uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu->auTimestamp + sender->maxLatencyUs : 0;
-            uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs[item->nalu.importance] > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs[item->nalu.importance] : 0;
-            item->nalu.timeoutTimestamp = timeoutTimestamp1;
-            if ((timeoutTimestamp1 == 0) || ((timeoutTimestamp2 > 0) && (timeoutTimestamp2 < timeoutTimestamp1)))
-            {
-                item->nalu.timeoutTimestamp = timeoutTimestamp2;
-            }
-            item->nalu.metadata = nalu->auMetadata;
-            item->nalu.metadataSize = nalu->auMetadataSize;
-            item->nalu.nalu = nalu->naluBuffer;
-            item->nalu.naluSize = nalu->naluSize;
-            item->nalu.auUserPtr = nalu->auUserPtr;
-            item->nalu.naluUserPtr = nalu->naluUserPtr;
-
-            res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
-            if (res != 0)
-            {
-                res = ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
-                retVal = ARSTREAM2_ERROR_INVALID_STATE;
-            }
-        }
-        else
-        {
-            retVal = ARSTREAM2_ERROR_QUEUE_FULL;
-        }
-
-        if (sender->naluFifoPipe[1] != -1)
-        {
-            char * buff = "x";
-            write(sender->naluFifoPipe[1], buff, 1);
-        }
-    }
-
-    return retVal;
-}
-
-
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_SendNNewNalu(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_StreamSender_H264NaluDesc_t *nalu, int naluCount, uint64_t inputTime)
-{
-    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
-    int k, res;
-
-    // Args check
-    if ((sender == NULL) ||
-        (nalu == NULL) ||
-        (naluCount <= 0))
-    {
-        retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        for (k = 0; k < naluCount; k++)
-        {
-            if ((nalu[k].naluBuffer == NULL) ||
-                (nalu[k].naluSize == 0) ||
-                (nalu[k].auTimestamp == 0))
-            {
-                retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-            }
-        }
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        ARSAL_Mutex_Lock(&(sender->streamMutex));
-        if (!sender->threadStarted)
-        {
-            retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
-        }
-        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-    }
-
-    if (retVal == ARSTREAM2_OK)
-    {
-        for (k = 0; k < naluCount; k++)
-        {
-            ARSTREAM2_H264_NaluFifoItem_t *item = ARSTREAM2_H264_NaluFifoPopFreeItem(&sender->naluFifo);
-            if (item)
-            {
-                ARSTREAM2_H264_NaluReset(&item->nalu);
-                item->nalu.inputTimestamp = inputTime;
-                item->nalu.ntpTimestamp = nalu[k].auTimestamp;
-                item->nalu.isLastInAu = nalu[k].isLastNaluInAu;
-                item->nalu.seqNumForcedDiscontinuity = nalu[k].seqNumForcedDiscontinuity;
-                item->nalu.importance = (nalu[k].importance < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS) ? nalu[k].importance : 0;
-                item->nalu.priority = (nalu[k].priority < ARSTREAM2_STREAM_SENDER_MAX_PRIORITY_LEVELS) ? nalu[k].priority : 0;
-                uint64_t timeoutTimestamp1 = (sender->maxLatencyUs > 0) ? nalu[k].auTimestamp + sender->maxLatencyUs : 0;
-                uint64_t timeoutTimestamp2 = ((sender->maxNetworkLatencyUs[item->nalu.importance] > 0) && (inputTime > 0)) ? inputTime + sender->maxNetworkLatencyUs[item->nalu.importance] : 0;
-                item->nalu.timeoutTimestamp = timeoutTimestamp1;
-                if ((timeoutTimestamp1 == 0) || ((timeoutTimestamp2 > 0) && (timeoutTimestamp2 < timeoutTimestamp1)))
-                {
-                    item->nalu.timeoutTimestamp = timeoutTimestamp2;
-                }
-                item->nalu.metadata = nalu[k].auMetadata;
-                item->nalu.metadataSize = nalu[k].auMetadataSize;
-                item->nalu.nalu = nalu[k].naluBuffer;
-                item->nalu.naluSize = nalu[k].naluSize;
-                item->nalu.auUserPtr = nalu[k].auUserPtr;
-                item->nalu.naluUserPtr = nalu[k].naluUserPtr;
-
-                res = ARSTREAM2_H264_NaluFifoEnqueueItem(&sender->naluFifo, item);
-                if (res != 0)
-                {
-                    res = ARSTREAM2_H264_NaluFifoPushFreeItem(&sender->naluFifo, item);
-                    retVal = ARSTREAM2_ERROR_INVALID_STATE;
-                    break;
-                }
-            }
-            else
-            {
-                retVal = ARSTREAM2_ERROR_QUEUE_FULL;
-                break;
-            }
-        }
-
-        if (sender->naluFifoPipe[1] != -1)
-        {
-            char * buff = "x";
-            write(sender->naluFifoPipe[1], buff, 1);
-        }
-    }
-
     return retVal;
 }
 
@@ -1264,7 +918,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
         ARSAL_Time_GetTime(&t1);
         curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-        int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
+        int ret = ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, sender->naluFifo, curTime);
         if (ret != 0)
         {
             retVal = ARSTREAM2_ERROR_BAD_PARAMETERS;
@@ -1275,401 +929,394 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 }
 
 
-void* ARSTREAM2_RtpSender_RunThread(void *ARSTREAM2_RtpSender_t_Param)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout)
 {
-    /* Local declarations */
-    ARSTREAM2_RtpSender_t *sender = (ARSTREAM2_RtpSender_t*)ARSTREAM2_RtpSender_t_Param;
-    int shouldStop, ret, selectRet, packetsPending = 0, previouslySending = 0;
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    int _maxFd;
+
+    // Args check
+    if (sender == NULL)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+    if ((!readSet) || (!writeSet) || (!exceptSet))
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    _maxFd = -1;
+    if (sender->streamSocket > _maxFd) _maxFd = sender->streamSocket;
+    if (sender->controlSocket > _maxFd) _maxFd = sender->controlSocket;
+
+    FD_SET(sender->controlSocket, readSet);
+    if (sender->packetsPending) FD_SET(sender->streamSocket, writeSet);
+    FD_SET(sender->streamSocket, exceptSet);
+    FD_SET(sender->controlSocket, exceptSet);
+
+    if (maxFd) *maxFd = _maxFd;
+    if (nextTimeout) *nextTimeout = (sender->nextSrDelay < ARSTREAM2_RTP_SENDER_TIMEOUT_US) ? sender->nextSrDelay : ARSTREAM2_RTP_SENDER_TIMEOUT_US;
+
+    return retVal;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet)
+{
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     unsigned int dropCount[ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS];
     struct timespec t1;
     uint64_t curTime;
-    uint32_t nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
-    fd_set readSet, readSetSaved;
-    fd_set writeSet;
-    fd_set exceptSet, exceptSetSaved;
-    int maxFd;
-    struct timeval tv;
+    int ret;
 
-    /* Parameters check */
+    // Args check
     if (sender == NULL)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Cannot start thread: bad context parameter");
-        return (void *)0;
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread running");
-    ARSAL_Mutex_Lock(&(sender->streamMutex));
-    sender->threadStarted = 1;
-    shouldStop = sender->threadShouldStop;
-    ARSAL_Mutex_Unlock(&(sender->streamMutex));
-
-    FD_ZERO(&readSetSaved);
-    FD_SET(sender->naluFifoPipe[0], &readSetSaved);
-    FD_SET(sender->controlSocket, &readSetSaved);
-    FD_ZERO(&writeSet);
-    FD_ZERO(&exceptSetSaved);
-    FD_SET(sender->naluFifoPipe[0], &exceptSetSaved);
-    FD_SET(sender->streamSocket, &exceptSetSaved);
-    FD_SET(sender->controlSocket, &exceptSetSaved);
-    maxFd = sender->naluFifoPipe[0];
-    if (sender->streamSocket > maxFd) maxFd = sender->streamSocket;
-    if (sender->controlSocket > maxFd) maxFd = sender->controlSocket;
-    maxFd++;
-    readSet = readSetSaved;
-    exceptSet = exceptSetSaved;
-    tv.tv_sec = 0;
-    tv.tv_usec = ARSTREAM2_RTP_SENDER_TIMEOUT_US;
-
-    while (shouldStop == 0)
+    if ((exceptSet) && (FD_ISSET(sender->streamSocket, exceptSet)))
     {
-        selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv);
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on stream socket");
+    }
 
-        ARSAL_Time_GetTime(&t1);
-        curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
 
-        if (FD_ISSET(sender->streamSocket, &exceptSet))
+    /* RTP packet FIFO cleanup (packets on timeout) */
+    ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, sender->packetFifo, sender->packetFifoQueue,
+                                                          curTime, dropCount, ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS);
+    if (ret < 0)
+    {
+        if (ret != -2)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on stream socket");
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to clean FIFO from timeout (%d)", ret);
         }
-        if (FD_ISSET(sender->controlSocket, &exceptSet))
+    }
+    else if (ret > 0)
+    {
+        /* Log drops once in a while */
+        if (sender->timeoutDropLogStartTime)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on control socket");
-        }
-        if (selectRet < 0)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Select error (%d): %s", errno, strerror(errno));
-        }
-
-        /* RTCP receiver reports */
-        if ((selectRet >= 0) && (FD_ISSET(sender->controlSocket, &readSet)))
-        {
-            /* The control socket is ready for reading */
-            //TODO: recvmmsg?
-            ssize_t bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0);
-            if ((bytes < 0) && (errno != EAGAIN))
+            if (curTime >= sender->timeoutDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_TIMEOUT_DROP_LOG_INTERVAL * 1000000)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
-            }
-            while (bytes > 0)
-            {
-                int gotReceptionReport = 0;
-                int gotVideoStats = 0;
-
-                ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(sender->rtcpMsgBuffer, (unsigned int)bytes,
-                                                                  curTime, &sender->rtcpSenderContext,
-                                                                  &gotReceptionReport, &gotVideoStats);
-                if ((ret != 0) && (bytes != 24)) /* workaround to avoid logging when it's an old clockSync packet with old FF or SC versions */
+                char strDrops[16];
+                char *str = strDrops;
+                int i, l, len;
+                unsigned int totalCount;
+                for (i = 0, len = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
+                    totalCount += sender->timeoutDropCount[i];
+                    l = snprintf(str, 16 - len, "%s%d", (i > 0) ? " " : "", sender->timeoutDropCount[i]);
+                    len += l;
+                    str += l;
                 }
-
-                if ((gotVideoStats) && (sender->videoStatsCallback != NULL))
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets out of %d (%.1f%%) from FIFO on timeout (%s) in last %.1f seconds",
+                            totalCount, sender->timeoutDropStatsTotalPackets, (float)totalCount * 100. / (float)sender->timeoutDropStatsTotalPackets,
+                            strDrops, (float)(curTime - sender->timeoutDropLogStartTime) / 1000000.);
+                for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
                 {
-                    /* Call the receiver report callback function */
-                    sender->videoStatsCallback(&sender->rtcpSenderContext.videoStatsCtx.videoStats, sender->videoStatsCallbackUserPtr);
+                    sender->timeoutDropCount[i] = 0;
                 }
-
-                if ((gotReceptionReport) && (sender->rtpStatsCallback != NULL))
-                {
-                    ARSTREAM2_RTP_RtpStats_t rtpStats;
-
-                    memset(&rtpStats, 0, sizeof(ARSTREAM2_RTP_RtpStats_t));
-                    rtpStats.timestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
-                    rtpStats.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
-                    rtpStats.interarrivalJitter = sender->rtcpSenderContext.interarrivalJitter;
-                    rtpStats.receiverLostCount = sender->rtcpSenderContext.receiverLostCount;
-                    rtpStats.receiverFractionLost = sender->rtcpSenderContext.receiverFractionLost;
-                    rtpStats.receiverExtHighestSeqNum = sender->rtcpSenderContext.receiverExtHighestSeqNum;
-                    rtpStats.lastSenderReportInterval = sender->rtcpSenderContext.lastSrInterval;
-                    rtpStats.senderReportIntervalPacketCount = sender->rtcpSenderContext.srIntervalPacketCount;
-                    rtpStats.senderReportIntervalByteCount = sender->rtcpSenderContext.srIntervalByteCount;
-                    rtpStats.senderPacketCount = sender->rtpSenderContext.packetCount;
-                    rtpStats.senderByteCount = sender->rtpSenderContext.byteCount;
-                    rtpStats.peerClockDelta = sender->rtcpSenderContext.clockDeltaCtx.clockDeltaAvg;
-                    rtpStats.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDeltaCtx.rtDelay;
-
-                    /* Call the receiver report callback function */
-                    sender->rtpStatsCallback(&rtpStats, sender->rtpStatsCallbackUserPtr);
-                }
-
-                bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0);
-                if ((bytes < 0) && (errno != EAGAIN))
-                {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
-                }
-            }
-        }
-
-        /* RTP packet FIFO cleanup (packets on timeout) */
-        ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromTimeout(&sender->rtpSenderContext, &sender->packetFifo, &sender->packetFifoQueue,
-                                                              curTime, dropCount, ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS);
-        if (ret < 0)
-        {
-            if (ret != -2)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to clean FIFO from timeout (%d)", ret);
-            }
-        }
-        else if (ret > 0)
-        {
-            /* Log drops once in a while */
-            if (sender->timeoutDropLogStartTime)
-            {
-                if (curTime >= sender->timeoutDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_TIMEOUT_DROP_LOG_INTERVAL * 1000000)
-                {
-                    char strDrops[16];
-                    char *str = strDrops;
-                    int i, l, len;
-                    unsigned int totalCount;
-                    for (i = 0, len = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-                    {
-                        totalCount += sender->timeoutDropCount[i];
-                        l = snprintf(str, 16 - len, "%s%d", (i > 0) ? " " : "", sender->timeoutDropCount[i]);
-                        len += l;
-                        str += l;
-                    }
-                    ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d packets out of %d (%.1f%%) from FIFO on timeout (%s) in last %.1f seconds",
-                                totalCount, sender->timeoutDropStatsTotalPackets, (float)totalCount * 100. / (float)sender->timeoutDropStatsTotalPackets,
-                                strDrops, (float)(curTime - sender->timeoutDropLogStartTime) / 1000000.);
-                    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-                    {
-                        sender->timeoutDropCount[i] = 0;
-                    }
-                    sender->timeoutDropLogStartTime = 0;
-                    sender->timeoutDropStatsTotalPackets = 0;
-                }
-                else
-                {
-                    int i;
-                    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-                    {
-                        sender->timeoutDropCount[i] += dropCount[i];
-                    }
-                }
+                sender->timeoutDropLogStartTime = 0;
+                sender->timeoutDropStatsTotalPackets = 0;
             }
             else
             {
-                int i, totalCount;
-                for (i = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+                int i;
+                for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
                 {
-                    totalCount += dropCount[i];
                     sender->timeoutDropCount[i] += dropCount[i];
-                }
-                if (totalCount > 0)
-                {
-                    sender->timeoutDropLogStartTime = curTime;
                 }
             }
         }
+        else
+        {
+            int i, totalCount;
+            for (i = 0, totalCount = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
+            {
+                totalCount += dropCount[i];
+                sender->timeoutDropCount[i] += dropCount[i];
+            }
+            if (totalCount > 0)
+            {
+                sender->timeoutDropLogStartTime = curTime;
+            }
+        }
+    }
 
-        /* RTP packets creation */
+    /* RTP packets creation */
+    if (sender->naluFifo != NULL)
+    {
         unsigned int newPacketsCount = 0;
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
         int dropOnTimeout = 0;
 #else
         int dropOnTimeout = 1;
 #endif
-        ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, &sender->naluFifo,
-                                                            &sender->packetFifo, &sender->packetFifoQueue,
+        ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, sender->naluFifo,
+                                                            sender->packetFifo, sender->packetFifoQueue,
                                                             dropOnTimeout, curTime, &newPacketsCount);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
         }
         sender->timeoutDropStatsTotalPackets += newPacketsCount;
+    }
 
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_DROP
-        ret = ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(&sender->rtpSenderContext, &sender->packetFifo,
-                                                        &sender->packetFifoQueue, ARSTREAM2_RTP_SENDER_RANDOM_DROP_RATIO, curTime);
+    ret = ARSTREAM2_RTP_Sender_PacketFifoRandomDrop(&sender->rtpSenderContext, sender->packetFifo,
+                                                    sender->packetFifoQueue, ARSTREAM2_RTP_SENDER_RANDOM_DROP_RATIO, curTime);
+    if (ret < 0)
+    {
+        if (ret != -2)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_Sender_PacketFifoRandomDrop() failed (%d)", ret);
+        }
+    }
+#endif
+
+#ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
+    uint32_t waitTime = ((uint64_t)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN);
+    usleep(waitTime);
+#endif
+
+    /* RTP packets sending */
+    if ((!sender->packetsPending) || ((sender->packetsPending) && ((!writeSet) || ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, writeSet))))))
+    {
+        ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(sender->packetFifoQueue, sender->msgVec, sender->msgVecCount, (void*)&sender->streamSendSin, sizeof(sender->streamSendSin));
         if (ret < 0)
         {
             if (ret != -2)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTP_Sender_PacketFifoRandomDrop() failed (%d)", ret);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to fill msgVec (%d)", ret);
             }
         }
-#endif
+        else if (ret > 0)
+        {
+            int msgVecCount = ret;
+            int msgVecSentCount = 0;
 
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
-        uint32_t waitTime = ((uint64_t)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_WAIT_MIN);
-        usleep(waitTime);
+            msgVecCount = round((float)msgVecCount * ((float)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN));
 #endif
 
-        /* RTP packets sending */
-        if ((!packetsPending) || ((packetsPending) && ((selectRet >= 0) && (FD_ISSET(sender->streamSocket, &writeSet)))))
-        {
-            ret = ARSTREAM2_RTP_Sender_PacketFifoFillMsgVec(&sender->packetFifoQueue, sender->msgVec, sender->msgVecCount, (void*)&sender->streamSendSin, sizeof(sender->streamSendSin));
+            sender->packetsPending = 1;
+            while (((ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0)) == -1) && (errno == EINTR));
+            if (ret < 0)
+            {
+                if (errno == EAGAIN)
+                {
+                    //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Stream socket buffer full (no packets dropped, will retry later) - sendmmsg error (%d): %s", errno, strerror(errno)); //TODO: debug
+                    int i;
+                    for (i = 0, msgVecSentCount = 0; i < msgVecCount; i++)
+                    {
+                        if (sender->msgVec[i].msg_len > 0) msgVecSentCount++;
+                    }
+                    sender->packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
+                    //if (sender->packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d (socket buffer is full)", msgVecSentCount, msgVecCount); //TODO: debug
+                }
+                else
+                {
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Stream socket - sendmmsg error (%d): %s", errno, strerror(errno));
+                    if ((sender->disconnectionCallback) && (sender->previouslySending) && (errno == ECONNREFUSED))
+                    {
+                        /* Call the disconnection callback */
+                        sender->disconnectionCallback(sender->disconnectionCallbackUserPtr);
+                    }
+                }
+            }
+            else
+            {
+                sender->previouslySending = 1;
+                msgVecSentCount = ret;
+                sender->packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
+                //if (sender->packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug
+            }
+
+            ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(&sender->rtpSenderContext, sender->packetFifo,
+                                                                 sender->packetFifoQueue, sender->msgVec,
+                                                                 msgVecSentCount, curTime);
             if (ret < 0)
             {
                 if (ret != -2)
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to fill msgVec (%d)", ret);
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to clean FIFO from msgVec (%d)", ret);
                 }
             }
-            else if (ret > 0)
+        }
+    }
+
+    return retVal;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtcp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet)
+{
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    struct timespec t1;
+    uint64_t curTime;
+    int ret;
+
+    // Args check
+    if (sender == NULL)
+    {
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
+    }
+
+    if ((exceptSet) && (FD_ISSET(sender->controlSocket, exceptSet)))
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Exception on control socket");
+    }
+
+    ARSAL_Time_GetTime(&t1);
+    curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
+
+    /* RTCP receiver reports */
+    if ((!readSet) || ((selectRet >= 0) && (FD_ISSET(sender->controlSocket, readSet))))
+    {
+        /* The control socket is ready for reading */
+        //TODO: recvmmsg?
+        ssize_t bytes;
+        while (((bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0)) == -1) && (errno == EINTR));
+        if ((bytes < 0) && (errno != EAGAIN))
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
+        }
+        while (bytes > 0)
+        {
+            int gotReceptionReport = 0;
+            int gotVideoStats = 0;
+
+            ret = ARSTREAM2_RTCP_Sender_ProcessCompoundPacket(sender->rtcpMsgBuffer, (unsigned int)bytes,
+                                                              curTime, &sender->rtcpSenderContext,
+                                                              &gotReceptionReport, &gotVideoStats);
+            if ((ret != 0) && (bytes != 24)) /* workaround to avoid logging when it's an old clockSync packet with old FF or SC versions */
             {
-                int msgVecCount = ret;
-                int msgVecSentCount = 0;
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to process compound RTCP packet (%d)", ret);
+            }
 
-#ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
-                msgVecCount = round((float)msgVecCount * ((float)rand() * (ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MAX - ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN) / RAND_MAX + ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION_MSG_MIN));
-    #endif
+            if ((gotVideoStats) && (sender->videoStatsCallback != NULL))
+            {
+                /* Call the receiver report callback function */
+                sender->videoStatsCallback(&sender->rtcpSenderContext.videoStatsCtx.videoStats, sender->videoStatsCallbackUserPtr);
+            }
 
-                packetsPending = 1;
-                ret = sendmmsg(sender->streamSocket, sender->msgVec, msgVecCount, 0);
-                if (ret < 0)
+            if ((gotReceptionReport) && (sender->rtpStatsCallback != NULL))
+            {
+                ARSTREAM2_RTP_RtpStats_t rtpStats;
+
+                memset(&rtpStats, 0, sizeof(ARSTREAM2_RTP_RtpStats_t));
+                rtpStats.timestamp = sender->rtcpSenderContext.lastRrReceptionTimestamp;
+                rtpStats.roundTripDelay = sender->rtcpSenderContext.roundTripDelay;
+                rtpStats.interarrivalJitter = sender->rtcpSenderContext.interarrivalJitter;
+                rtpStats.receiverLostCount = sender->rtcpSenderContext.receiverLostCount;
+                rtpStats.receiverFractionLost = sender->rtcpSenderContext.receiverFractionLost;
+                rtpStats.receiverExtHighestSeqNum = sender->rtcpSenderContext.receiverExtHighestSeqNum;
+                rtpStats.lastSenderReportInterval = sender->rtcpSenderContext.lastSrInterval;
+                rtpStats.senderReportIntervalPacketCount = sender->rtcpSenderContext.srIntervalPacketCount;
+                rtpStats.senderReportIntervalByteCount = sender->rtcpSenderContext.srIntervalByteCount;
+                rtpStats.senderPacketCount = sender->rtpSenderContext.packetCount;
+                rtpStats.senderByteCount = sender->rtpSenderContext.byteCount;
+                rtpStats.peerClockDelta = sender->rtcpSenderContext.clockDeltaCtx.clockDeltaAvg;
+                rtpStats.roundTripDelayFromClockDelta = (uint32_t)sender->rtcpSenderContext.clockDeltaCtx.rtDelay;
+
+                /* Call the receiver report callback function */
+                sender->rtpStatsCallback(&rtpStats, sender->rtpStatsCallbackUserPtr);
+            }
+
+            while (((bytes = recv(sender->controlSocket, sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, 0)) == -1) && (errno == EINTR));
+            if ((bytes < 0) && (errno != EAGAIN))
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - read error (%d): %s", errno, strerror(errno));
+            }
+        }
+    }
+
+    /* RTCP sender reports */
+    uint32_t srDelay = (uint32_t)(curTime - sender->rtcpSenderContext.lastRtcpTimestamp);
+    if (srDelay >= sender->nextSrDelay)
+    {
+        unsigned int size = 0;
+
+        ret = ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, curTime, 1, 1, 1,
+                                                           sender->rtpSenderContext.packetCount, sender->rtpSenderContext.byteCount,
+                                                           &sender->rtcpSenderContext, &size);
+
+        if ((ret == 0) && (size > 0))
+        {
+            sender->rtcpDropStatsTotalPackets++;
+            ssize_t bytes;
+            while (((bytes = sendto(sender->controlSocket, sender->rtcpMsgBuffer, size, 0, (struct sockaddr*)&sender->controlSendSin, sizeof(sender->controlSendSin))) == -1) && (errno == EINTR));
+            if (bytes < 0)
+            {
+                if (errno == EAGAIN)
                 {
-                    if (errno == EAGAIN)
+                    /* Log drops once in a while */
+                    sender->rtcpDropCount++;
+                    if (sender->rtcpDropLogStartTime)
                     {
-                        //ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Stream socket buffer full (no packets dropped, will retry later) - sendmmsg error (%d): %s", errno, strerror(errno)); //TODO: debug
-                        int i;
-                        for (i = 0, msgVecSentCount = 0; i < msgVecCount; i++)
+                        if (curTime >= sender->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_RTCP_DROP_LOG_INTERVAL * 1000000)
                         {
-                            if (sender->msgVec[i].msg_len > 0) msgVecSentCount++;
+                            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
+                                        sender->rtcpDropCount, sender->rtcpDropStatsTotalPackets, (float)sender->rtcpDropCount * 100. / (float)sender->rtcpDropStatsTotalPackets,
+                                        (float)(curTime - sender->rtcpDropLogStartTime) / 1000000.);
+                            sender->rtcpDropCount = 0;
+                            sender->rtcpDropStatsTotalPackets = 0;
+                            sender->rtcpDropLogStartTime = 0;
                         }
-                        packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
-                        //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d (socket buffer is full)", msgVecSentCount, msgVecCount); //TODO: debug
                     }
                     else
                     {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Stream socket - sendmmsg error (%d): %s", errno, strerror(errno));
-                        if ((sender->disconnectionCallback) && (previouslySending) && (errno == ECONNREFUSED))
-                        {
-                            /* Call the disconnection callback */
-                            sender->disconnectionCallback(sender->disconnectionCallbackUserPtr);
-                        }
+                        sender->rtcpDropLogStartTime = curTime;
                     }
                 }
                 else
                 {
-                    previouslySending = 1;
-                    msgVecSentCount = ret;
-                    packetsPending = (msgVecSentCount < msgVecCount) ? 1 : 0;
-                    //if (packetsPending) ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Sent %d packets out of %d", msgVecSentCount, msgVecCount); //TODO: debug
-                }
-
-                ret = ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(&sender->rtpSenderContext, &sender->packetFifo,
-                                                                     &sender->packetFifoQueue, sender->msgVec,
-                                                                     msgVecSentCount, curTime);
-                if (ret < 0)
-                {
-                    if (ret != -2)
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to clean FIFO from msgVec (%d)", ret);
-                    }
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - send error (%d): %s", errno, strerror(errno));
                 }
             }
         }
 
-        /* RTCP sender reports */
-        uint32_t srDelay = (uint32_t)(curTime - sender->rtcpSenderContext.lastRtcpTimestamp);
-        if (srDelay >= nextSrDelay)
-        {
-            unsigned int size = 0;
-
-            ret = ARSTREAM2_RTCP_Sender_GenerateCompoundPacket(sender->rtcpMsgBuffer, sender->rtpSenderContext.maxPacketSize, curTime, 1, 1, 1,
-                                                               sender->rtpSenderContext.packetCount, sender->rtpSenderContext.byteCount,
-                                                               &sender->rtcpSenderContext, &size);
-
-            if ((ret == 0) && (size > 0))
-            {
-                sender->rtcpDropStatsTotalPackets++;
-                ssize_t bytes = sendto(sender->controlSocket, sender->rtcpMsgBuffer, size, 0, (struct sockaddr*)&sender->controlSendSin, sizeof(sender->controlSendSin));
-                if (bytes < 0)
-                {
-                    if (errno == EAGAIN)
-                    {
-                        /* Log drops once in a while */
-                        sender->rtcpDropCount++;
-                        if (sender->rtcpDropLogStartTime)
-                        {
-                            if (curTime >= sender->rtcpDropLogStartTime + (uint64_t)ARSTREAM2_RTP_SENDER_RTCP_DROP_LOG_INTERVAL * 1000000)
-                            {
-                                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_SENDER_TAG, "Dropped %d RTCP packets out of %d (%.1f%%) on socket buffer full in last %.1f seconds",
-                                            sender->rtcpDropCount, sender->rtcpDropStatsTotalPackets, (float)sender->rtcpDropCount * 100. / (float)sender->rtcpDropStatsTotalPackets,
-                                            (float)(curTime - sender->rtcpDropLogStartTime) / 1000000.);
-                                sender->rtcpDropCount = 0;
-                                sender->rtcpDropStatsTotalPackets = 0;
-                                sender->rtcpDropLogStartTime = 0;
-                            }
-                        }
-                        else
-                        {
-                            sender->rtcpDropLogStartTime = curTime;
-                        }
-                    }
-                    else
-                    {
-                        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Control socket - send error (%d): %s", errno, strerror(errno));
-                    }
-                }
-            }
-
-            sender->rtcpSenderContext.lastRtcpTimestamp = curTime;
-            srDelay = 0;
-            nextSrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / sender->rtcpSenderContext.rtcpByteRate;
-            if (nextSrDelay < ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL) nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
-        }
-
-        if ((selectRet >= 0) && (FD_ISSET(sender->naluFifoPipe[0], &readSet)))
-        {
-            /* Dump bytes (so it won't be ready next time) */
-            char dump[10];
-            int readRet = read(sender->naluFifoPipe[0], &dump, 10);
-            if (readRet < 0)
-            {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));
-            }
-        }
-
-        ARSAL_Mutex_Lock(&(sender->streamMutex));
-        shouldStop = sender->threadShouldStop;
-        ARSAL_Mutex_Unlock(&(sender->streamMutex));
-        
-        if (!shouldStop)
-        {
-            /* Prepare the next select */
-            readSet = readSetSaved;
-            exceptSet = exceptSetSaved;
-            FD_ZERO(&writeSet);
-            if (packetsPending) FD_SET(sender->streamSocket, &writeSet);
-            tv.tv_sec = 0;
-            tv.tv_usec = (nextSrDelay - srDelay < ARSTREAM2_RTP_SENDER_TIMEOUT_US) ? nextSrDelay - srDelay : ARSTREAM2_RTP_SENDER_TIMEOUT_US;
-        }
+        sender->rtcpSenderContext.lastRtcpTimestamp = curTime;
+        srDelay = 0;
+        sender->nextSrDelay = (size + ARSTREAM2_RTP_UDP_HEADER_SIZE + ARSTREAM2_RTP_IP_HEADER_SIZE) * 1000000 / sender->rtcpSenderContext.rtcpByteRate;
+        if (sender->nextSrDelay < ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL) sender->nextSrDelay = ARSTREAM2_RTCP_SENDER_MIN_PACKET_TIME_INTERVAL;
     }
 
-    ARSAL_Mutex_Lock(&(sender->streamMutex));
-    sender->threadStarted = 0;
-    ARSAL_Mutex_Unlock(&(sender->streamMutex));
+    sender->nextSrDelay = sender->nextSrDelay - srDelay;
 
-    /* cancel the last Access Unit */
-    if (sender->rtpSenderContext.auCallback != NULL)
+    return retVal;
+}
+
+
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessEnd(ARSTREAM2_RtpSender_t *sender, int queueOnly)
+{
+    eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
+    struct timespec t1;
+    uint64_t curTime;
+
+    // Args check
+    if (sender == NULL)
     {
-        if (sender->rtpSenderContext.previousTimestamp != sender->rtpSenderContext.lastAuCallbackTimestamp)
-        {
-            sender->rtpSenderContext.lastAuCallbackTimestamp = sender->rtpSenderContext.previousTimestamp;
-
-            /* call the auCallback */
-            ((ARSTREAM2_StreamSender_AuCallback_t)sender->rtpSenderContext.auCallback)(ARSTREAM2_STREAM_SENDER_STATUS_CANCELLED, sender->rtpSenderContext.previousAuUserPtr, sender->rtpSenderContext.auCallbackUserPtr);
-        }
+        return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
     /* flush the NALU FIFO and packet FIFO */
     ARSAL_Time_GetTime(&t1);
     curTime = (uint64_t)t1.tv_sec * 1000000 + (uint64_t)t1.tv_nsec / 1000;
-    ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, &sender->naluFifo, curTime);
-    ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, &sender->packetFifo, curTime);
+    if (sender->naluFifo != NULL) ARSTREAM2_RTPH264_Sender_FifoFlush(&sender->rtpSenderContext, sender->naluFifo, curTime);
+    if (queueOnly)
+        ARSTREAM2_RTP_Sender_PacketFifoFlushQueue(&sender->rtpSenderContext, sender->packetFifo, sender->packetFifoQueue, curTime);
+    else
+        ARSTREAM2_RTP_Sender_PacketFifoFlush(&sender->rtpSenderContext, sender->packetFifo, curTime);
 
-    ARSAL_PRINT(ARSAL_PRINT_DEBUG, ARSTREAM2_RTP_SENDER_TAG, "Sender thread ended");
-
-    return (void*)0;
+    return retVal;
 }
 
 
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sender, ARSTREAM2_RtpSender_DynamicConfig_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-    int i;
 
     if ((sender == NULL) || (config == NULL))
     {
@@ -1677,27 +1324,8 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sen
     }
 
     config->targetPacketSize = sender->rtpSenderContext.targetPacketSize;
-    config->streamSocketBufferSize = sender->streamSocketSendBufferSize;
+    config->streamSocketSendBufferSize = sender->streamSocketSendBufferSize;
     config->maxBitrate = sender->maxBitrate;
-    if (sender->maxLatencyUs > 0)
-    {
-        config->maxLatencyMs = (sender->maxLatencyUs + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
-    }
-    else
-    {
-        config->maxLatencyMs = 0;
-    }
-    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-    {
-        if (sender->maxNetworkLatencyUs[i] > 0)
-        {
-            config->maxNetworkLatencyMs[i] = (sender->maxNetworkLatencyUs[i] + ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0)) / 1000;
-        }
-        else
-        {
-            config->maxNetworkLatencyMs[i] = 0;
-        }
-    }
 
     return ret;
 }
@@ -1706,38 +1334,16 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetDynamicConfig(ARSTREAM2_RtpSender_t *sen
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_SetDynamicConfig(ARSTREAM2_RtpSender_t *sender, const ARSTREAM2_RtpSender_DynamicConfig_t *config)
 {
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
-    int i;
 
     if ((sender == NULL) || (config == NULL))
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    sender->rtpSenderContext.targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : sender->rtpSenderContext.maxPacketSize;
-    sender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
-    if (config->streamSocketBufferSize > 0)
-    {
-        sender->streamSocketSendBufferSize = config->streamSocketBufferSize;
-    }
-    else
-    {
-        int totalBufSize = 0;
-        if (config->maxNetworkLatencyMs[0] > 0)
-        {
-            totalBufSize = sender->maxBitrate * config->maxNetworkLatencyMs[0] / 1000 / 8;
-        }
-        else if (config->maxLatencyMs > 0)
-        {
-            totalBufSize = sender->maxBitrate * config->maxLatencyMs / 1000 / 8;
-        }
-        int minStreamSocketSendBufferSize = (sender->maxBitrate > 0) ? sender->maxBitrate * 50 / 1000 / 8 : ARSTREAM2_RTP_SENDER_DEFAULT_STREAM_SOCKET_SEND_BUFFER_SIZE;
-        sender->streamSocketSendBufferSize = (totalBufSize / 4 > minStreamSocketSendBufferSize) ? totalBufSize / 4 : minStreamSocketSendBufferSize;
-    }
-    sender->maxLatencyUs = (config->maxLatencyMs > 0) ? config->maxLatencyMs * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
-    for (i = 0; i < ARSTREAM2_STREAM_SENDER_MAX_IMPORTANCE_LEVELS; i++)
-    {
-        sender->maxNetworkLatencyUs[i] = (config->maxNetworkLatencyMs[i] > 0) ? config->maxNetworkLatencyMs[i] * 1000 - ((sender->maxBitrate > 0) ? (int)((uint64_t)sender->streamSocketSendBufferSize * 8 * 1000000 / sender->maxBitrate) : 0) : 0;
-    }
+    sender->rtpSenderContext.targetPacketSize = config->targetPacketSize;
+    sender->maxBitrate = config->maxBitrate;
+    sender->rtcpSenderContext.rtcpByteRate = (sender->maxBitrate > 0) ? sender->maxBitrate * ARSTREAM2_RTCP_SENDER_BANDWIDTH_SHARE / 8 : ARSTREAM2_RTCP_SENDER_DEFAULT_BITRATE / 8;
+    sender->streamSocketSendBufferSize = config->streamSocketSendBufferSize;
 
     if ((sender->streamSocket != -1) && (sender->streamSocketSendBufferSize))
     {

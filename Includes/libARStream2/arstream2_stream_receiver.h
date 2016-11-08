@@ -251,9 +251,7 @@ typedef struct ARSTREAM2_StreamReceiver_ResenderConfig_t
     int clientControlPort;                          /**< Client control port */
     eARSAL_SOCKET_CLASS_SELECTOR classSelector;     /**< Type of Service class selector */
     int streamSocketBufferSize;                     /**< Send buffer size for the stream socket (optional, can be 0) */
-    int maxPacketSize;                              /**< Maximum network packet size in bytes (example: the interface MTU) */
     int maxNetworkLatencyMs;                        /**< Maximum acceptable network latency in milliseconds */
-    int useRtpHeaderExtensions;                     /**< Boolean-like (0-1) flag: if active insert access unit metadata as RTP header extensions */
 
 } ARSTREAM2_StreamReceiver_ResenderConfig_t;
 
@@ -420,61 +418,37 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopRecorder(ARSTREAM2_StreamReceiver_
 /**
  * @brief Initialize a new resender.
  *
- * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_Free()
- * or ARSTREAM2_StreamReceiver_FreeResender() to free the resources.
+ * The library allocates the required resources. The user must call ARSTREAM2_StreamReceiver_StopResender()
+ * to free the resources.
  *
  * @param streamReceiverHandle StreamReceiver instance handle.
- * @param resenderHandle Pointer to the resender handle used in future calls to the library.
+ * @param streamResenderHandle Pointer to the resender handle used in future calls to the library.
  * @param config The resender configuration.
  *
- * @return 0 if no error occurred.
+ * @return ARSTREAM2_OK if no error occurred.
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  *
  * @see ARSTREAM2_StreamReceiver_StopResender()
- * @see ARSTREAM2_StreamReceiver_FreeResender()
  */
 eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
-                                                        ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle,
+                                                        ARSTREAM2_StreamReceiver_ResenderHandle *streamResenderHandle,
                                                         const ARSTREAM2_StreamReceiver_ResenderConfig_t *config);
 
 
 /**
  * @brief Stop a resender.
  *
- * The function ends the resender threads before they can be joined.
+ * The library stops the resender and frees the allocated resources.
+ * On success the streamResenderHandle is set to NULL.
  *
- * @param resenderHandle Resender handle.
- *
- * @return ARSTREAM2_OK if no error occurred.
- * @return an eARSTREAM2_ERROR error code if an error occurred.
- */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle);
-
-
-/**
- * @brief Free a resender.
- *
- * The library frees the allocated resources. On success the resenderHandle is set to NULL.
- *
- * @param resenderHandle Pointer to the resender handle.
+ * @param streamReceiverHandle StreamReceiver instance handle.
+ * @param streamResenderHandle Pointer to the resender handle used in future calls to the library.
  *
  * @return ARSTREAM2_OK if no error occurred.
  * @return an eARSTREAM2_ERROR error code if an error occurred.
  */
-eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_FreeResender(ARSTREAM2_StreamReceiver_ResenderHandle *resenderHandle);
-
-
-/**
- * @brief Run a resender thread.
- *
- * The resender must be correctly allocated using ARSTREAM2_StreamReceiver_InitResender().
- * @warning This function never returns until ARSTREAM2_StreamReceiver_StopResender() is called. The tread can then be joined.
- *
- * @param resenderHandle Resender handle casted as (void*).
- *
- * @return NULL in all cases.
- */
-void* ARSTREAM2_StreamReceiver_RunResenderThread(void *resenderHandle);
+eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_Handle streamReceiverHandle,
+                                                       ARSTREAM2_StreamReceiver_ResenderHandle *streamResenderHandle);
 
 
 /**
