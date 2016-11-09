@@ -535,7 +535,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     }
 
     ARSTREAM2_RtpResender_t *resender, *next;
-    for (resender = streamReceiver->resender; resender; resender = resender->next)
+    for (resender = streamReceiver->resender; resender; resender = next)
     {
         ret = ARSTREAM2_RtpSender_Delete(&resender->sender);
         if (ret != ARSTREAM2_OK)
