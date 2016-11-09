@@ -521,6 +521,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Free(ARSTREAM2_StreamReceiver_Handle *
     ARSAL_Mutex_Lock(&(streamReceiver->threadMutex));
     if (streamReceiver->threadStarted == 1)
     {
+        ARSAL_Mutex_Unlock(&(streamReceiver->threadMutex));
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Call ARSTREAM2_StreamReceiver_Stop() before calling this function");
         return ARSTREAM2_ERROR_BUSY;
     }
@@ -1703,7 +1704,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
                 if (err != ARSTREAM2_OK)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
-                    return (void *)0;
+                    break;
                 }
                 if (_timeout < nextTimeout) nextTimeout = _timeout;
                 if (_maxFd > maxFd) maxFd = _maxFd;
