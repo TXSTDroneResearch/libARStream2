@@ -814,7 +814,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Filter_Init(ARSTREAM2_H264Filter_Handle *filterHa
 
     if (ret == ARSTREAM2_OK)
     {
-        *filterHandle = (ARSTREAM2_H264Filter_Handle*)filter;
+        *filterHandle = filter;
     }
     else
     {

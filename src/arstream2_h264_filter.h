@@ -32,7 +32,7 @@
 /**
  * @brief ARSTREAM2 H264Filter instance handle.
  */
-typedef void* ARSTREAM2_H264Filter_Handle;
+typedef struct ARSTREAM2_H264Filter_s *ARSTREAM2_H264Filter_Handle;
 
 
 typedef int (*ARSTREAM2_H264Filter_SpsPpsSyncCallback_t)(uint8_t *spsBuffer, int spsSize, uint8_t *ppsBuffer, int ppsSize, void *userPtr);

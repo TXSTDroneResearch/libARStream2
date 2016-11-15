@@ -42,13 +42,13 @@ extern "C" {
 /**
  * @brief ARSTREAM2 StreamReceiver instance handle.
  */
-typedef void* ARSTREAM2_StreamReceiver_Handle;
+typedef struct ARSTREAM2_StreamReceiver_s *ARSTREAM2_StreamReceiver_Handle;
 
 
 /**
  * @brief ARSTREAM2 StreamReceiver resender handle.
  */
-typedef void* ARSTREAM2_StreamReceiver_ResenderHandle;
+typedef struct ARSTREAM2_RtpResender_s *ARSTREAM2_StreamReceiver_ResenderHandle;
 
 
 /**

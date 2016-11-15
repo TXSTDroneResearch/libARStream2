@@ -591,7 +591,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
 
     if (ret == ARSTREAM2_OK)
     {
-        *streamRecorderHandle = (ARSTREAM2_StreamRecorder_Handle*)streamRecorder;
+        *streamRecorderHandle = streamRecorder;
     }
     else
     {
@@ -672,7 +672,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Stop(ARSTREAM2_StreamRecorder_Handle s
 eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_SetUntimedMetadata(ARSTREAM2_StreamRecorder_Handle streamRecorderHandle,
                                                              const ARSTREAM2_StreamRecorder_UntimedMetadata_t *metadata)
 {
-    ARSTREAM2_StreamRecorder_t* streamRecorder = (ARSTREAM2_StreamRecorder_t*)streamRecorderHandle;
+    ARSTREAM2_StreamRecorder_t* streamRecorder = streamRecorderHandle;
     eARSTREAM2_ERROR ret = ARSTREAM2_OK;
 
     if (!streamRecorderHandle)

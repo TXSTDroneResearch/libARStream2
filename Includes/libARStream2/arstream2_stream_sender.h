@@ -51,7 +51,7 @@ extern "C" {
 /**
  * @brief ARSTREAM2 StreamSender instance handle.
  */
-typedef void* ARSTREAM2_StreamSender_Handle;
+typedef struct ARSTREAM2_StreamSender_s *ARSTREAM2_StreamSender_Handle;
 
 
 /**

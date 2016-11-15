@@ -454,7 +454,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_Init(ARSTREAM2_StreamReceiver_Handle *
 
     if (ret == ARSTREAM2_OK)
     {
-        *streamReceiverHandle = (ARSTREAM2_StreamReceiver_Handle*)streamReceiver;
+        *streamReceiverHandle = streamReceiver;
     }
     else
     {
@@ -2478,7 +2478,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
 
     if (ret == ARSTREAM2_OK)
     {
-        *streamResenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle*)resender;
+        *streamResenderHandle = resender;
     }
     else
     {

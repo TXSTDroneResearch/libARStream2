@@ -287,7 +287,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
 
     if (ret == ARSTREAM2_OK)
     {
-        *streamSenderHandle = (ARSTREAM2_StreamSender_Handle*)streamSender;
+        *streamSenderHandle = streamSender;
     }
     else
     {

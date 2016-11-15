@@ -20,7 +20,7 @@ extern "C" {
 /**
  * @brief ARSTREAM2 StreamRecorder instance handle.
  */
-typedef void* ARSTREAM2_StreamRecorder_Handle;
+typedef struct ARSTREAM2_StreamRecorder_s *ARSTREAM2_StreamRecorder_Handle;
 
 
 /**
