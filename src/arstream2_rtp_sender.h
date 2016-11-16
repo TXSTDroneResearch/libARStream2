@@ -149,7 +149,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_Delete(ARSTREAM2_RtpSender_t **sender);
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sender);
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set **readSet, fd_set **writeSet, fd_set **exceptSet, int *maxFd, uint32_t *nextTimeout);
 
 
 eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet);

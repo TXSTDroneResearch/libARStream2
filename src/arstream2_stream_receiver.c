@@ -1570,10 +1570,9 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     ARSTREAM2_StreamReceiver_t *streamReceiver = (ARSTREAM2_StreamReceiver_t*)streamReceiverHandle;
     ARSTREAM2_RtpResender_t *resender;
     int shouldStop, selectRet = 0;
-    fd_set readSet;
-    fd_set writeSet;
-    fd_set exceptSet;
-    int maxFd = 0, _maxFd = 0, useMux = 0;
+    fd_set readSet, writeSet, exceptSet;
+    fd_set *pReadSet, *pWriteSet, *pExceptSet;
+    int maxFd = 0, _maxFd = 0;
     struct timeval tv;
     uint32_t nextTimeout = 0, _timeout = 0;
     eARSTREAM2_ERROR err;
@@ -1593,8 +1592,11 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     FD_ZERO(&readSet);
     FD_ZERO(&writeSet);
     FD_ZERO(&exceptSet);
+    pReadSet = &readSet;
+    pWriteSet = &writeSet;
+    pExceptSet = &exceptSet;
 
-    err = ARSTREAM2_RtpReceiver_GetSelectParams(streamReceiver->receiver, &useMux, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+    err = ARSTREAM2_RtpReceiver_GetSelectParams(streamReceiver->receiver, &pReadSet, &pWriteSet, &pExceptSet, &maxFd, &nextTimeout);
     if (err != ARSTREAM2_OK)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
@@ -1604,7 +1606,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
     for (resender = streamReceiver->resender; resender; resender = resender->next)
     {
-        err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
+        err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &pReadSet, &pWriteSet, &pExceptSet, &_maxFd, &_timeout);
         if (err != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
@@ -1615,8 +1617,10 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
     }
     ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
-    FD_SET(streamReceiver->signalPipe[0], &readSet);
-    FD_SET(streamReceiver->signalPipe[0], &exceptSet);
+    if (pReadSet)
+        FD_SET(streamReceiver->signalPipe[0], pReadSet);
+    if (pExceptSet)
+        FD_SET(streamReceiver->signalPipe[0], pExceptSet);
     if (streamReceiver->signalPipe[0] > maxFd) maxFd = streamReceiver->signalPipe[0];
     maxFd++;
     tv.tv_sec = 0;
@@ -1624,9 +1628,9 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 
     while (shouldStop == 0)
     {
-        if (!useMux)
+        if ((pReadSet) && (pWriteSet) && (pExceptSet))
         {
-            while (((selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv)) == -1) && (errno == EINTR));
+            while (((selectRet = select(maxFd, pReadSet, pWriteSet, pExceptSet, &tv)) == -1) && (errno == EINTR));
 
             if (selectRet < 0)
             {
@@ -1636,12 +1640,12 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 
         ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
 
-        err = ARSTREAM2_RtpReceiver_ProcessRtcp(streamReceiver->receiver, selectRet, &readSet, &writeSet, &exceptSet, &shouldStop);
+        err = ARSTREAM2_RtpReceiver_ProcessRtcp(streamReceiver->receiver, selectRet, pReadSet, pWriteSet, pExceptSet, &shouldStop);
         if (err != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_ProcessRtcp() failed (%d)", err);
         }
-        err = ARSTREAM2_RtpReceiver_ProcessRtp(streamReceiver->receiver, selectRet, &readSet, &writeSet, &exceptSet, &shouldStop,
+        err = ARSTREAM2_RtpReceiver_ProcessRtp(streamReceiver->receiver, selectRet, pReadSet, pWriteSet, pExceptSet, &shouldStop,
                                                streamReceiver->resendQueue, streamReceiver->resendTimeout, streamReceiver->resendCount);
         if (err != ARSTREAM2_OK)
         {
@@ -1650,12 +1654,12 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 
         for (resender = streamReceiver->resender; resender; resender = resender->next)
         {
-            err = ARSTREAM2_RtpSender_ProcessRtcp(resender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+            err = ARSTREAM2_RtpSender_ProcessRtcp(resender->sender, selectRet, pReadSet, pWriteSet, pExceptSet);
             if (err != ARSTREAM2_OK)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessRtcp() failed (%d)", err);
             }
-            err = ARSTREAM2_RtpSender_ProcessRtp(resender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+            err = ARSTREAM2_RtpSender_ProcessRtp(resender->sender, selectRet, pReadSet, pWriteSet, pExceptSet);
             if (err != ARSTREAM2_OK)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpSender_ProcessRtp() failed (%d)", err);
@@ -1664,7 +1668,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
 
         ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
-        if ((!useMux) && ((selectRet >= 0) && (FD_ISSET(streamReceiver->signalPipe[0], &readSet))))
+        if ((pReadSet) && ((selectRet >= 0) && (FD_ISSET(streamReceiver->signalPipe[0], pReadSet))))
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
@@ -1689,8 +1693,11 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
             FD_ZERO(&readSet);
             FD_ZERO(&writeSet);
             FD_ZERO(&exceptSet);
+            pReadSet = &readSet;
+            pWriteSet = &writeSet;
+            pExceptSet = &exceptSet;
 
-            err = ARSTREAM2_RtpReceiver_GetSelectParams(streamReceiver->receiver, &useMux, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+            err = ARSTREAM2_RtpReceiver_GetSelectParams(streamReceiver->receiver, &pReadSet, &pWriteSet, &pExceptSet, &maxFd, &nextTimeout);
             if (err != ARSTREAM2_OK)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
@@ -1700,7 +1707,7 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
             ARSAL_Mutex_Lock(&(streamReceiver->resendMutex));
             for (resender = streamReceiver->resender; resender; resender = resender->next)
             {
-                err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &readSet, &writeSet, &exceptSet, &_maxFd, &_timeout);
+                err = ARSTREAM2_RtpSender_GetSelectParams(resender->sender, &pReadSet, &pWriteSet, &pExceptSet, &_maxFd, &_timeout);
                 if (err != ARSTREAM2_OK)
                 {
                     ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "ARSTREAM2_RtpReceiver_GetSelectParams() failed (%d)", err);
@@ -1711,8 +1718,10 @@ void* ARSTREAM2_StreamReceiver_RunNetworkThread(void *streamReceiverHandle)
             }
             ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
 
-            FD_SET(streamReceiver->signalPipe[0], &readSet);
-            FD_SET(streamReceiver->signalPipe[0], &exceptSet);
+            if (pReadSet)
+                FD_SET(streamReceiver->signalPipe[0], pReadSet);
+            if (pExceptSet)
+                FD_SET(streamReceiver->signalPipe[0], pExceptSet);
             if (streamReceiver->signalPipe[0] > maxFd) maxFd = streamReceiver->signalPipe[0];
             maxFd++;
             tv.tv_sec = 0;

@@ -929,7 +929,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_FlushNaluQueue(ARSTREAM2_RtpSender_t *sende
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout)
+eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *sender, fd_set **readSet, fd_set **writeSet, fd_set **exceptSet, int *maxFd, uint32_t *nextTimeout)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int _maxFd;
@@ -939,19 +939,25 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_GetSelectParams(ARSTREAM2_RtpSender_t *send
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if ((!readSet) || (!writeSet) || (!exceptSet))
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
 
     _maxFd = -1;
     if (sender->streamSocket > _maxFd) _maxFd = sender->streamSocket;
     if (sender->controlSocket > _maxFd) _maxFd = sender->controlSocket;
 
-    FD_SET(sender->controlSocket, readSet);
-    if (sender->packetsPending) FD_SET(sender->streamSocket, writeSet);
-    FD_SET(sender->streamSocket, exceptSet);
-    FD_SET(sender->controlSocket, exceptSet);
+    if (readSet)
+    {
+        FD_SET(sender->controlSocket, *readSet);
+    }
+    if (writeSet)
+    {
+        if (sender->packetsPending)
+            FD_SET(sender->streamSocket, *writeSet);
+    }
+    if (exceptSet)
+    {
+        FD_SET(sender->streamSocket, *exceptSet);
+        FD_SET(sender->controlSocket, *exceptSet);
+    }
 
     if (maxFd) *maxFd = _maxFd;
     if (nextTimeout) *nextTimeout = (sender->nextSrDelay < ARSTREAM2_RTP_SENDER_TIMEOUT_US) ? sender->nextSrDelay : ARSTREAM2_RTP_SENDER_TIMEOUT_US;

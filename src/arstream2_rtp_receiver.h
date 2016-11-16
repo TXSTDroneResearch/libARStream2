@@ -243,7 +243,7 @@ void ARSTREAM2_RtpReceiver_Stop(ARSTREAM2_RtpReceiver_t *receiver);
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver);
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, int *useMux, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout);
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, fd_set **readSet, fd_set **writeSet, fd_set **exceptSet, int *maxFd, uint32_t *nextTimeout);
 
 
 eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_ProcessRtp(ARSTREAM2_RtpReceiver_t *receiver, int selectRet, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet,

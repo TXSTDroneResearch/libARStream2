@@ -1190,7 +1190,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_Delete(ARSTREAM2_RtpReceiver_t **receiver
 }
 
 
-eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, int *useMux, fd_set *readSet, fd_set *writeSet, fd_set *exceptSet, int *maxFd, uint32_t *nextTimeout)
+eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *receiver, fd_set **readSet, fd_set **writeSet, fd_set **exceptSet, int *maxFd, uint32_t *nextTimeout)
 {
     eARSTREAM2_ERROR retVal = ARSTREAM2_OK;
     int _maxFd = 0;
@@ -1200,26 +1200,35 @@ eARSTREAM2_ERROR ARSTREAM2_RtpReceiver_GetSelectParams(ARSTREAM2_RtpReceiver_t *
     {
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
-    if ((!receiver->useMux) && ((!readSet) || (!writeSet) || (!exceptSet)))
-    {
-        return ARSTREAM2_ERROR_BAD_PARAMETERS;
-    }
 
     if (!receiver->useMux)
     {
         _maxFd = -1;
         if (receiver->net.streamSocket > _maxFd) _maxFd = receiver->net.streamSocket;
         if (receiver->net.controlSocket > _maxFd) _maxFd = receiver->net.controlSocket;
-
-        FD_SET(receiver->net.streamSocket, readSet);
-        FD_SET(receiver->net.controlSocket, readSet);
-        FD_SET(receiver->net.streamSocket, exceptSet);
-        FD_SET(receiver->net.controlSocket, exceptSet);
+        if (readSet)
+        {
+            FD_SET(receiver->net.streamSocket, *readSet);
+            FD_SET(receiver->net.controlSocket, *readSet);
+        }
+        if (exceptSet)
+        {
+            FD_SET(receiver->net.streamSocket, *exceptSet);
+            FD_SET(receiver->net.controlSocket, *exceptSet);
+        }
+    }
+    else
+    {
+        if (readSet)
+            *readSet = NULL;
+        if (writeSet)
+            *writeSet = NULL;
+        if (exceptSet)
+            *exceptSet = NULL;
     }
 
     if (maxFd) *maxFd = _maxFd;
     if (nextTimeout) *nextTimeout = (receiver->generateReceiverReports) ? ((receiver->nextRrDelay < ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) ? receiver->nextRrDelay : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US) : ARSTREAM2_RTP_RECEIVER_TIMEOUT_US;
-    if (useMux) *useMux = receiver->useMux;
 
     return retVal;
 }

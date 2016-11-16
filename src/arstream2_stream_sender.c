@@ -538,10 +538,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_FlushNaluQueue(ARSTREAM2_StreamSender_Ha
 void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
 {
     ARSTREAM2_StreamSender_t *streamSender = (ARSTREAM2_StreamSender_t*)streamSenderHandle;
-    int shouldStop, selectRet;
-    fd_set readSet;
-    fd_set writeSet;
-    fd_set exceptSet;
+    int shouldStop, selectRet = 0;
+    fd_set readSet, writeSet, exceptSet;
+    fd_set *pReadSet, *pWriteSet, *pExceptSet;
     int maxFd = 0;
     struct timeval tv;
     uint32_t nextTimeout = 0;
@@ -562,16 +561,21 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
     FD_ZERO(&readSet);
     FD_ZERO(&writeSet);
     FD_ZERO(&exceptSet);
+    pReadSet = &readSet;
+    pWriteSet = &writeSet;
+    pExceptSet = &exceptSet;
 
-    err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+    err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &pReadSet, &pWriteSet, &pExceptSet, &maxFd, &nextTimeout);
     if (err != ARSTREAM2_OK)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
         return (void *)0;
     }
 
-    FD_SET(streamSender->signalPipe[0], &readSet);
-    FD_SET(streamSender->signalPipe[0], &exceptSet);
+    if (pReadSet)
+        FD_SET(streamSender->signalPipe[0], pReadSet);
+    if (pExceptSet)
+        FD_SET(streamSender->signalPipe[0], pExceptSet);
     if (streamSender->signalPipe[0] > maxFd) maxFd = streamSender->signalPipe[0];
     maxFd++;
     tv.tv_sec = 0;
@@ -579,25 +583,28 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
 
     while (shouldStop == 0)
     {
-        while (((selectRet = select(maxFd, &readSet, &writeSet, &exceptSet, &tv)) == -1) && (errno == EINTR));
-
-        if (selectRet < 0)
+        if ((pReadSet) && (pWriteSet) && (pExceptSet))
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Select error (%d): %s", errno, strerror(errno));
+            while (((selectRet = select(maxFd, pReadSet, pWriteSet, pExceptSet, &tv)) == -1) && (errno == EINTR));
+
+            if (selectRet < 0)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Select error (%d): %s", errno, strerror(errno));
+            }
         }
 
-        err = ARSTREAM2_RtpSender_ProcessRtcp(streamSender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+        err = ARSTREAM2_RtpSender_ProcessRtcp(streamSender->sender, selectRet, pReadSet, pWriteSet, pExceptSet);
         if (err != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_ProcessRtcp() failed (%d)", err);
         }
-        err = ARSTREAM2_RtpSender_ProcessRtp(streamSender->sender, selectRet, &readSet, &writeSet, &exceptSet);
+        err = ARSTREAM2_RtpSender_ProcessRtp(streamSender->sender, selectRet, pReadSet, pWriteSet, pExceptSet);
         if (err != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_ProcessRtp() failed (%d)", err);
         }
 
-        if ((selectRet >= 0) && (FD_ISSET(streamSender->signalPipe[0], &readSet)))
+        if ((pReadSet) && (selectRet >= 0) && (FD_ISSET(streamSender->signalPipe[0], pReadSet)))
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
@@ -618,16 +625,21 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
             FD_ZERO(&readSet);
             FD_ZERO(&writeSet);
             FD_ZERO(&exceptSet);
+            pReadSet = &readSet;
+            pWriteSet = &writeSet;
+            pExceptSet = &exceptSet;
 
-            err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &readSet, &writeSet, &exceptSet, &maxFd, &nextTimeout);
+            err = ARSTREAM2_RtpSender_GetSelectParams(streamSender->sender, &pReadSet, &pWriteSet, &pExceptSet, &maxFd, &nextTimeout);
             if (err != ARSTREAM2_OK)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "ARSTREAM2_RtpSender_GetSelectParams() failed (%d)", err);
                 break;
             }
 
-            FD_SET(streamSender->signalPipe[0], &readSet);
-            FD_SET(streamSender->signalPipe[0], &exceptSet);
+            if (pReadSet)
+                FD_SET(streamSender->signalPipe[0], pReadSet);
+            if (pExceptSet)
+                FD_SET(streamSender->signalPipe[0], pExceptSet);
             if (streamSender->signalPipe[0] > maxFd) maxFd = streamSender->signalPipe[0];
             maxFd++;
             tv.tv_sec = 0;
