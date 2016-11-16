@@ -1055,7 +1055,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
 #endif
         ret = ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(&sender->rtpSenderContext, sender->naluFifo,
                                                             sender->packetFifo, sender->packetFifoQueue,
-                                                            dropOnTimeout, curTime, &newPacketsCount);
+                                                            curTime, dropOnTimeout, &newPacketsCount);
         if (ret != 0)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
