@@ -423,11 +423,11 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
                                                   ARSTREAM2_H264_NaluFifo_t *naluFifo,
                                                   ARSTREAM2_RTP_PacketFifo_t *packetFifo,
                                                   ARSTREAM2_RTP_PacketFifoQueue_t *packetFifoQueue,
-                                                  uint64_t curTime, int dropOnTimeout, unsigned int *newPacketsCount)
+                                                  uint64_t curTime, int dropOnTimeout, int *newPacketsCount)
 {
     ARSTREAM2_H264_NalUnit_t nalu;
     int ret = 0, fifoRes, naluCount = 0, err;
-    unsigned int initialPacketCount = packetFifoQueue->count;
+    int initialPacketCount = packetFifoQueue->count;
 
     while ((fifoRes = ARSTREAM2_RTPH264_FifoDequeueNalu(naluFifo, &nalu)) == 0) //TODO replace with FifoDequeue+FifoPushFreeItem
     {

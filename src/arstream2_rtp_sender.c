@@ -1053,7 +1053,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
     /* RTP packets creation */
     if (sender->naluFifo != NULL)
     {
-        unsigned int newPacketsCount = 0;
+        int newPacketsCount = 0;
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_CONGESTION
         int dropOnTimeout = 0;
 #else
@@ -1066,7 +1066,7 @@ eARSTREAM2_ERROR ARSTREAM2_RtpSender_ProcessRtp(ARSTREAM2_RtpSender_t *sender, i
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo() failed (%d)", ret);
         }
-        sender->timeoutDropStatsTotalPackets += newPacketsCount;
+        sender->timeoutDropStatsTotalPackets = ((int)sender->timeoutDropStatsTotalPackets+ newPacketsCount > 0) ? ((int)sender->timeoutDropStatsTotalPackets+ newPacketsCount) : 0;
     }
 
 #ifdef ARSTREAM2_RTP_SENDER_RANDOM_DROP
