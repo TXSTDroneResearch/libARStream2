@@ -735,7 +735,7 @@ ARSTREAM2_RtpSender_t* ARSTREAM2_RtpSender_New(const ARSTREAM2_RtpSender_Config_
             retSender->msgVec = malloc(retSender->msgVecCount * sizeof(struct mmsghdr));
             if (!retSender->msgVec)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "MsgVec allocation failed (size %d)", retSender->msgVecCount * sizeof(struct mmsghdr));
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "MsgVec allocation failed (size %ld)", (long)retSender->msgVecCount * sizeof(struct mmsghdr));
                 internalError = ARSTREAM2_ERROR_ALLOC;
             }
             else

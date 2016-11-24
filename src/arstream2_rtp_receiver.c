@@ -1061,7 +1061,7 @@ ARSTREAM2_RtpReceiver_t* ARSTREAM2_RtpReceiver_New(ARSTREAM2_RtpReceiver_Config_
             retReceiver->msgVec = malloc(retReceiver->msgVecCount * sizeof(struct mmsghdr));
             if (!retReceiver->msgVec)
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "FIFO allocation failed (size %d)", retReceiver->msgVecCount * sizeof(struct mmsghdr));
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "FIFO allocation failed (size %ld)", (long)retReceiver->msgVecCount * sizeof(struct mmsghdr));
                 internalError = ARSTREAM2_ERROR_ALLOC;
             }
             else
