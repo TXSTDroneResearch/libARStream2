@@ -436,7 +436,7 @@ Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeInit(JNIEnv *env, jobjec
 JNIEXPORT jboolean JNICALL
 Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop(JNIEnv *env, jobject thizz, jlong cStreamReceiver, jlong cResender)
 {
-    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop: %d", cResender);
+    ARSAL_PRINT(ARSAL_PRINT_VERBOSE, ARSTREAM2_STREAM_RECEIVER_JNI_TAG, "Java_com_parrot_arsdk_arstream2_ARStream2Resender_nativeStop: %llx", cResender);
     jboolean retVal = JNI_TRUE;
     ARSTREAM2_StreamReceiver_Handle streamReceiverHandle = (ARSTREAM2_StreamReceiver_Handle)(intptr_t)cStreamReceiver;
     ARSTREAM2_StreamReceiver_ResenderHandle resenderHandle = (ARSTREAM2_StreamReceiver_ResenderHandle)(intptr_t)cResender;
