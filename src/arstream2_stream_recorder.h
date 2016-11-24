@@ -50,6 +50,7 @@ typedef struct
     char *makerAndModel;                    /**< product maker and model */
     char *serialNumber;                     /**< product serial number */
     char *softwareVersion;                  /**< software version */
+    char *mediaDate;                        /**< media date and time */
     char *runDate;                          /**< run date and time */
     char *runUuid;                          /**< run UUID */
     double takeoffLatitude;                 /**< takeoff latitude (500 means unknown) */

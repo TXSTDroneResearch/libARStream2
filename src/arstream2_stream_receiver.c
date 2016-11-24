@@ -109,6 +109,7 @@ typedef struct ARSTREAM2_StreamReceiver_s
     {
         ARSTREAM2_H264_AuFifoQueue_t auFifoQueue;
         char *fileName;
+        time_t startTime;
         int startPending;
         int running;
         int grayIFramePending;
@@ -1103,6 +1104,7 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderInit(ARSTREAM2_StreamReceiver_
         }
         else
         {
+            time(&streamReceiver->recorder.startTime);
             int thErr = ARSAL_Thread_Create(&streamReceiver->recorder.thread, ARSTREAM2_StreamRecorder_RunThread, (void*)streamReceiver->recorder.recorder);
             if (thErr != 0)
             {
@@ -1150,11 +1152,20 @@ static int ARSTREAM2_StreamReceiver_StreamRecorderStop(ARSTREAM2_StreamReceiver_
         }
         else
         {
+            /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
+            #define DATE_SIZE 23
+            #define DATE_FORMAT "%FT%H%M%S%z"
+            char mediaDate[DATE_SIZE];
+            struct tm timeInfo;
+            localtime_r(&streamReceiver->recorder.startTime, &timeInfo);
+            strftime(mediaDate, DATE_SIZE, DATE_FORMAT, &timeInfo);
+
             ARSTREAM2_StreamRecorder_UntimedMetadata_t meta;
             memset(&meta, 0, sizeof(ARSTREAM2_StreamRecorder_UntimedMetadata_t));
             meta.makerAndModel = metadata.friendlyName;
             meta.serialNumber = metadata.canonicalName;
             meta.softwareVersion = metadata.applicationName;
+            meta.mediaDate = mediaDate;
             meta.runDate = metadata.runDate;
             meta.runUuid = metadata.runUuid;
             meta.takeoffLatitude = metadata.takeoffLatitude;

@@ -543,10 +543,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_Init(ARSTREAM2_StreamRecorder_Handle *
         eARMEDIA_ERROR err = ARMEDIA_OK;
         streamRecorder->videoEncap = ARMEDIA_VideoEncapsuler_New(config->mediaFileName,
                                                                  round(config->videoFramerate),
-                                                                 "", //VIDEO_RECORD_DEFAULT_SESSON_ID, //TODO
-                                                                 "", //VIDEO_RECORD_DEFAULT_STARTDATE, //TODO
-                                                                 config->serviceType,
-                                                                 &err);
+                                                                 "", "", config->serviceType, &err);
         if (streamRecorder->videoEncap == NULL)
         {
             ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECORDER_TAG, "ARMEDIA_VideoEncapsuler_New() failed: %d (%s)", err, ARMEDIA_Error_ToString(err));
@@ -706,6 +703,12 @@ eARSTREAM2_ERROR ARSTREAM2_StreamRecorder_SetUntimedMetadata(ARSTREAM2_StreamRec
         snprintf(meta.softwareVersion,
                  ARMEDIA_ENCAPSULER_UNTIMED_METADATA_SOFT_VER_SIZE,
                  "%s", metadata->softwareVersion);
+    }
+    if (metadata->mediaDate)
+    {
+        snprintf(meta.mediaDate,
+                 ARMEDIA_ENCAPSULER_UNTIMED_METADATA_MEDIA_DATE_SIZE,
+                 "%s", metadata->mediaDate);
     }
     if (metadata->runDate)
     {
