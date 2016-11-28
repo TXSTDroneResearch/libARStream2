@@ -167,7 +167,7 @@ int ARSTREAM2_H264_NaluFifoInit(ARSTREAM2_H264_NaluFifo_t *fifo, int maxCount)
     fifo->pool = malloc(maxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
     if (!fifo->pool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", maxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %zu)", maxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
         return -1;
     }
     memset(fifo->pool, 0, maxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
@@ -402,7 +402,7 @@ int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, i
     fifo->itemPool = malloc(itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
     if (!fifo->itemPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %zu)", itemMaxCount * sizeof(ARSTREAM2_H264_AuFifoItem_t));
         fifo->itemPoolSize = 0;
         return -1;
     }
@@ -431,7 +431,7 @@ int ARSTREAM2_H264_AuFifoInit(ARSTREAM2_H264_AuFifo_t *fifo, int itemMaxCount, i
     fifo->bufferPool = malloc(bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
     if (!fifo->bufferPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %zu)", bufferMaxCount * sizeof(ARSTREAM2_H264_AuFifoBuffer_t));
         fifo->bufferPoolSize = 0;
         return -1;
     }
@@ -964,7 +964,7 @@ int ARSTREAM2_H264_AuNaluFifoInit(ARSTREAM2_H264_AccessUnit_t *au, int naluItemM
     au->naluPool = malloc(naluItemMaxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
     if (!au->naluPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %d)", naluItemMaxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_TAG, "FIFO allocation failed (size %zu)", naluItemMaxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));
         return -1;
     }
     memset(au->naluPool, 0, naluItemMaxCount * sizeof(ARSTREAM2_H264_NaluFifoItem_t));

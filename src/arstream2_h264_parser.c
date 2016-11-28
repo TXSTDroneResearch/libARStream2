@@ -2305,7 +2305,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
             }
             clockTimestamp = (((uint64_t)hH * 60 + (uint64_t)mM) * 60 + (uint64_t)sS) * parser->spsContext.time_scale
                              + (uint64_t)nFrames * (parser->spsContext.num_units_in_tick * (1 + nuit_field_based_flag)) + (uint64_t)tOffset;
-            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clockTimestamp = %llu", clockTimestamp);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clockTimestamp = %" PRIu64, clockTimestamp);
         }
     }
 

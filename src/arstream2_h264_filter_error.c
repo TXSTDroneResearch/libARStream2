@@ -221,7 +221,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
                 }
                 else
                 {
-                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "FIXME! #%d AUTS:%llu previousSliceIdx:%d currentSliceFirstMb:%d this should not happen!",
+                    ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "FIXME! #%d AUTS:%"PRIu64" previousSliceIdx:%d currentSliceFirstMb:%d this should not happen!",
                                 filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuPreviousSliceIndex, filter->currentAuCurrentSliceFirstMb);
                     missingMb = 0;
                     ret = -1;
@@ -237,7 +237,7 @@ int ARSTREAM2_H264FilterError_HandleMissingSlices(ARSTREAM2_H264Filter_t *filter
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "FIXME! #%d AUTS:%llu previousSliceFirstMb:%d previousSliceMbCount:%d currentSliceFirstMb:%d this should not happen!",
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_FILTER_ERROR_TAG, "FIXME! #%d AUTS:%"PRIu64" previousSliceFirstMb:%d previousSliceMbCount:%d currentSliceFirstMb:%d this should not happen!",
                             filter->currentAuOutputIndex, au->ntpTimestamp, filter->currentAuPreviousSliceFirstMb, filter->currentAuStreamingSliceMbCount[filter->currentAuPreviousSliceIndex], filter->currentAuCurrentSliceFirstMb);
                 missingMb = 0;
                 ret = -1;

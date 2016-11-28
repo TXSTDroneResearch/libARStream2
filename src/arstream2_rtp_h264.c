@@ -254,7 +254,7 @@ static int ARSTREAM2_RTPH264_Sender_FuAPackets(ARSTREAM2_RTP_SenderContext_t *co
             }
             else
             {
-                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Time %llu: FU-A, packetSize + 2 > maxPacketSize (packetSize=%d)", nalu->ntpTimestamp, packetSize);
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTPH264_TAG, "Time %"PRIu64": FU-A, packetSize + 2 > maxPacketSize (packetSize=%d)", nalu->ntpTimestamp, packetSize);
             }
 
             fragmentOffset += packetSize;
@@ -554,7 +554,7 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
         }
         else
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Time %llu: dropped NALU (%.1fms late) (seqNum = %d)",
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTPH264_TAG, "Time %"PRIu64": dropped NALU (%.1fms late) (seqNum = %d)",
                         nalu.ntpTimestamp, (float)(curTime - nalu.timeoutTimestamp) / 1000., context->seqNum - 1);
 
             /* call the monitoringCallback */

@@ -296,7 +296,7 @@ int ARSTREAM2_RTCP_Receiver_ProcessSenderReport(const uint8_t *buffer, unsigned 
     }
     else if (ntpTimestamp <= context->prevSrNtpTimestamp)
     {
-        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report (%llu vs. %llu)", ntpTimestamp, context->prevSrNtpTimestamp);
+        ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTCP_TAG, "Out of order or duplicate sender report (%"PRIu64" vs. %"PRIu64")", ntpTimestamp, context->prevSrNtpTimestamp);
         return -1;
     }
     if (!context->prevSrRtpTimestamp)

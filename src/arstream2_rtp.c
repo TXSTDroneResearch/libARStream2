@@ -105,7 +105,7 @@ int ARSTREAM2_RTP_PacketFifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int itemMaxCo
     fifo->itemPool = malloc(itemMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
     if (!fifo->itemPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %d)", itemMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %zu)", itemMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoItem_t));
         ARSTREAM2_RTP_PacketFifoFree(fifo);
         return -1;
     }
@@ -127,7 +127,7 @@ int ARSTREAM2_RTP_PacketFifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int itemMaxCo
     fifo->bufferPool = malloc(bufferMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoBuffer_t));
     if (!fifo->bufferPool)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %d)", bufferMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoBuffer_t));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO allocation failed (size %zu)", bufferMaxCount * sizeof(ARSTREAM2_RTP_PacketFifoBuffer_t));
         ARSTREAM2_RTP_PacketFifoFree(fifo);
         return -1;
     }
@@ -165,7 +165,7 @@ int ARSTREAM2_RTP_PacketFifoInit(ARSTREAM2_RTP_PacketFifo_t *fifo, int itemMaxCo
         fifo->bufferPool[i].header = malloc(sizeof(ARSTREAM2_RTP_Header_t));
         if (!fifo->bufferPool[i].header)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO packet buffer allocation failed (size %d)", sizeof(ARSTREAM2_RTP_Header_t));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_TAG, "FIFO packet buffer allocation failed (size %zu)", sizeof(ARSTREAM2_RTP_Header_t));
             ARSTREAM2_RTP_PacketFifoFree(fifo);
             return -1;
         }
@@ -699,7 +699,7 @@ int ARSTREAM2_RTP_Sender_PacketFifoCleanFromMsgVec(ARSTREAM2_RTP_SenderContext_t
         }
         if (msgVec[i].msg_len != len)
         {
-            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Sent size (%d) does not match message iov total size (%d)", msgVec[i].msg_len, len);
+            ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_RTP_TAG, "Sent size (%d) does not match message iov total size (%zu)", msgVec[i].msg_len, len);
         }
 
         /* call the monitoringCallback */
