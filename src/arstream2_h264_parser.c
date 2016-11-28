@@ -3798,7 +3798,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHa
     parser = (ARSTREAM2_H264Parser_t*)malloc(sizeof(*parser));
     if (!parser)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %ld)", sizeof(*parser));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %zu)", sizeof(*parser));
         return ARSTREAM2_ERROR_ALLOC;
     }
     memset(parser, 0, sizeof(*parser));
