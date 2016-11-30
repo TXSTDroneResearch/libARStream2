@@ -2485,30 +2485,48 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartResender(ARSTREAM2_StreamReceiver
     {
         ARSTREAM2_RtpResender_t* r;
         for (r = streamReceiver->resender, streamReceiver->resendCount = 0; r; r = resender->next)
+        {
             streamReceiver->resendCount++;
-        streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
-        if (!streamReceiver->resendQueue)
+        }
+        if (streamReceiver->resendCount > 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
-            ret = ARSTREAM2_ERROR_ALLOC;
+            streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+            if (!streamReceiver->resendQueue)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+                ret = ARSTREAM2_ERROR_ALLOC;
+            }
+            else
+            {
+                int k;
+                for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                    streamReceiver->resendQueue[k] = &r->packetFifoQueue;
+            }
+            streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
+            if (!streamReceiver->resendTimeout)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
+                ret = ARSTREAM2_ERROR_ALLOC;
+            }
+            else
+            {
+                int k;
+                for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                    streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+            }
         }
         else
         {
-            int k;
-            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
-                streamReceiver->resendQueue[k] = &r->packetFifoQueue;
-        }
-        streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
-        if (!streamReceiver->resendTimeout)
-        {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
-            ret = ARSTREAM2_ERROR_ALLOC;
-        }
-        else
-        {
-            int k;
-            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
-                streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+            if (streamReceiver->resendQueue)
+            {
+                free(streamReceiver->resendQueue);
+                streamReceiver->resendQueue = NULL;
+            }
+            if (streamReceiver->resendTimeout)
+            {
+                free(streamReceiver->resendTimeout);
+                streamReceiver->resendTimeout = NULL;
+            }
         }
     }
 
@@ -2583,30 +2601,48 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StopResender(ARSTREAM2_StreamReceiver_
 
     ARSTREAM2_RtpResender_t* r;
     for (r = streamReceiver->resender, streamReceiver->resendCount = 0; r; r = resender->next)
+    {
         streamReceiver->resendCount++;
-    streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
-    if (!streamReceiver->resendQueue)
+    }
+    if (streamReceiver->resendCount > 0)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
-        ret = ARSTREAM2_ERROR_ALLOC;
+        streamReceiver->resendQueue = realloc(streamReceiver->resendQueue, streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+        if (!streamReceiver->resendQueue)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(ARSTREAM2_RTP_PacketFifoQueue_t*));
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            int k;
+            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                streamReceiver->resendQueue[k] = &r->packetFifoQueue;
+        }
+        streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
+        if (!streamReceiver->resendTimeout)
+        {
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
+            ret = ARSTREAM2_ERROR_ALLOC;
+        }
+        else
+        {
+            int k;
+            for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
+                streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+        }
     }
     else
     {
-        int k;
-        for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
-            streamReceiver->resendQueue[k] = &r->packetFifoQueue;
-    }
-    streamReceiver->resendTimeout = realloc(streamReceiver->resendTimeout, streamReceiver->resendCount * sizeof(uint32_t));
-    if (!streamReceiver->resendTimeout)
-    {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_RECEIVER_TAG, "Allocation failed (size %ld)", streamReceiver->resendCount * sizeof(uint32_t));
-        ret = ARSTREAM2_ERROR_ALLOC;
-    }
-    else
-    {
-        int k;
-        for (r = streamReceiver->resender, k = 0; r; r = resender->next, k++)
-            streamReceiver->resendTimeout[k] = r->maxNetworkLatencyUs;
+        if (streamReceiver->resendQueue)
+        {
+            free(streamReceiver->resendQueue);
+            streamReceiver->resendQueue = NULL;
+        }
+        if (streamReceiver->resendTimeout)
+        {
+            free(streamReceiver->resendTimeout);
+            streamReceiver->resendTimeout = NULL;
+        }
     }
 
     ARSAL_Mutex_Unlock(&(streamReceiver->resendMutex));
