@@ -369,7 +369,7 @@ static eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_JNI_AuReadyCallback(uint8_t *au
         return ARSTREAM2_ERROR_INVALID_STATE;
     }
 
-    ret = (*env)->CallIntMethod(env, (jobject)userPtr, g_onBufferReady, (jint)auBufferUserPtr, (jint)auSize,
+    ret = (*env)->CallIntMethod(env, (jobject)userPtr, g_onBufferReady, (jint)(intptr_t)auBufferUserPtr, (jint)auSize,
                                 (jlong)auMetadata->auMetadata, (jint)auMetadata->auMetadataSize, (jlong)auTimestamps->auNtpTimestamp, (jlong)auTimestamps->auNtpTimestampRaw, (jlong)auTimestamps->auNtpTimestampLocal, (jint)auSyncType);
     if (wasAlreadyAttached == 0)
     {
