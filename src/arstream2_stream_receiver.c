@@ -1035,14 +1035,16 @@ static int ARSTREAM2_StreamReceiver_H264FilterSpsPpsCallback(uint8_t *spsBuffer,
         streamReceiver->recorder.startPending = 0;
     }
 
+    /* call the app output SPS/PPS callback if app output is started */
     ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
     streamReceiver->appOutput.callbackInProgress = 1;
-    if (streamReceiver->appOutput.getAuBufferCallback)
+    if (streamReceiver->appOutput.spsPpsCallback)
     {
-        /* call the spsPpsCallback */
         ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
 
-        cbRet = streamReceiver->appOutput.spsPpsCallback(spsBuffer, spsSize, ppsBuffer, ppsSize, streamReceiver->appOutput.spsPpsCallbackUserPtr);
+        cbRet = streamReceiver->appOutput.spsPpsCallback(streamReceiver->pSps, streamReceiver->spsSize,
+                                                         streamReceiver->pPps, streamReceiver->ppsSize,
+                                                         streamReceiver->appOutput.spsPpsCallbackUserPtr);
         if (cbRet != ARSTREAM2_OK)
         {
             ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Application SPS/PPS callback failed");
@@ -1797,6 +1799,31 @@ eARSTREAM2_ERROR ARSTREAM2_StreamReceiver_StartAppOutput(ARSTREAM2_StreamReceive
     streamReceiver->appOutput.auReadyCallback = auReadyCallback;
     streamReceiver->appOutput.auReadyCallbackUserPtr = auReadyCallbackUserPtr;
     ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
+
+    if (streamReceiver->sync)
+    {
+        /* call the app output SPS/PPS callback if already synchronized */
+        ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
+        streamReceiver->appOutput.callbackInProgress = 1;
+        if (streamReceiver->appOutput.spsPpsCallback)
+        {
+            ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
+
+            eARSTREAM2_ERROR cbRet;
+            cbRet = streamReceiver->appOutput.spsPpsCallback(streamReceiver->pSps, streamReceiver->spsSize,
+                                                             streamReceiver->pPps, streamReceiver->ppsSize,
+                                                             streamReceiver->appOutput.spsPpsCallbackUserPtr);
+            if (cbRet != ARSTREAM2_OK)
+            {
+                ARSAL_PRINT(ARSAL_PRINT_WARNING, ARSTREAM2_STREAM_RECEIVER_TAG, "Application SPS/PPS callback failed");
+            }
+
+            ARSAL_Mutex_Lock(&(streamReceiver->appOutput.callbackMutex));
+        }
+        streamReceiver->appOutput.callbackInProgress = 0;
+        ARSAL_Mutex_Unlock(&(streamReceiver->appOutput.callbackMutex));
+        ARSAL_Cond_Signal(&(streamReceiver->appOutput.callbackCond));
+    }
 
     ARSAL_Mutex_Lock(&(streamReceiver->appOutput.threadMutex));
     streamReceiver->appOutput.grayIFramePending = 1;
