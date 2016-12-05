@@ -120,7 +120,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
         streamSender->videoStatsCallbackUserPtr = config->videoStatsCallbackUserPtr;
         streamSender->naluFifoSize = (config->naluFifoSize > 0) ? config->naluFifoSize : ARSTREAM2_STREAM_SENDER_DEFAULT_NALU_FIFO_SIZE;
         streamSender->maxPacketSize = (config->maxPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE) ? (uint32_t)config->maxPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : ARSTREAM2_RTP_MAX_PAYLOAD_SIZE;
-        streamSender->targetPacketSize = (config->targetPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : streamSender->maxPacketSize;
+        streamSender->targetPacketSize = (config->targetPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE)
+                ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE
+                : ((config->targetPacketSize) ? streamSender->maxPacketSize : 0);
         streamSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
 
         if (config->streamSocketBufferSize > 0)
@@ -191,7 +193,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
     /* Setup the packet FIFO */
     if (ret == ARSTREAM2_OK)
     {
-        int packetFifoBufferCount = ((streamSender->maxBitrate > 0) && (streamSender->maxNetworkLatencyUs[0] > 0))
+        int packetFifoBufferCount = ((streamSender->maxBitrate > 0) && (streamSender->maxNetworkLatencyUs[0] > 0) && (streamSender->targetPacketSize > 0))
                 ? (int)((uint64_t)streamSender->maxBitrate * streamSender->maxNetworkLatencyUs[0] * 5 / streamSender->targetPacketSize / 8 / 1000000)
                 : streamSender->naluFifoSize;
         if (packetFifoBufferCount < ARSTREAM2_STREAM_SENDER_DEFAULT_MIN_PACKET_FIFO_BUFFER_COUNT)
@@ -681,7 +683,7 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_GetDynamicConfig(ARSTREAM2_StreamSender_
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    config->targetPacketSize = streamSender->targetPacketSize;
+    config->targetPacketSize = (streamSender->targetPacketSize > 0) ? streamSender->targetPacketSize + ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : 0;
     config->streamSocketBufferSize = streamSender->streamSocketSendBufferSize;
     config->maxBitrate = streamSender->maxBitrate;
     if (streamSender->maxLatencyUs > 0)
@@ -725,7 +727,9 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SetDynamicConfig(ARSTREAM2_StreamSender_
         return ARSTREAM2_ERROR_BAD_PARAMETERS;
     }
 
-    streamSender->targetPacketSize = (config->targetPacketSize > 0) ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE : streamSender->maxPacketSize;
+    streamSender->targetPacketSize = (config->targetPacketSize > (int)ARSTREAM2_RTP_TOTAL_HEADERS_SIZE)
+            ? (uint32_t)config->targetPacketSize - ARSTREAM2_RTP_TOTAL_HEADERS_SIZE
+            : ((config->targetPacketSize) ? streamSender->maxPacketSize : 0);
     streamSender->maxBitrate = (config->maxBitrate > 0) ? config->maxBitrate : 0;
     if (config->streamSocketBufferSize > 0)
     {

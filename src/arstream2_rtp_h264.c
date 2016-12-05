@@ -460,9 +460,18 @@ int ARSTREAM2_RTPH264_Sender_NaluFifoToPacketFifo(ARSTREAM2_RTP_SenderContext_t 
         /* check that the NALU is not too old */
         if ((!dropOnTimeout) || ((nalu.timeoutTimestamp == 0) || (nalu.timeoutTimestamp > curTime)))
         {
+            /* If target packet size is null, do not use aggregation (STAP-A):
+             * only single-NALU and fragmentation (FU-A) to meet the maxPacketSize
+             * requirement.
+             * If target packet size is not null, use single-NALU, aggregation
+             * (STAP-A) up to targetPacketSize and fragmentation (FU-A) to meet
+             * both the targetPacketSize and maxPacketSize requirements.
+             */
+
             /* Fragments count evaluation */
-            unsigned int fragmentCount = (nalu.naluSize + ((context->useRtpHeaderExtensions) ? nalu.metadataSize : 0) + context->targetPacketSize / 2) / context->targetPacketSize;
-            if (fragmentCount < 1) fragmentCount = 1;
+            unsigned int fragmentCount = (context->targetPacketSize)
+                    ? (nalu.naluSize + ((context->useRtpHeaderExtensions) ? nalu.metadataSize : 0) + context->targetPacketSize / 2) / context->targetPacketSize
+                    : 0;
 
             if ((fragmentCount > 1) || (nalu.naluSize > context->maxPacketSize))
             {
