@@ -248,9 +248,9 @@ int ARSTREAM2_RTP_PacketFifoRemoveQueue(ARSTREAM2_RTP_PacketFifo_t *fifo, ARSTRE
     {
         queue->next->prev = queue->prev;
     }
-    if ((!queue->prev) && (!queue->next))
+    if (fifo->queue == queue)
     {
-        fifo->queue = NULL;
+        fifo->queue = queue->next;
     }
     fifo->queueCount--;
     queue->prev = NULL;
