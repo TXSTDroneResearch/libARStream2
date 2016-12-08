@@ -1316,7 +1316,7 @@ static int ARSTREAM2_H264Writer_WriteGrayISliceData(ARSTREAM2_H264Writer_t* writ
 
     // macroblock_layer
 
-    for (i = writer->sliceContext.first_mb_in_slice; i < writer->sliceContext.sliceMbCount; i++)
+    for (i = 0; i < writer->sliceContext.sliceMbCount; i++)
     {
         // mb_type = 3 (I_16x16_2_0_0: Intra16x16PredMode = 2/DC, CodedBlockPatternLuma = 0, CodedBlockPatternChroma = 0)
         ret = writeBits_expGolomb_ue(writer, 3, 1);
