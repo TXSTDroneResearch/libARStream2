@@ -104,9 +104,9 @@ public class ARStream2Receiver
         return null;
     }
 
-    private int onBufferReady(int bufferIdx, int auSize, int metadata, int metadataSize, long auTimestamp, long auTimestampShifted, int iAuSyncType)
+    private int onBufferReady(int bufferIdx, int auSize, long metadata, int metadataSize, long auTimestamp, long auTimestampRaw, long auTimestampLocal, int iAuSyncType)
     {
-        ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM auSyncType = ARSTREAM2_H264_FILTER_AU_SYNC_TYPE_ENUM.getFromValue(iAuSyncType);
+        ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM auSyncType = ARSTREAM2_STREAM_RECEIVER_AU_SYNC_TYPE_ENUM.getFromValue(iAuSyncType);
         if (auSyncType == null)
         {
             ARSALPrint.e(TAG, "Bad au sync type : " + iAuSyncType);
@@ -118,7 +118,7 @@ public class ARStream2Receiver
             ByteBuffer buffer = this.buffers[bufferIdx];
             //buffer.limit(auSize);
             buffer.position(auSize);
-            listener.onBufferReady(bufferIdx, auTimestamp, auTimestampShifted, auSyncType);
+            listener.onBufferReady(bufferIdx, metadata, metadataSize, auTimestamp, auTimestampRaw, auTimestampLocal, auSyncType);
             return 0;
         } catch (Throwable t)
         {

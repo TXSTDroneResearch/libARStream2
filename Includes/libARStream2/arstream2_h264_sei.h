@@ -47,9 +47,41 @@ typedef struct
 typedef struct
 {
     uint32_t uuid[4];                                   /**< User data SEI UUID */
-    ARSTREAM2_H264Sei_ParrotStreamingV1_t streaming;        /**< "Parrot Streaming" v1 */
+    ARSTREAM2_H264Sei_ParrotStreamingV1_t streaming;    /**< "Parrot Streaming" v1 */
 
 } ARSTREAM2_H264Sei_UserDataParrotStreamingV1_t;
+
+
+/**
+ * "Parrot Streaming" v2 user data SEI UUID.
+ * UUID: e5cedca1-86b7-4254-9601-434fffcd1f56
+ */
+#define ARSTREAM2_H264_SEI_PARROT_STREAMING_V2_UUID_0 0xe5cedca1   /**< "Parrot Streaming" v2 user data SEI UUID part 1 (bit 0..31) */
+#define ARSTREAM2_H264_SEI_PARROT_STREAMING_V2_UUID_1 0x86b74254   /**< "Parrot Streaming" v2 user data SEI UUID part 2 (bit 32..63) */
+#define ARSTREAM2_H264_SEI_PARROT_STREAMING_V2_UUID_2 0x9601434f   /**< "Parrot Streaming" v2 user data SEI UUID part 3 (bit 64..95) */
+#define ARSTREAM2_H264_SEI_PARROT_STREAMING_V2_UUID_3 0xffcd1f56   /**< "Parrot Streaming" v2 user data SEI UUID part 4 (bit 96..127) */
+
+
+/**
+ * @brief "Parrot Streaming" v2 user data SEI payload definition.
+ */
+typedef struct
+{
+    uint16_t frameSliceCount;                           /**< Frame slice count */
+    uint16_t sliceMbCount;                              /**< Slice macroblock count (the last slice of the frame may be smaller) */
+
+} ARSTREAM2_H264Sei_ParrotStreamingV2_t;
+
+
+/**
+ * @brief "Parrot Streaming" v2 user data SEI definition.
+ */
+typedef struct
+{
+    uint32_t uuid[4];                                   /**< User data SEI UUID */
+    ARSTREAM2_H264Sei_ParrotStreamingV2_t streaming;    /**< "Parrot Streaming" v1 */
+
+} ARSTREAM2_H264Sei_UserDataParrotStreamingV2_t;
 
 
 /**
@@ -100,6 +132,55 @@ eARSTREAM2_ERROR ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV1(const vo
  * @return -1 if an error occurred.
  */
 int ARSTREAM2_H264Sei_IsUserDataParrotStreamingV1(const void* pBuf, unsigned int bufSize);
+
+
+/**
+ * @brief Serialize a "Parrot Streaming" v2 user data SEI.
+ *
+ * The function parses a "Parrot Streaming" v2 structure and fills the user data SEI buffer.
+ * bufSize must be at least sizeof(ARSTREAM2_H264Sei_UserDataParrotStreamingV2_t).
+ *
+ * @param streaming Pointer to the "Parrot Streaming" v2 payload structure.
+ * @param pBuf Pointer to the user data SEI buffer to fill.
+ * @param bufSize Size of the user data SEI buffer.
+ * @param size Pointer to the final user data SEI buffer size.
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Sei_SerializeUserDataParrotStreamingV2(const ARSTREAM2_H264Sei_ParrotStreamingV2_t *streaming, void* pBuf, unsigned int bufSize, unsigned int *size);
+
+
+/**
+ * @brief Deserialize a "Parrot Streaming" v2 user data SEI.
+ *
+ * The function parses a "Parrot Streaming" v2 user data SEI and fills the streaming structure.
+ *
+ * @param pBuf Pointer to the user data SEI buffer.
+ * @param bufSize Size of the user data SEI.
+ * @param streaming Pointer to the "Parrot Streaming" v2 payload structure to fill.
+ * @param sliceMbCount Pointer to the sliceMbCount array to fill (array size must be ARSTREAM2_H264_SEI_PARROT_STREAMING_MAX_SLICE_COUNT).
+ *
+ * @return ARSTREAM2_OK if no error occurred.
+ * @return an eARSTREAM2_ERROR error code if an error occurred.
+ */
+eARSTREAM2_ERROR ARSTREAM2_H264Sei_DeserializeUserDataParrotStreamingV2(const void* pBuf, unsigned int bufSize, ARSTREAM2_H264Sei_ParrotStreamingV2_t *streaming);
+
+
+/**
+ * @brief Checks if the data provided is a "Parrot Streaming" v2 user data SEI.
+ *
+ * The function checks if the data provided in the pBuf buffer corresponds to a "Parrot Streaming" v2 user data SEI
+ * using the user data SEI UUID.
+ *
+ * @param pBuf Pointer to the user data SEI buffer.
+ * @param bufSize Size of the user data SEI.
+ *
+ * @return 1 if the data is a "Parrot Streaming" v2 user data SEI.
+ * @return 0 if the data is not a "Parrot Streaming" v2 user data SEI.
+ * @return -1 if an error occurred.
+ */
+int ARSTREAM2_H264Sei_IsUserDataParrotStreamingV2(const void* pBuf, unsigned int bufSize);
 
 
 #ifdef __cplusplus

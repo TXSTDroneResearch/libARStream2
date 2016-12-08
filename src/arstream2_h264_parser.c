@@ -5,6 +5,10 @@
  * @author aurelien.barre@parrot.com
  */
 
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -55,6 +59,10 @@ typedef struct ARSTREAM2_H264Parser_s
     int userDataBufSize[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
     int userDataSize[ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT];
     unsigned int userDataCount;
+
+    // Recovery point SEI
+    ARSTREAM2_H264Parser_RecoveryPointSei_t recoveryPoint;
+    int hasRecoveryPoint;
 
 } ARSTREAM2_H264Parser_t;
 
@@ -1920,6 +1928,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.recoveryFrameCnt = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ recovery_frame_count = %d", val);
 
     // exact_match_flag
@@ -1930,6 +1939,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.exactMatchFlag = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ exact_match_flag = %d", val);
 
     // broken_link_flag
@@ -1940,6 +1950,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.brokenLinkFlag = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ broken_link_flag = %d", val);
 
     // changing_slice_group_idc
@@ -1950,7 +1961,10 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_recoveryPoint(ARSTREAM2_H264Pars
         return ret;
     }
     _readBits += ret;
+    parser->recoveryPoint.changingSliceGroupIdc = val;
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ changing_slice_group_idc = %d", val);
+
+    parser->hasRecoveryPoint = 1;
 
     return _readBits;
 }
@@ -2291,7 +2305,7 @@ static int ARSTREAM2_H264Parser_ParseSeiPayload_picTiming(ARSTREAM2_H264Parser_t
             }
             clockTimestamp = (((uint64_t)hH * 60 + (uint64_t)mM) * 60 + (uint64_t)sS) * parser->spsContext.time_scale
                              + (uint64_t)nFrames * (parser->spsContext.num_units_in_tick * (1 + nuit_field_based_flag)) + (uint64_t)tOffset;
-            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clockTimestamp = %llu", clockTimestamp);
+            if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ clockTimestamp = %" PRIu64, clockTimestamp);
         }
     }
 
@@ -2305,6 +2319,8 @@ static int ARSTREAM2_H264Parser_ParseSei(ARSTREAM2_H264Parser_t* parser)
     uint32_t val = 0;
     int readBytes = 0, _readBits = 0, _readBits2;
     int payloadType, payloadSize;
+
+    parser->hasRecoveryPoint = 0;
 
     // sei_rbsp
     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-- sei_rbsp()");
@@ -2659,8 +2675,6 @@ static int ARSTREAM2_H264Parser_ParsePredWeightTable(ARSTREAM2_H264Parser_t* par
 
     //TODO
     return -1;
-
-    return _readBits;
 }
 
 
@@ -2764,6 +2778,7 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     }
                     _readBits += ret;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- long_term_frame_idx = %d", val);
+                }
 
                 if (memory_management_control_operation == 4)
                 {
@@ -2776,7 +2791,6 @@ static int ARSTREAM2_H264Parser_ParseDecRefPicMarking(ARSTREAM2_H264Parser_t* pa
                     }
                     _readBits += ret;
                     if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "-------- max_long_term_frame_idx_plus1 = %d", val);
-                }
                 }
             }
             while (memory_management_control_operation != 0);
@@ -3187,6 +3201,7 @@ static int ARSTREAM2_H264Parser_ParseSlice(ARSTREAM2_H264Parser_t* parser)
         if (parser->config.printLogs) ARSAL_PRINT(ARSAL_PRINT_INFO, ARSTREAM2_H264_PARSER_TAG, "------ slice_group_change_cycle = %d", val);
     }
 
+    parser->sliceContext.sliceHeaderLengthInBits = _readBits;
 
     // rbsp_slice_trailing_bits
 
@@ -3268,13 +3283,18 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ParseNalu(ARSTREAM2_H264Parser_Handle pars
 }
 
 
-static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* parser, FILE* fp, unsigned long long fileSize, unsigned long long *startcodePosition)
+static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* parser, FILE* fp, off_t fileSize, off_t *startcodePosition)
 {
     int ret;
-    unsigned long long initPos, pos, end, i = 0;
+    off_t initPos, pos, end, i = 0;
     uint32_t val, shiftVal;
 
-    initPos = pos = ftell(fp);
+    pos = ftello(fp);
+    if (pos < 0)
+    {
+        return -1;
+    }
+    initPos = pos;
     end = fileSize;
 
     if (pos + 4 > end) return -2;
@@ -3308,14 +3328,14 @@ static int ARSTREAM2_H264Parser_StartcodeMatch_file(ARSTREAM2_H264Parser_t* pars
     if (shiftVal == ARSTREAM2_H264_BYTE_STREAM_NALU_START_CODE)
     {
         pos += 4;
-        ret = fseek(fp, pos, SEEK_SET);
+        ret = fseeko(fp, pos, SEEK_SET);
         if (ret != 0) return -1;
         ret = 0;
         if (startcodePosition) *startcodePosition = pos - 4;
     }
     else
     {
-        ret = fseek(fp, initPos, SEEK_SET);
+        ret = fseeko(fp, initPos, SEEK_SET);
         if (ret != 0) return -1;
         ret = -2;
     }
@@ -3329,7 +3349,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
     int ret = 0;
-    unsigned long long naluStart, naluEnd, startcodePosition = 0;
+    off_t naluStart, naluEnd, startcodePosition = 0;
     unsigned int _naluSize = 0;
 
     if (!parserHandle)
@@ -3367,7 +3387,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_ReadNextNalu_file(ARSTREAM2_H264Parser_Han
         _naluSize = (unsigned int)(naluEnd - naluStart);
         if (_naluSize > 0)
         {
-            ret = fseek(fp, naluStart, SEEK_SET);
+            ret = fseeko(fp, naluStart, SEEK_SET);
             if (ret != 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Failed to seek in file");
@@ -3578,17 +3598,17 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_SetupNalu_buffer(ARSTREAM2_H264Parser_Hand
 }
 
 
-int ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle)
+uint8_t ARSTREAM2_H264Parser_GetLastNaluType(ARSTREAM2_H264Parser_Handle parserHandle)
 {
     ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
 
     if (!parserHandle)
     {
         ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
-        return -1;
+        return 0;
     }
 
-    return parser->sliceContext.nal_unit_type;
+    return (uint8_t)parser->sliceContext.nal_unit_type;
 }
 
 
@@ -3642,6 +3662,34 @@ int ARSTREAM2_H264Parser_GetUserDataSeiCount(ARSTREAM2_H264Parser_Handle parserH
     if (parser->config.extractUserDataSei)
     {
         return (int)parser->userDataCount;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+
+int ARSTREAM2_H264Parser_GetRecoveryPointSei(ARSTREAM2_H264Parser_Handle parserHandle, ARSTREAM2_H264Parser_RecoveryPointSei_t *recoveryPoint)
+{
+    ARSTREAM2_H264Parser_t* parser = (ARSTREAM2_H264Parser_t*)parserHandle;
+
+    if (!parserHandle)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid handle");
+        return -1;
+    }
+
+    if (!recoveryPoint)
+    {
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Invalid pointer");
+        return -1;
+    }
+
+    if (parser->hasRecoveryPoint)
+    {
+        memcpy(recoveryPoint, &parser->recoveryPoint, sizeof(ARSTREAM2_H264Parser_RecoveryPointSei_t));
+        return 1;
     }
     else
     {
@@ -3750,7 +3798,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Init(ARSTREAM2_H264Parser_Handle* parserHa
     parser = (ARSTREAM2_H264Parser_t*)malloc(sizeof(*parser));
     if (!parser)
     {
-        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %ld)", sizeof(*parser));
+        ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_H264_PARSER_TAG, "Allocation failed (size %zu)", sizeof(*parser));
         return ARSTREAM2_ERROR_ALLOC;
     }
     memset(parser, 0, sizeof(*parser));
@@ -3791,10 +3839,7 @@ eARSTREAM2_ERROR ARSTREAM2_H264Parser_Free(ARSTREAM2_H264Parser_Handle parserHan
 
     for (i = 0; i < ARSTREAM2_H264_PARSER_MAX_USER_DATA_SEI_COUNT; i++)
     {
-        if (parser->pUserDataBuf[i])
-        {
-            free(parser->pUserDataBuf[i]);
-        }
+        free(parser->pUserDataBuf[i]);
     }
 
     free(parser);

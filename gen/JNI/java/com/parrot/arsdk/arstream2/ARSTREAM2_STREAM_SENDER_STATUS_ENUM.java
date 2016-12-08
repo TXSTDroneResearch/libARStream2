@@ -38,27 +38,27 @@ package com.parrot.arsdk.arstream2;
 import java.util.HashMap;
 
 /**
- * Java copy of the eARSTREAM2_RTP_SENDER_STATUS enum
+ * Java copy of the eARSTREAM2_STREAM_SENDER_STATUS enum
  */
-public enum ARSTREAM2_RTP_SENDER_STATUS_ENUM {
+public enum ARSTREAM2_STREAM_SENDER_STATUS_ENUM {
    /** Dummy value for all unknown cases */
-    eARSTREAM2_RTP_SENDER_STATUS_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
+    eARSTREAM2_STREAM_SENDER_STATUS_UNKNOWN_ENUM_VALUE (Integer.MIN_VALUE, "Dummy value for all unknown cases"),
    /** Access unit or NAL unit was sent */
-    ARSTREAM2_RTP_SENDER_STATUS_SENT (0, "Access unit or NAL unit was sent"),
+    ARSTREAM2_STREAM_SENDER_STATUS_SENT (0, "Access unit or NAL unit was sent"),
    /** Access unit or NAL unit was cancelled (not sent or partly sent) */
-    ARSTREAM2_RTP_SENDER_STATUS_CANCELLED (1, "Access unit or NAL unit was cancelled (not sent or partly sent)"),
-   ARSTREAM2_RTP_SENDER_STATUS_MAX (2);
+    ARSTREAM2_STREAM_SENDER_STATUS_CANCELLED (1, "Access unit or NAL unit was cancelled (not sent or partly sent)"),
+   ARSTREAM2_STREAM_SENDER_STATUS_MAX (2);
 
     private final int value;
     private final String comment;
-    static HashMap<Integer, ARSTREAM2_RTP_SENDER_STATUS_ENUM> valuesList;
+    static HashMap<Integer, ARSTREAM2_STREAM_SENDER_STATUS_ENUM> valuesList;
 
-    ARSTREAM2_RTP_SENDER_STATUS_ENUM (int value) {
+    ARSTREAM2_STREAM_SENDER_STATUS_ENUM (int value) {
         this.value = value;
         this.comment = null;
     }
 
-    ARSTREAM2_RTP_SENDER_STATUS_ENUM (int value, String comment) {
+    ARSTREAM2_STREAM_SENDER_STATUS_ENUM (int value, String comment) {
         this.value = value;
         this.comment = comment;
     }
@@ -72,21 +72,21 @@ public enum ARSTREAM2_RTP_SENDER_STATUS_ENUM {
     }
 
     /**
-     * Gets the ARSTREAM2_RTP_SENDER_STATUS_ENUM instance from a C enum value
+     * Gets the ARSTREAM2_STREAM_SENDER_STATUS_ENUM instance from a C enum value
      * @param value C value of the enum
-     * @return The ARSTREAM2_RTP_SENDER_STATUS_ENUM instance, or null if the C enum value was not valid
+     * @return The ARSTREAM2_STREAM_SENDER_STATUS_ENUM instance, or null if the C enum value was not valid
      */
-    public static ARSTREAM2_RTP_SENDER_STATUS_ENUM getFromValue (int value) {
+    public static ARSTREAM2_STREAM_SENDER_STATUS_ENUM getFromValue (int value) {
         if (null == valuesList) {
-            ARSTREAM2_RTP_SENDER_STATUS_ENUM [] valuesArray = ARSTREAM2_RTP_SENDER_STATUS_ENUM.values ();
-            valuesList = new HashMap<Integer, ARSTREAM2_RTP_SENDER_STATUS_ENUM> (valuesArray.length);
-            for (ARSTREAM2_RTP_SENDER_STATUS_ENUM entry : valuesArray) {
+            ARSTREAM2_STREAM_SENDER_STATUS_ENUM [] valuesArray = ARSTREAM2_STREAM_SENDER_STATUS_ENUM.values ();
+            valuesList = new HashMap<Integer, ARSTREAM2_STREAM_SENDER_STATUS_ENUM> (valuesArray.length);
+            for (ARSTREAM2_STREAM_SENDER_STATUS_ENUM entry : valuesArray) {
                 valuesList.put (entry.getValue (), entry);
             }
         }
-        ARSTREAM2_RTP_SENDER_STATUS_ENUM retVal = valuesList.get (value);
+        ARSTREAM2_STREAM_SENDER_STATUS_ENUM retVal = valuesList.get (value);
         if (retVal == null) {
-            retVal = eARSTREAM2_RTP_SENDER_STATUS_UNKNOWN_ENUM_VALUE;
+            retVal = eARSTREAM2_STREAM_SENDER_STATUS_UNKNOWN_ENUM_VALUE;
         }
         return retVal;    }
 
