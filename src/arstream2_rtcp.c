@@ -8,9 +8,14 @@
 #include "arstream2_rtcp.h"
 
 #include <stdlib.h>
-#include <netinet/in.h>
 #include <libARSAL/ARSAL_Print.h>
 
+/* for ntohl */
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 /**
  * Tag for ARSAL_PRINT

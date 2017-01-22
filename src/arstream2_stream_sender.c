@@ -9,7 +9,26 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#ifndef _WIN32
+/* mmsghdr */
+#define __USE_GNU
+#include <sys/socket.h>
+#undef __USE_GNU
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#endif
+
+#define ARSAL_INCLUDE_WSA
 #include <libARSAL/ARSAL_Print.h>
+#include <libARSAL/ARSAL_Socket.h>
+#include <libARSAL/ARSAL_Time.h>
+#undef ARSAL_INCLUDE_WSA
+
+#ifdef _WIN32
+/* HACK: For Windows */
+#define strndup(c, n) _strdup(c)
+#endif
 
 #include <libARStream2/arstream2_stream_sender.h>
 #include "arstream2_rtp_sender.h"
@@ -164,10 +183,8 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
             streamSender->friendlyName = strndup(config->canonicalName, 40);
         }
         char szDate[200];
-        time_t rawtime;
         struct tm timeinfo;
-        time(&rawtime);
-        localtime_r(&rawtime, &timeinfo);
+        ARSAL_Time_GetLocalTime(NULL, &timeinfo);
         /* Date format : <YYYY-MM-DDTHHMMSS+HHMM */
         strftime(szDate, 200, "%FT%H%M%S%z", &timeinfo);
         streamSender->dateAndTime = strndup(szDate, 200);
@@ -268,10 +285,17 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
 
     if (ret == ARSTREAM2_OK)
     {
+#ifdef _WIN32
+        if (ARSAL_Socket_CreatePair(streamSender->signalPipe) != 0)
+        {
+            ret = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
+        }
+#else
         if (pipe(streamSender->signalPipe) != 0)
         {
             ret = ARSTREAM2_ERROR_RESOURCE_UNAVAILABLE;
         }
+#endif
     }
 
     if (ret == ARSTREAM2_OK)
@@ -298,12 +322,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Init(ARSTREAM2_StreamSender_Handle *stre
             int err;
             if (streamSender->signalPipe[0] != -1)
             {
+#ifdef _WIN32
+                ARSAL_Socket_Close(streamSender->signalPipe[0]);
+#else
                 while (((err = close(streamSender->signalPipe[0])) == -1) && (errno == EINTR));
+#endif
                 streamSender->signalPipe[0] = -1;
             }
             if (streamSender->signalPipe[1] != -1)
             {
+#ifdef _WIN32
+                ARSAL_Socket_Close(streamSender->signalPipe[1]);
+#else
                 while (((err = close(streamSender->signalPipe[1])) == -1) && (errno == EINTR));
+#endif
                 streamSender->signalPipe[1] = -1;
             }
             if (threadMutexWasInit == 1) ARSAL_Mutex_Destroy(&(streamSender->threadMutex));
@@ -343,7 +375,11 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Stop(ARSTREAM2_StreamSender_Handle strea
     {
         char * buff = "x";
         ssize_t err;
+#ifdef _WIN32
+        ARSAL_Socket_Send(streamSender->signalPipe[1], buff, 1, 0);
+#else
         while (((err = write(streamSender->signalPipe[1], buff, 1)) == -1) && (errno == EINTR));
+#endif
     }
 
     return ret;
@@ -381,12 +417,20 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_Free(ARSTREAM2_StreamSender_Handle *stre
 
         if (streamSender->signalPipe[0] != -1)
         {
+#ifdef _WIN32
+            ARSAL_Socket_Close(streamSender->signalPipe[0]);
+#else
             close(streamSender->signalPipe[0]);
+#endif
             streamSender->signalPipe[0] = -1;
         }
         if (streamSender->signalPipe[1] != -1)
         {
+#ifdef _WIN32
+            ARSAL_Socket_Close(streamSender->signalPipe[1]);
+#else
             close(streamSender->signalPipe[1]);
+#endif
             streamSender->signalPipe[1] = -1;
         }
         ARSAL_Mutex_Destroy(&(streamSender->threadMutex));
@@ -515,7 +559,11 @@ eARSTREAM2_ERROR ARSTREAM2_StreamSender_SendNNewNalu(ARSTREAM2_StreamSender_Hand
         {
             char * buff = "x";
             ssize_t err;
+#ifdef _WIN32
+            ARSAL_Socket_Send(streamSender->signalPipe[1], buff, 1, 0);
+#else
             while (((err = write(streamSender->signalPipe[1], buff, 1)) == -1) && (errno == EINTR));
+#endif
         }
     }
 
@@ -610,7 +658,11 @@ void* ARSTREAM2_StreamSender_RunThread(void *streamSenderHandle)
         {
             /* Dump bytes (so it won't be ready next time) */
             char dump[10];
+#ifdef _WIN32
+            int readRet = ARSAL_Socket_Recv(streamSender->signalPipe[0], &dump, 10, 0);
+#else
             int readRet = read(streamSender->signalPipe[0], &dump, 10);
+#endif
             if (readRet < 0)
             {
                 ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_STREAM_SENDER_TAG, "Failed to read from pipe (%d): %s", errno, strerror(errno));

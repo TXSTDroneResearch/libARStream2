@@ -7,13 +7,19 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <arpa/inet.h>
 #include <math.h>
 
 #include <libARSAL/ARSAL_Print.h>
 #include <libARSAL/ARSAL_Mutex.h>
 #if BUILD_LIBARMEDIA
 #include <libARMedia/ARMedia.h>
+#endif
+
+/* for ntohl family of functions */
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
 #endif
 
 #include "arstream2_stream_recorder.h"
@@ -784,7 +790,9 @@ void* ARSTREAM2_StreamRecorder_RunThread(void *param)
                             || (streamRecorder->auCount >= streamRecorder->lastSyncIndex + ARSTREAM2_STREAM_RECORDER_FILE_SYNC_MAX_INTERVAL))
                     {
                         fflush(streamRecorder->outputFile);
+#ifndef _WIN32
                         fsync(fileno(streamRecorder->outputFile));
+#endif
                         streamRecorder->lastSyncIndex = streamRecorder->auCount;
                     }
                 }

@@ -7,7 +7,13 @@
 
 #include <stdio.h>
 #include <string.h>
+
+ /* for ntohl family of functions */
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <libARStream2/arstream2_h264_sei.h>
 #include <libARSAL/ARSAL_Print.h>

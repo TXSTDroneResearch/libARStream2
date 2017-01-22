@@ -12,6 +12,11 @@
 
 #include "arstream2_stream_stats_internal.h"
 
+#ifdef _WIN32
+#include <io.h>
+
+#define access _access
+#endif
 
 #define ARSTREAM2_STREAM_STATS_TAG "ARSTREAM2_StreamStats"
 

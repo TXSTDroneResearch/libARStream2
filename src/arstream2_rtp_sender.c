@@ -11,22 +11,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <math.h>
+
+#ifndef _WIN32
+/* mmsghdr */
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
-#include <fcntl.h>
-#include <math.h>
+#endif
+
+#ifdef _WIN32
+ /* HACK: Some cheap Windows hacks */
+#define ARSAL_INCLUDE_WSA
+#define strndup(c, n) _strdup(c)
+#endif
+
+#include <libARSAL/ARSAL_Mutex.h>
+#include <libARSAL/ARSAL_Print.h>
+#include <libARSAL/ARSAL_Socket.h>
 
 #include "arstream2_rtp_sender.h"
 #include "arstream2_rtp.h"
 #include "arstream2_rtp_h264.h"
 #include "arstream2_rtcp.h"
-
-#include <libARSAL/ARSAL_Print.h>
-#include <libARSAL/ARSAL_Mutex.h>
 
 
 //#define ARSTREAM2_RTP_SENDER_RANDOM_DROP
@@ -236,11 +247,10 @@ static int ARSTREAM2_RtpSender_StreamSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* set to non-blocking */
-        int flags = fcntl(sender->streamSocket, F_GETFL, 0);
-        err = fcntl(sender->streamSocket, F_SETFL, flags | O_NONBLOCK);
+        err = ARSAL_Socket_SetBlocking(sender->streamSocket, 0);
         if (err < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d", err);
         }
 
         /* source address */
@@ -370,11 +380,10 @@ static int ARSTREAM2_RtpSender_ControlSocketSetup(ARSTREAM2_RtpSender_t *sender)
     if (ret == 0)
     {
         /* set to non-blocking */
-        int flags = fcntl(sender->controlSocket, F_GETFL, 0);
-        err = fcntl(sender->controlSocket, F_SETFL, flags | O_NONBLOCK);
+        err = ARSAL_Socket_SetBlocking(sender->controlSocket, 0);
         if (err < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_SENDER_TAG, "Failed to set to non-blocking: error=%d", err);
         }
 
         /* receive address */
@@ -486,7 +495,7 @@ static int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, unsig
 
     for (i = 0, count = 0; i < vlen; i++)
     {
-        while (((ret = sendmsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
+        while (((ret = ARSAL_Socket_SendMsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
         if (ret < 0)
         {
             if (count == 0)

@@ -6,8 +6,16 @@
  */
 
 
-#include "arstream2_rtp_receiver.h"
+#ifdef _WIN32
+/* HACK: Some cheap Windows hacks */
+#define ARSAL_INCLUDE_WSA
+#define strndup(c, n) _strdup(c)
 
+#include <libARSAL/ARSAL_Socket.h>
+#undef ARSAL_INCLUDE_WSA
+#endif
+
+#include "arstream2_rtp_receiver.h"
 
 #define ARSTREAM2_RTP_RECEIVER_TAG "ARSTREAM2_RtpReceiver"
 
@@ -161,11 +169,10 @@ static int ARSTREAM2_RtpReceiver_StreamSocketSetup(ARSTREAM2_RtpReceiver_t *rece
     if (ret == 0)
     {
         /* set to non-blocking */
-        int flags = fcntl(receiver->net.streamSocket, F_GETFL, 0);
-        err = fcntl(receiver->net.streamSocket, F_SETFL, flags | O_NONBLOCK);
+        err = ARSAL_Socket_SetBlocking(receiver->net.streamSocket, 0);
         if (err < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d", err);
         }
 
         memset(&recvSin, 0, sizeof(struct sockaddr_in));
@@ -378,11 +385,10 @@ static int ARSTREAM2_RtpReceiver_ControlSocketSetup(ARSTREAM2_RtpReceiver_t *rec
     if (ret == 0)
     {
         /* set to non-blocking */
-        int flags = fcntl(receiver->net.controlSocket, F_GETFL, 0);
-        err = fcntl(receiver->net.controlSocket, F_SETFL, flags | O_NONBLOCK);
+        err = ARSAL_Socket_SetBlocking(receiver->net.controlSocket, 0);
         if (err < 0)
         {
-            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d (%s)", errno, strerror(errno));
+            ARSAL_PRINT(ARSAL_PRINT_ERROR, ARSTREAM2_RTP_RECEIVER_TAG, "Failed to set to non-blocking: error=%d", err);
         }
 
         /* receive address */
@@ -629,7 +635,7 @@ static int ARSTREAM2_RtpReceiver_MuxRecvMmsg(ARSTREAM2_RtpReceiver_t *receiver, 
 }
 
 
-#ifndef HAS_MMSG
+#if !defined(HAS_MMSG)
 static int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen,
                     unsigned int flags, struct timespec *timeout)
 {
@@ -643,7 +649,7 @@ static int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen,
 
     for (i = 0, count = 0; i < vlen; i++)
     {
-        while (((ret = recvmsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
+        while (((ret = ARSAL_Socket_RecvMsg(sockfd, &msgvec[i].msg_hdr, flags)) == -1) && (errno == EINTR));
         if (ret < 0)
         {
             if (count == 0)

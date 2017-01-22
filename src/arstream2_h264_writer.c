@@ -10,7 +10,13 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+
+ /* for ntohl family of functions */
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <libARStream2/arstream2_h264_writer.h>
 #include "arstream2_h264.h"

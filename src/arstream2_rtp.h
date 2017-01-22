@@ -9,9 +9,17 @@
 #define _ARSTREAM2_RTP_H_
 
 #include <inttypes.h>
+
+#ifndef _WIN32
+/* mmsghdr */
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
+#endif
+
+#define ARSAL_INCLUDE_WSA
+#include <libARSAL/ARSAL_Socket.h>
+#undef ARSAL_INCLUDE_WSA
 
 #include "arstream2_rtcp.h"
 

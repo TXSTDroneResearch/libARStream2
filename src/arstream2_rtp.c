@@ -10,7 +10,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
+
 #include <libARSAL/ARSAL_Print.h>
 
 

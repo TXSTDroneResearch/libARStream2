@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <arpa/inet.h>
 
 #include <libARSAL/ARSAL_Print.h>
 

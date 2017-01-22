@@ -19,6 +19,11 @@ extern "C" {
 #include "arstream2_rtcp.h"
 #include "arstream2_h264.h"
 
+/* forward declarations */
+#ifdef _WIN32
+struct fd_set;
+typedef struct fd_set fd_set;
+#endif
 
 /**
  * @brief Default server-side stream port

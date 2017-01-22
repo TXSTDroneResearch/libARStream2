@@ -14,7 +14,13 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+
+/* for ntohl */
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <libARSAL/ARSAL_Print.h>
 

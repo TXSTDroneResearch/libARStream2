@@ -14,15 +14,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <math.h>
+
+#ifndef _WIN32
+ /* mmsghdr */
 #define __USE_GNU
 #include <sys/socket.h>
 #undef __USE_GNU
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
-#include <math.h>
+#include <netinet/ip.h>
+#endif
 
 #include <libARStream2/arstream2_error.h>
 #include "arstream2_rtp_sender.h"

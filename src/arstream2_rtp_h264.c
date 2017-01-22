@@ -9,7 +9,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <libARSAL/ARSAL_Print.h>
 #include <libARStream2/arstream2_stream_sender.h>
 
